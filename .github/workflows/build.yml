@@ -33,11 +33,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache node_modules
+      - name: Cache npm
         uses: actions/cache@v4
         with:
-          path: node_modules
-          key: node-${{ matrix.arch }}-${{ hashFiles('package.json') }}
+          path: ~/.npm
+          key: npm-${{ matrix.arch }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-${{ matrix.arch }}-
 
       - name: Cache Next.js build
         uses: actions/cache@v4
@@ -47,7 +48,7 @@ jobs:
           restore-keys: nextjs-${{ matrix.arch }}-
 
       - name: Install dependencies
-        run: npm install --no-audit --no-fund --prefer-offline
+        run: npm ci --no-audit --no-fund
 
       - name: Build
         run: npm run build

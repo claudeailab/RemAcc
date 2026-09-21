@@ -1,6 +1,8 @@
 import type { MetadataRoute } from "next";
 import { getPlatformInfo } from "@/lib/platform";
 
+export const dynamic = "force-dynamic";
+
 export default async function manifest(): Promise<MetadataRoute.Manifest> {
   const platform = await getPlatformInfo();
   return {
