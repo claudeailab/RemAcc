@@ -1,4 +1,4 @@
-# CLAUDE.md — remotecat
+# CLAUDE.md — webapp
 
 ## Rules (non-negotiable)
 
@@ -22,4 +22,4 @@
 
 ## ENV Prefix
 
-`REMOTE_CAT_` — all secrets here, never `NEXT_PUBLIC_*`
+`WEBAPP_` — all secrets here, never `NEXT_PUBLIC_*`

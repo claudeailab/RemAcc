@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
   const { email, password } = parsed.data;
 
   // Auto-seed first admin
-  const adminEmail = process.env.REMOTE_CAT_ADMIN_EMAIL;
-  const adminPassword = process.env.REMOTE_CAT_ADMIN_PASSWORD;
+  const adminEmail = process.env.WEBAPP_ADMIN_EMAIL;
+  const adminPassword = process.env.WEBAPP_ADMIN_PASSWORD;
   if (adminEmail && adminPassword) {
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
     if (!existing) {

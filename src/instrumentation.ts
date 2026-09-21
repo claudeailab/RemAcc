@@ -88,7 +88,7 @@ export async function register() {
     },
   });
 
-  if (process.env.REMOTE_CAT_SMTP_ENABLED === "true") {
+  if (process.env.WEBAPP_SMTP_ENABLED === "true") {
     checks.push({
       name: "SMTP",
       check: async () => {
@@ -102,7 +102,7 @@ export async function register() {
     });
   }
 
-  if (process.env.REMOTE_CAT_ANTHROPIC_ENABLED === "true") {
+  if (process.env.WEBAPP_ANTHROPIC_ENABLED === "true") {
     checks.push({
       name: "Anthropic",
       check: async () => {
@@ -113,7 +113,7 @@ export async function register() {
     });
   }
 
-  if (process.env.REMOTE_CAT_OPENAI_ENABLED === "true") {
+  if (process.env.WEBAPP_OPENAI_ENABLED === "true") {
     checks.push({
       name: "OpenAI",
       check: async () => {
@@ -124,7 +124,7 @@ export async function register() {
     });
   }
 
-  if (process.env.REMOTE_CAT_STRIPE_ENABLED === "true") {
+  if (process.env.WEBAPP_STRIPE_ENABLED === "true") {
     checks.push({
       name: "Stripe",
       check: async () => {
@@ -135,7 +135,7 @@ export async function register() {
     });
   }
 
-  if (process.env.REMOTE_CAT_M365_ENABLED === "true") {
+  if (process.env.WEBAPP_M365_ENABLED === "true") {
     checks.push({
       name: "M365",
       check: async () => {

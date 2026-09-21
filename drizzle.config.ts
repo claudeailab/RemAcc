@@ -5,10 +5,10 @@ export default {
   out: "./drizzle",
   dialect: "mysql",
   dbCredentials: {
-    host: process.env.REMOTE_CAT_DB_HOST!,
-    port: Number(process.env.REMOTE_CAT_DB_PORT ?? 3306),
-    user: process.env.REMOTE_CAT_DB_USER!,
-    password: process.env.REMOTE_CAT_DB_PASSWORD!,
-    database: process.env.REMOTE_CAT_DB_NAME!,
+    host: process.env.WEBAPP_DB_HOST!,
+    port: Number(process.env.WEBAPP_DB_PORT ?? 3306),
+    user: process.env.WEBAPP_DB_USER!,
+    password: process.env.WEBAPP_DB_PASSWORD!,
+    database: process.env.WEBAPP_DB_NAME!,
   },
 } satisfies Config;
