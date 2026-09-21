@@ -83,7 +83,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 py-4 border-b">
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 relative"
+            className="flex h-10 w-10 items-center justify-center rounded-lg shrink-0 relative"
             style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
