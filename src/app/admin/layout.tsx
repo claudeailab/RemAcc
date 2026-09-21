@@ -8,7 +8,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="flex min-h-screen">
       <AdminSidebar user={user} features={features} platform={platform} />
-      <main className="flex-1 overflow-auto md:ml-56 pb-20 md:pb-0">
+      <main className="flex-1 md:ml-56 pb-20 md:pb-0">
         {children}
       </main>
     </div>

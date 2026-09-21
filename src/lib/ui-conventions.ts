@@ -1,4 +1,4 @@
-export const pageWrapper = "min-h-screen w-full px-4 py-6 md:px-8 md:py-10 animate-fade-in";
+export const pageWrapper = "w-full px-4 py-6 md:px-8 md:py-10 animate-fade-in";
 export const pageInner = "mx-auto w-full max-w-5xl";
 export const sectionGap = "flex flex-col gap-8";
 export const cardGap = "grid gap-4 md:grid-cols-2 lg:grid-cols-3";
