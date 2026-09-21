@@ -18,6 +18,7 @@ import type { FeatureKey } from "@/lib/features";
 import { iconUrl, DEFAULT_ICON, DEFAULT_PRIMARY_COLOR } from "@/lib/platform-shared";
 
 const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = [
+  { key: "users", label: "Users", description: "User management, registration, and profiles" },
   { key: "payments", label: "Payments", description: "Stripe, Viva Wallet, and PayPal billing" },
   { key: "subscriptions", label: "Subscriptions", description: "Subscription plans and management" },
   { key: "m365", label: "Microsoft 365", description: "Azure AD sync and Microsoft SSO login" },
@@ -124,7 +125,7 @@ function AuditTab() {
 function FeaturesTab() {
   const router = useRouter();
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
-    payments: true, m365: true, email: true, ai: true, subscriptions: true,
+    users: true, payments: true, m365: true, email: true, ai: true, subscriptions: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<FeatureKey | null>(null);

@@ -60,7 +60,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
   const systemItems: NavItem[] = [
     { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
-    { href: "/admin/users", label: "Users", icon: Users },
+    ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
     ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard }] : []),
     ...(features.m365 ? [{ href: "/admin/m365", label: "Microsoft 365", icon: Settings }] : []),
@@ -70,7 +70,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
   const mobileItems = [
     { href: "/admin", label: "Home", icon: LayoutDashboard, exact: true },
-    { href: "/admin/users", label: "Users", icon: Users },
+    ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
     ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Plans", icon: CreditCard }] : []),
     ...(features.ai ? [{ href: "/admin/ai", label: "AI", icon: Bot }] : []),
