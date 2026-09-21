@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { getSetting } from "@/lib/encryption";
+import { getPlatformInfo } from "@/lib/platform";
 import nodemailer from "nodemailer";
 
 const schema = z.object({ to: z.string().email() });
@@ -22,6 +23,8 @@ export async function POST(req: NextRequest) {
 
   if (!host || !fromEmail) return NextResponse.json({ error: "SMTP not configured" }, { status: 400 });
 
+  const platform = await getPlatformInfo();
+
   try {
     const transporter = nodemailer.createTransport({
       host,
@@ -29,7 +32,7 @@ export async function POST(req: NextRequest) {
       secure: ssl === "true",
       auth: user && password ? { user, pass: password } : undefined,
     });
-    await transporter.sendMail({ from: `${fromName} <${fromEmail}>`, to: parsed.data.to, subject: "Test Email", text: "This is a test email from the platform." });
+    await transporter.sendMail({ from: `${fromName} <${fromEmail}>`, to: parsed.data.to, subject: "Test Email", text: `This is a test email from ${platform.name}.` });
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json({ error: "Failed to send email" }, { status: 400 });

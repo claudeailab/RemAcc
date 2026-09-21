@@ -1,4 +1,4 @@
-# RemoteCat
+# Platform
 
 A production-ready Next.js webapp with admin area, user management, M365 integration, SMTP, AI providers (Anthropic + OpenAI), Stripe subscriptions, and PWA support.
 
@@ -19,10 +19,10 @@ A production-ready Next.js webapp with admin area, user management, M365 integra
 ```yaml
 services:
 
-  remotecat:
+  app:
     image: ghcr.io/claudeailab/remotecat
-    container_name: remotecat
-    hostname: remotecat
+    container_name: app
+    hostname: app
     restart: unless-stopped
     user: "0"
     environment:
@@ -34,13 +34,13 @@ services:
       REMOTE_CAT_ADMIN_PASSWORD: change-me
       REMOTE_CAT_DB_HOST: db
       REMOTE_CAT_DB_PORT: 3306
-      REMOTE_CAT_DB_USER: remotecat
+      REMOTE_CAT_DB_USER: app
       REMOTE_CAT_DB_PASSWORD: change-me
-      REMOTE_CAT_DB_NAME: remotecat
+      REMOTE_CAT_DB_NAME: app
     ports:
       - 8095:8095
     volumes:
-      - ./config/remotecat/data:/data
+      - ./config/app/data:/data
     healthcheck:
       test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8095/api/health"]
       interval: 30s
@@ -53,7 +53,7 @@ services:
 
 networks:
   default:
-    name: remotecat
+    name: app
 ```
 
 ## Updating

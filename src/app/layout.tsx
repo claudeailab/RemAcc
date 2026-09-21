@@ -14,7 +14,6 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: platform.name,
     description: `${platform.name} application`,
-    manifest: "/manifest.json",
     icons: { icon: favicon, apple: favicon },
   };
 }
