@@ -484,28 +484,25 @@ function IconPickerDialog({ value, onSelect, onClose }: {
 function PlatformTab() {
   const router = useRouter();
   const [name, setName] = useState("");
-  const [icon, setIcon] = useState(DEFAULT_ICON);
-  const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY_COLOR);
+  const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
-  const [original, setOriginal] = useState({ name: "", icon: DEFAULT_ICON, primaryColor: DEFAULT_PRIMARY_COLOR });
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [original, setOriginal] = useState({ name: "", title: "" });
 
   useEffect(() => {
     fetch("/api/platform").then(r => r.json()).then(d => {
       const n = d.name ?? "";
-      const ic = d.icon ?? DEFAULT_ICON;
-      const pc = d.primaryColor ?? DEFAULT_PRIMARY_COLOR;
-      setName(n); setIcon(ic); setPrimaryColor(pc);
-      setOriginal({ name: n, icon: ic, primaryColor: pc });
+      const t = d.title ?? "";
+      setName(n); setTitle(t);
+      setOriginal({ name: n, title: t });
       setLoading(false);
     });
   }, []);
 
   useEffect(() => {
-    setDirty(name !== original.name || icon !== original.icon || primaryColor !== original.primaryColor);
-  }, [name, icon, primaryColor, original]);
+    setDirty(name !== original.name || title !== original.title);
+  }, [name, title, original]);
 
   async function handleSave() {
     setSaving(true);
@@ -513,11 +510,71 @@ function PlatformTab() {
       const r = await fetch("/api/admin/settings/platform", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name || undefined, icon, primaryColor }),
+        body: JSON.stringify({ name: name || undefined, title }),
       });
       if (!r.ok) { toast.error("Save failed"); return; }
       toast.success("Platform settings saved");
-      setOriginal({ name, icon, primaryColor });
+      setOriginal({ name, title });
+      setDirty(false);
+      router.refresh();
+    } finally { setSaving(false); }
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">Set the name and title shown throughout the platform.</p>
+      <div className="flex flex-col gap-1.5">
+        <Label>Platform Name</Label>
+        <Input value={name} onChange={e => setName(e.target.value)} placeholder="Platform" maxLength={80} />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Platform Title <span className="text-muted-foreground font-normal text-xs">(optional subtitle)</span></Label>
+        <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Customer Portal" maxLength={160} />
+      </div>
+      <Button onClick={handleSave} disabled={saving || !dirty}>
+        {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
+      </Button>
+    </div>
+  );
+}
+
+function VisualAppearanceSection() {
+  const router = useRouter();
+  const [icon, setIcon] = useState(DEFAULT_ICON);
+  const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY_COLOR);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [original, setOriginal] = useState({ icon: DEFAULT_ICON, primaryColor: DEFAULT_PRIMARY_COLOR });
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/platform").then(r => r.json()).then(d => {
+      const ic = d.icon ?? DEFAULT_ICON;
+      const pc = d.primaryColor ?? DEFAULT_PRIMARY_COLOR;
+      setIcon(ic); setPrimaryColor(pc);
+      setOriginal({ icon: ic, primaryColor: pc });
+      setLoading(false);
+    });
+  }, []);
+
+  useEffect(() => {
+    setDirty(icon !== original.icon || primaryColor !== original.primaryColor);
+  }, [icon, primaryColor, original]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/admin/settings/platform", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ icon, primaryColor }),
+      });
+      if (!r.ok) { toast.error("Save failed"); return; }
+      toast.success("Appearance saved");
+      setOriginal({ icon, primaryColor });
       setDirty(false);
       document.documentElement.style.setProperty("--color-primary", primaryColor);
       document.documentElement.style.setProperty("--color-ring", primaryColor);
@@ -525,17 +582,13 @@ function PlatformTab() {
     } finally { setSaving(false); }
   }
 
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-
   const isValidHex = /^#[0-9a-fA-F]{6}$/.test(primaryColor);
 
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
   return (
-    <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">Set the name, icon, and brand color used throughout the platform.</p>
-      <div className="flex flex-col gap-1.5">
-        <Label>Platform Name</Label>
-        <Input value={name} onChange={e => setName(e.target.value)} placeholder="Platform" maxLength={80} />
-      </div>
+    <div className="space-y-6 pt-6 border-t">
+      <p className="text-sm font-medium">Appearance</p>
       <div className="flex flex-col gap-2">
         <Label>Icon</Label>
         <div className="flex items-center gap-3">
@@ -662,6 +715,7 @@ export default function SettingsPage() {
                   </div>
                   {saving && <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</p>}
                 </div>
+                <VisualAppearanceSection />
               </CardContent>
             </Card>
           </TabsContent>

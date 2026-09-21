@@ -97,6 +97,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
           </div>
           <div className="flex flex-col min-w-0">
             <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
+            {platform.title && <span className="text-[10px] text-muted-foreground truncate">{platform.title}</span>}
             <span className="text-[10px] text-muted-foreground font-mono">v{version.version}</span>
           </div>
         </div>

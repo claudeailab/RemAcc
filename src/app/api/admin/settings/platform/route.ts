@@ -7,6 +7,7 @@ import { logAudit } from "@/lib/audit";
 
 const schema = z.object({
   name: z.string().min(1).max(80).optional(),
+  title: z.string().max(160).optional(),
   icon: z.string().max(120).optional(),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
