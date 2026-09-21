@@ -12,8 +12,8 @@ export async function generateMetadata(): Promise<Metadata> {
   const platform = await getPlatformInfo();
   const favicon = iconUrl(platform.icon);
   return {
-    title: platform.name,
-    description: `${platform.name} application`,
+    title: platform.title ? `${platform.name} — ${platform.title}` : platform.name,
+    description: platform.title || `${platform.name} application`,
     icons: { icon: favicon, apple: favicon },
   };
 }
