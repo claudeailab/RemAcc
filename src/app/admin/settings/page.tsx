@@ -399,7 +399,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
       try {
         const params = new URLSearchParams({ query: query.trim(), limit: "60" });
         if (setFilter) params.set("prefixes", setFilter);
-        const r = await fetch(`https://api.iconify.design/search?${params}`);
+        const r = await fetch(`/api/icon/search?${params}`);
         const d = await r.json();
         setIcons(d.icons ?? []);
       } catch { setIcons([]); }
