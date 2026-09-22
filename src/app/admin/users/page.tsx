@@ -27,9 +27,9 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ id: 0, email: "", displayName: "", password: "", role: "user", groupId: "" });
+  const [form, setForm] = useState({ id: 0, source: "local", email: "", displayName: "", password: "", role: "user", groupId: "" });
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // Azure browse state
@@ -38,8 +38,9 @@ export default function UsersPage() {
   const [azureUsers, setAzureUsers] = useState<AzureDirectoryUser[]>([]);
   const [azureFilter, setAzureFilter] = useState("");
   const [azureSelected, setAzureSelected] = useState<Set<string>>(new Set());
+  const [azureInitialInPlatform, setAzureInitialInPlatform] = useState<Set<string>>(new Set());
   const [azureGroupId, setAzureGroupId] = useState("");
-  const [azureAdding, setAzureAdding] = useState(false);
+  const [azureApplying, setAzureApplying] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,9 +54,13 @@ export default function UsersPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  function openNew() { setForm({ id: 0, email: "", displayName: "", password: "", role: "user", groupId: "" }); setDialogOpen(true); }
+  function openNew() {
+    setForm({ id: 0, source: "local", email: "", displayName: "", password: "", role: "user", groupId: "" });
+    setDialogOpen(true);
+  }
+
   function openEdit(u: User) {
-    setForm({ id: u.id, email: u.email, displayName: u.displayName ?? "", password: "", role: u.role, groupId: u.groupId?.toString() ?? "" });
+    setForm({ id: u.id, source: u.source, email: u.email, displayName: u.displayName ?? "", password: "", role: u.role, groupId: u.groupId?.toString() ?? "" });
     setDialogOpen(true);
   }
 
@@ -65,7 +70,8 @@ export default function UsersPage() {
       const method = form.id ? "PUT" : "POST";
       const payload = {
         ...(form.id ? { id: form.id } : {}),
-        email: form.email, displayName: form.displayName || undefined,
+        email: form.email,
+        displayName: form.displayName || undefined,
         ...(form.password ? { password: form.password } : {}),
         role: form.role,
         groupId: form.groupId ? Number(form.groupId) : null,
@@ -90,45 +96,77 @@ export default function UsersPage() {
   async function browseAzure() {
     setAzureDialogOpen(true);
     setAzureLoading(true);
-    setAzureSelected(new Set());
     setAzureFilter("");
+    setAzureGroupId("");
     try {
       const r = await fetch("/api/admin/users/azure-users");
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Failed to fetch Azure users"); setAzureDialogOpen(false); return; }
-      setAzureUsers(d.users ?? []);
+      const all: AzureDirectoryUser[] = d.users ?? [];
+      setAzureUsers(all);
+      const inPlatform = new Set(all.filter(u => u.inPlatform).map(u => u.oid));
+      setAzureInitialInPlatform(inPlatform);
+      setAzureSelected(new Set(inPlatform));
     } finally { setAzureLoading(false); }
   }
 
-  async function addAzureUsers() {
-    const toAdd = azureUsers.filter(u => azureSelected.has(u.oid) && !u.inPlatform);
-    if (toAdd.length === 0) return;
-    setAzureAdding(true);
+  async function applyAzureChanges() {
+    const toAdd = azureUsers.filter(u => azureSelected.has(u.oid) && !azureInitialInPlatform.has(u.oid));
+    const toRemove = azureUsers.filter(u => !azureSelected.has(u.oid) && azureInitialInPlatform.has(u.oid) && u.userId !== null);
+
+    if (toAdd.length === 0 && toRemove.length === 0) {
+      setAzureDialogOpen(false);
+      return;
+    }
+
+    setAzureApplying(true);
     try {
-      const r = await fetch("/api/admin/users/azure-add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          users: toAdd.map(u => ({
-            oid: u.oid, email: u.email, displayName: u.displayName,
-            groupId: azureGroupId ? Number(azureGroupId) : null,
-          })),
-        }),
-      });
-      const d = await r.json();
-      if (!r.ok) { toast.error(d.error ?? "Failed to add users"); return; }
-      toast.success(`Added ${d.count} user${d.count !== 1 ? "s" : ""} to the platform`);
+      if (toAdd.length > 0) {
+        const r = await fetch("/api/admin/users/azure-add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            users: toAdd.map(u => ({
+              oid: u.oid, email: u.email, displayName: u.displayName,
+              groupId: azureGroupId ? Number(azureGroupId) : null,
+            })),
+          }),
+        });
+        const d = await r.json();
+        if (!r.ok) { toast.error(d.error ?? "Failed to add users"); return; }
+      }
+
+      for (const u of toRemove) {
+        const r = await fetch(`/api/admin/users?id=${u.userId}`, { method: "DELETE" });
+        if (!r.ok) { toast.error(`Failed to remove ${u.email}`); return; }
+      }
+
+      const parts: string[] = [];
+      if (toAdd.length > 0) parts.push(`Added ${toAdd.length} user${toAdd.length !== 1 ? "s" : ""}`);
+      if (toRemove.length > 0) parts.push(`Removed ${toRemove.length} user${toRemove.length !== 1 ? "s" : ""}`);
+      toast.success(parts.join(", "));
       setAzureDialogOpen(false);
       load();
-    } finally { setAzureAdding(false); }
+    } finally { setAzureApplying(false); }
   }
 
   const filteredAzure = azureUsers.filter(u =>
-    !u.inPlatform && (
-      u.email.toLowerCase().includes(azureFilter.toLowerCase()) ||
-      (u.displayName ?? "").toLowerCase().includes(azureFilter.toLowerCase())
-    )
+    u.email.toLowerCase().includes(azureFilter.toLowerCase()) ||
+    (u.displayName ?? "").toLowerCase().includes(azureFilter.toLowerCase())
   );
+
+  const toAddCount = [...azureSelected].filter(oid => !azureInitialInPlatform.has(oid)).length;
+  const toRemoveCount = [...azureInitialInPlatform].filter(oid => !azureSelected.has(oid)).length;
+  const hasChanges = toAddCount > 0 || toRemoveCount > 0;
+
+  const applyLabel = (() => {
+    if (azureApplying) return null;
+    if (!hasChanges) return "No changes";
+    const parts: string[] = [];
+    if (toAddCount > 0) parts.push(`Add ${toAddCount}`);
+    if (toRemoveCount > 0) parts.push(`Remove ${toRemoveCount}`);
+    return parts.join(" · ");
+  })();
 
   const platformAzureUsers = users.filter(u => u.source === "azure");
   const localUsers = users.filter(u => u.source === "local");
@@ -195,8 +233,8 @@ export default function UsersPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-sky-600 border-sky-300 dark:text-sky-400 dark:border-sky-700">Azure</Badge>
+                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>{u.role}</Badge>
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => setDeleteId(u.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
                   </div>
                 ))}
@@ -205,45 +243,85 @@ export default function UsersPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Local user create/edit dialog */}
+        {/* Create/edit dialog — local users: full form; Azure users: role + group only */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{form.id ? "Edit User" : "Add User"}</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{form.id ? "Edit User" : "Add User"}</DialogTitle>
+              {form.source === "azure" && (
+                <p className="text-xs text-muted-foreground pt-1">
+                  This is an Azure AD user. To change their name or email, update them in Azure AD.
+                </p>
+              )}
+            </DialogHeader>
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Display Name</Label>
-                <Input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>{form.id ? "New Password (leave blank to keep)" : "Password"}</Label>
-                <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="flex flex-col gap-1.5">
-                  <Label>Role</Label>
-                  <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="user">User</SelectItem>
-                      <SelectItem value="admin">Admin</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Group</Label>
-                  <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
-                    <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No group</SelectItem>
-                      {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+              {form.source === "azure" ? (
+                <>
+                  <div className="rounded-lg border bg-muted/40 px-4 py-3 space-y-0.5">
+                    <p className="text-sm font-medium">{form.displayName || form.email}</p>
+                    {form.displayName && <p className="text-xs text-muted-foreground">{form.email}</p>}
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Role</Label>
+                      <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Group</Label>
+                      <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
+                        <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No group</SelectItem>
+                          {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Email</Label>
+                    <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Display Name</Label>
+                    <Input value={form.displayName} onChange={e => setForm(f => ({ ...f, displayName: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>{form.id ? "New Password (leave blank to keep)" : "Password"}</Label>
+                    <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Role</Label>
+                      <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label>Group</Label>
+                      <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
+                        <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No group</SelectItem>
+                          {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
@@ -257,13 +335,18 @@ export default function UsersPage() {
         {/* Azure browse dialog */}
         <Dialog open={azureDialogOpen} onOpenChange={setAzureDialogOpen}>
           <DialogContent className="max-w-lg">
-            <DialogHeader><DialogTitle>Add from Azure AD</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>Browse Azure AD</DialogTitle>
+              <p className="text-xs text-muted-foreground pt-1">
+                Checked users are on the platform. Uncheck to remove, check to add.
+              </p>
+            </DialogHeader>
             {azureLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin" /></div>
             ) : (
               <div className="space-y-4">
                 <div className="flex flex-col gap-1.5">
-                  <Label>Assign to Group</Label>
+                  <Label>Group for newly added users</Label>
                   <Select value={azureGroupId || "none"} onValueChange={v => setAzureGroupId(v === "none" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
                     <SelectContent>
@@ -284,22 +367,21 @@ export default function UsersPage() {
                 </div>
 
                 {filteredAzure.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">
-                    {azureUsers.filter(u => !u.inPlatform).length === 0
-                      ? "All Azure AD users are already on the platform."
-                      : "No users match your filter."}
-                  </p>
+                  <p className="text-sm text-muted-foreground text-center py-4">No users match your filter.</p>
                 ) : (
-                  <div className="max-h-64 overflow-y-auto space-y-1 border rounded-lg p-2">
+                  <div className="max-h-72 overflow-y-auto space-y-1 border rounded-lg p-2">
                     <div className="flex justify-between text-xs text-muted-foreground px-1 pb-1">
                       <span>{filteredAzure.length} user{filteredAzure.length !== 1 ? "s" : ""}</span>
-                      <button
-                        type="button"
-                        className="hover:text-foreground transition-colors"
-                        onClick={() => setAzureSelected(new Set(filteredAzure.map(u => u.oid)))}
-                      >
-                        Select all
-                      </button>
+                      <div className="flex gap-3">
+                        <button type="button" className="hover:text-foreground transition-colors"
+                          onClick={() => setAzureSelected(prev => { const n = new Set(prev); filteredAzure.forEach(u => n.add(u.oid)); return n; })}>
+                          Select all
+                        </button>
+                        <button type="button" className="hover:text-foreground transition-colors"
+                          onClick={() => setAzureSelected(prev => { const n = new Set(prev); filteredAzure.forEach(u => n.delete(u.oid)); return n; })}>
+                          Deselect all
+                        </button>
+                      </div>
                     </div>
                     {filteredAzure.map(u => (
                       <label key={u.oid} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
@@ -313,10 +395,13 @@ export default function UsersPage() {
                           }}
                           className="h-4 w-4 rounded accent-primary shrink-0"
                         />
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <p className="text-sm font-medium truncate">{u.displayName ?? u.email}</p>
                           {u.displayName && <p className="text-xs text-muted-foreground truncate">{u.email}</p>}
                         </div>
+                        {u.inPlatform && (
+                          <Badge variant="outline" className="shrink-0 text-xs text-sky-600 border-sky-300 dark:text-sky-400 dark:border-sky-700">On platform</Badge>
+                        )}
                       </label>
                     ))}
                   </div>
@@ -325,19 +410,14 @@ export default function UsersPage() {
             )}
             <DialogFooter>
               <Button variant="outline" onClick={() => setAzureDialogOpen(false)}>Cancel</Button>
-              <Button
-                onClick={addAzureUsers}
-                disabled={azureAdding || azureLoading || azureSelected.size === 0}
-              >
-                {azureAdding
-                  ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Adding…</>
-                  : `Add ${azureSelected.size > 0 ? azureSelected.size : ""} Selected`}
+              <Button onClick={applyAzureChanges} disabled={azureApplying || azureLoading || !hasChanges}>
+                {azureApplying ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Applying…</> : applyLabel}
               </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        {/* Delete confirm */}
+        {/* Delete confirm — local users only */}
         <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Remove User</DialogTitle></DialogHeader>
