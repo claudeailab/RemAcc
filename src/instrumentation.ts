@@ -24,7 +24,6 @@ export async function register() {
         \`name\` varchar(255) NOT NULL,
         \`description\` varchar(500),
         \`permissions\` text NOT NULL DEFAULT ('[]'),
-        \`is_default\` tinyint(1) NOT NULL DEFAULT 0,
         \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
@@ -32,7 +31,6 @@ export async function register() {
         \`id\` int NOT NULL AUTO_INCREMENT,
         \`email\` varchar(255) NOT NULL,
         \`display_name\` varchar(255),
-        \`role\` varchar(50) NOT NULL DEFAULT 'user',
         \`source\` varchar(50) NOT NULL DEFAULT 'local',
         \`azure_oid\` varchar(255),
         \`password_hash\` varchar(255),
@@ -75,6 +73,17 @@ export async function register() {
     ];
     for (const sql of stmts) {
       await db.execute(sql as unknown as Parameters<typeof db.execute>[0]);
+    }
+
+    // Drop deprecated columns from older deployments (no-op if already removed)
+    const migrations = [
+      "ALTER TABLE `webapp_users` DROP COLUMN `role`",
+      "ALTER TABLE `webapp_permission_groups` DROP COLUMN `is_default`",
+    ];
+    for (const sql of migrations) {
+      try {
+        await db.execute(sql as unknown as Parameters<typeof db.execute>[0]);
+      } catch { /* column already dropped or doesn't exist */ }
     }
   }
 

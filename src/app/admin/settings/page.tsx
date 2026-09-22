@@ -187,11 +187,10 @@ interface Group {
   name: string;
   description: string | null;
   permissions: string[];
-  isDefault: boolean;
   userCount: number;
 }
 
-const defaultGroupForm = { name: "", description: "", permissions: [] as string[], isDefault: false };
+const defaultGroupForm = { name: "", description: "", permissions: [] as string[] };
 
 function PermissionsTab() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -214,7 +213,7 @@ function PermissionsTab() {
 
   function openNew() { setForm({ id: 0, ...defaultGroupForm }); setDialogOpen(true); }
   function openEdit(g: Group) {
-    setForm({ id: g.id, name: g.name, description: g.description ?? "", permissions: g.permissions, isDefault: g.isDefault });
+    setForm({ id: g.id, name: g.name, description: g.description ?? "", permissions: g.permissions });
     setDialogOpen(true);
   }
 
@@ -235,7 +234,7 @@ function PermissionsTab() {
       const r = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: form.name, description: form.description || undefined, permissions: form.permissions, isDefault: form.isDefault }),
+        body: JSON.stringify({ name: form.name, description: form.description || undefined, permissions: form.permissions }),
       });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
@@ -272,7 +271,6 @@ function PermissionsTab() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-semibold text-sm">{g.name}</span>
-                    {g.isDefault && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
                     <span className="text-xs text-muted-foreground">{g.userCount} user{g.userCount !== 1 ? "s" : ""}</span>
                   </div>
                   {g.description && <p className="text-xs text-muted-foreground mt-0.5">{g.description}</p>}
@@ -333,15 +331,6 @@ function PermissionsTab() {
                 ))}
               </div>
             </div>
-            <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={form.isDefault}
-                onChange={e => setForm(f => ({ ...f, isDefault: e.target.checked }))}
-                className="h-4 w-4 rounded accent-primary"
-              />
-              <span className="text-sm">Set as default group for new users</span>
-            </label>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>

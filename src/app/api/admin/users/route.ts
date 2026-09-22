@@ -11,7 +11,6 @@ const createSchema = z.object({
   email: z.string().email(),
   displayName: z.string().optional(),
   password: z.string().min(8),
-  role: z.enum(["user", "admin"]),
   groupId: z.number().int().positive().nullable().optional(),
 });
 const updateSchema = z.object({
@@ -19,14 +18,13 @@ const updateSchema = z.object({
   email: z.string().email().optional(),
   displayName: z.string().optional(),
   password: z.string().min(8).optional(),
-  role: z.enum(["user", "admin"]).optional(),
   groupId: z.number().int().positive().nullable().optional(),
 });
 
 export async function GET() {
   await requireAdmin();
   const list = await db
-    .select({ id: users.id, email: users.email, displayName: users.displayName, role: users.role, source: users.source, groupId: users.groupId })
+    .select({ id: users.id, email: users.email, displayName: users.displayName, source: users.source, groupId: users.groupId })
     .from(users)
     .limit(200);
   return NextResponse.json({ users: list });
@@ -37,11 +35,11 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { email, displayName, password, role, groupId } = parsed.data;
+  const { email, displayName, password, groupId } = parsed.data;
   const passwordHash = await bcrypt.hash(password, 12);
-  await db.insert(users).values({ email, displayName, passwordHash, role, source: "local", groupId: groupId ?? null });
+  await db.insert(users).values({ email, displayName, passwordHash, source: "local", groupId: groupId ?? null });
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
-  const parts = [`email=${email}`, `role=${role}`];
+  const parts = [`email=${email}`];
   if (displayName) parts.push(`displayName=${displayName}`);
   if (groupId) parts.push(`groupId=${groupId}`);
   await logAudit({ userEmail: admin.email, action: "create", resource: "user", detail: parts.join("; "), ip });
@@ -53,10 +51,10 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { id, email, displayName, password, role, groupId } = parsed.data;
+  const { id, email, displayName, password, groupId } = parsed.data;
 
   const [existing] = await db
-    .select({ email: users.email, displayName: users.displayName, role: users.role, groupId: users.groupId })
+    .select({ email: users.email, displayName: users.displayName, groupId: users.groupId })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -66,7 +64,6 @@ export async function PUT(req: NextRequest) {
   const set: UpdateSet = {};
   if (email) set.email = sql`${email}`;
   if (displayName !== undefined) set.displayName = sql`${displayName}`;
-  if (role) set.role = sql`${role}`;
   if (passwordHash) set.passwordHash = sql`${passwordHash}`;
   if (groupId !== undefined) set.groupId = groupId;
   if (Object.keys(set).length === 0) return NextResponse.json({ ok: true });
@@ -75,7 +72,6 @@ export async function PUT(req: NextRequest) {
   const changes: string[] = [`id=${id}`];
   if (email && email !== existing?.email) changes.push(`email: ${existing?.email ?? "(unset)"}→${email}`);
   if (displayName !== undefined && displayName !== existing?.displayName) changes.push(`displayName: ${existing?.displayName ?? "(unset)"}→${displayName || "(cleared)"}`);
-  if (role && role !== existing?.role) changes.push(`role: ${existing?.role ?? "(unset)"}→${role}`);
   if (password) changes.push("password: [updated]");
   if (groupId !== undefined && groupId !== existing?.groupId) changes.push(`groupId: ${existing?.groupId ?? "(unset)"}→${groupId ?? "(cleared)"}`);
 
@@ -90,7 +86,7 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const [existing] = await db
-    .select({ email: users.email, displayName: users.displayName, role: users.role })
+    .select({ email: users.email, displayName: users.displayName })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -98,7 +94,7 @@ export async function DELETE(req: NextRequest) {
 
   const parts = [`id=${id}`];
   if (existing) {
-    parts.push(`email=${existing.email}`, `role=${existing.role}`);
+    parts.push(`email=${existing.email}`);
     if (existing.displayName) parts.push(`displayName=${existing.displayName}`);
   }
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";

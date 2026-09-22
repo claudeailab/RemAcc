@@ -19,7 +19,6 @@ export const permission_groups = mysqlTable("webapp_permission_groups", {
   name: varchar("name", { length: 255 }).notNull(),
   description: varchar("description", { length: 500 }),
   permissions: text("permissions").notNull().default("[]"),
-  isDefault: boolean("is_default").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -27,7 +26,6 @@ export const users = mysqlTable("webapp_users", {
   id: int("id").autoincrement().primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
   displayName: varchar("display_name", { length: 255 }),
-  role: varchar("role", { length: 50 }).notNull().default("user"),
   source: varchar("source", { length: 50 }).notNull().default("local"),
   azureOid: varchar("azure_oid", { length: 255 }),
   passwordHash: varchar("password_hash", { length: 255 }),

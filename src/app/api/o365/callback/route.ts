@@ -65,13 +65,14 @@ export async function GET(req: NextRequest) {
   if (!oid) return fail("invalid_token");
 
   const [user] = await db
-    .select({ id: users.id, email: users.email, role: users.role, groupId: users.groupId })
+    .select({ id: users.id, email: users.email, groupId: users.groupId })
     .from(users)
     .where(eq(users.azureOid, oid))
     .limit(1);
 
   if (!user) return fail("not_provisioned");
 
+  let isAdmin = false;
   if (user.groupId) {
     const [group] = await db
       .select({ permissions: permission_groups.permissions })
@@ -80,15 +81,18 @@ export async function GET(req: NextRequest) {
       .limit(1);
     if (group) {
       const perms = JSON.parse(group.permissions || "[]") as string[];
-      if (!perms.includes("access_dashboard")) return fail("no_access");
+      if (!perms.includes("access_dashboard") && !perms.includes("administrator")) return fail("no_access");
+      isAdmin = perms.includes("administrator");
     }
+  } else {
+    return fail("no_access");
   }
 
   const token = await createSession(user.id);
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
   await logAudit({ userEmail: user.email, action: "login", resource: "auth", detail: "azure_sso" });
 
-  const redirectPath = user.role === "admin" ? "/admin" : "/dashboard";
+  const redirectPath = isAdmin ? "/admin" : "/dashboard";
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
 
   const res = NextResponse.redirect(new URL(redirectPath, req.url));

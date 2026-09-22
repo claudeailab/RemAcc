@@ -66,6 +66,7 @@ A production-ready Next.js SaaS foundation with admin panel, multi-provider auth
 Add the service to your `docker-compose.yml` and define the variables in a `.env` file alongside it.
 
 ```yaml
+services:
   webapp:
     image: ghcr.io/claudeailab/webapp
     container_name: webapp

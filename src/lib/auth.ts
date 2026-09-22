@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
-import { sessions, users } from "./db/schema";
+import { sessions, users, permission_groups } from "./db/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
@@ -24,13 +24,22 @@ export async function getUser() {
   const session = await getSession();
   if (!session) return null;
 
-  const [user] = await db
-    .select({ id: users.id, email: users.email, displayName: users.displayName, role: users.role })
+  const [row] = await db
+    .select({
+      id: users.id,
+      email: users.email,
+      displayName: users.displayName,
+      groupId: users.groupId,
+      permissions: permission_groups.permissions,
+    })
     .from(users)
+    .leftJoin(permission_groups, eq(users.groupId, permission_groups.id))
     .where(eq(users.id, session.userId))
     .limit(1);
 
-  return user ?? null;
+  if (!row) return null;
+  const perms = JSON.parse(row.permissions ?? "[]") as string[];
+  return { id: row.id, email: row.email, displayName: row.displayName, groupId: row.groupId, isAdmin: perms.includes("administrator") };
 }
 
 export async function requireSession() {
@@ -41,7 +50,7 @@ export async function requireSession() {
 
 export async function requireAdmin() {
   const user = await getUser();
-  if (!user || user.role !== "admin") redirect("/login");
+  if (!user || !user.isAdmin) redirect("/login");
   return user;
 }
 

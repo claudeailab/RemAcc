@@ -27,7 +27,6 @@ export async function POST(req: NextRequest) {
       displayName: u.displayName ?? null,
       source: "azure",
       azureOid: u.oid,
-      role: "user",
       groupId: u.groupId ?? null,
     }).onDuplicateKeyUpdate({
       set: {

@@ -32,7 +32,7 @@ export async function POST() {
     for (const u of azureUsers) {
       const email = u.mail ?? u.userPrincipalName;
       if (!email) continue;
-      await db.insert(users).values({ email, displayName: u.displayName, source: "azure", azureOid: u.id, role: "user" })
+      await db.insert(users).values({ email, displayName: u.displayName, source: "azure", azureOid: u.id })
         .onDuplicateKeyUpdate({ set: { displayName: sql`values(display_name)`, azureOid: sql`values(azure_oid)` } });
       count++;
     }

@@ -3,14 +3,13 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { permission_groups, users } from "@/lib/db/schema";
-import { eq, count, sql } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const groupSchema = z.object({
   name: z.string().min(1).max(255),
   description: z.string().max(500).optional(),
   permissions: z.array(z.string()).default([]),
-  isDefault: z.boolean().default(false),
 });
 
 export async function GET() {
@@ -21,7 +20,6 @@ export async function GET() {
       name: permission_groups.name,
       description: permission_groups.description,
       permissions: permission_groups.permissions,
-      isDefault: permission_groups.isDefault,
       createdAt: permission_groups.createdAt,
       userCount: count(users.id),
     })
@@ -44,14 +42,9 @@ export async function POST(req: NextRequest) {
   const parsed = groupSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { name, description, permissions, isDefault } = parsed.data;
-
-  if (isDefault) {
-    await db.update(permission_groups).set({ isDefault: false });
-  }
-
+  const { name, description, permissions } = parsed.data;
   await db.insert(permission_groups).values({
-    name, description, permissions: JSON.stringify(permissions), isDefault,
+    name, description, permissions: JSON.stringify(permissions),
   });
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -68,14 +61,9 @@ export async function PUT(req: NextRequest) {
   const parsed = groupSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { name, description, permissions, isDefault } = parsed.data;
-
-  if (isDefault) {
-    await db.update(permission_groups).set({ isDefault: false }).where(sql`id != ${id}`);
-  }
-
+  const { name, description, permissions } = parsed.data;
   await db.update(permission_groups)
-    .set({ name, description, permissions: JSON.stringify(permissions), isDefault })
+    .set({ name, description, permissions: JSON.stringify(permissions) })
     .where(eq(permission_groups.id, id));
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
@@ -88,7 +76,6 @@ export async function DELETE(req: NextRequest) {
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  // Unassign users from this group before deleting
   await db.update(users).set({ groupId: null }).where(eq(users.groupId, id));
   await db.delete(permission_groups).where(eq(permission_groups.id, id));
 

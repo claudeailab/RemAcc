@@ -7,12 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Pencil, Trash2, CloudDownload, Search } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
-interface User { id: number; email: string; displayName: string | null; role: string; source: string; groupId: number | null }
+interface User { id: number; email: string; displayName: string | null; source: string; groupId: number | null }
 interface Group { id: number; name: string }
 interface AzureDirectoryUser {
   oid: string;
@@ -28,7 +27,7 @@ export default function UsersPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ id: 0, source: "local", email: "", displayName: "", password: "", role: "user", groupId: "" });
+  const [form, setForm] = useState({ id: 0, source: "local", email: "", displayName: "", password: "", groupId: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -55,12 +54,12 @@ export default function UsersPage() {
   useEffect(() => { load(); }, [load]);
 
   function openNew() {
-    setForm({ id: 0, source: "local", email: "", displayName: "", password: "", role: "user", groupId: "" });
+    setForm({ id: 0, source: "local", email: "", displayName: "", password: "", groupId: "" });
     setDialogOpen(true);
   }
 
   function openEdit(u: User) {
-    setForm({ id: u.id, source: u.source, email: u.email, displayName: u.displayName ?? "", password: "", role: u.role, groupId: u.groupId?.toString() ?? "" });
+    setForm({ id: u.id, source: u.source, email: u.email, displayName: u.displayName ?? "", password: "", groupId: u.groupId?.toString() ?? "" });
     setDialogOpen(true);
   }
 
@@ -73,7 +72,6 @@ export default function UsersPage() {
         email: form.email,
         displayName: form.displayName || undefined,
         ...(form.password ? { password: form.password } : {}),
-        role: form.role,
         groupId: form.groupId ? Number(form.groupId) : null,
       };
       const r = await fetch("/api/admin/users", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -201,7 +199,6 @@ export default function UsersPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>{u.role}</Badge>
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => setDeleteId(u.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
@@ -233,7 +230,6 @@ export default function UsersPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="outline" className="text-sky-600 border-sky-300 dark:text-sky-400 dark:border-sky-700">Azure</Badge>
-                      <Badge variant={u.role === "admin" ? "default" : "secondary"}>{u.role}</Badge>
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                     </div>
                   </div>
@@ -261,27 +257,15 @@ export default function UsersPage() {
                     <p className="text-sm font-medium">{form.displayName || form.email}</p>
                     {form.displayName && <p className="text-xs text-muted-foreground">{form.email}</p>}
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Role</Label>
-                      <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Group</Label>
-                      <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
-                        <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No group</SelectItem>
-                          {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Group</Label>
+                    <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
+                      <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No group</SelectItem>
+                        {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               ) : (
@@ -298,27 +282,15 @@ export default function UsersPage() {
                     <Label>{form.id ? "New Password (leave blank to keep)" : "Password"}</Label>
                     <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Role</Label>
-                      <Select value={form.role} onValueChange={v => setForm(f => ({ ...f, role: v }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label>Group</Label>
-                      <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
-                        <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No group</SelectItem>
-                          {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Group</Label>
+                    <Select value={form.groupId || "none"} onValueChange={v => setForm(f => ({ ...f, groupId: v === "none" ? "" : v }))}>
+                      <SelectTrigger><SelectValue placeholder="No group" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No group</SelectItem>
+                        {groups.map(g => <SelectItem key={g.id} value={String(g.id)}>{g.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </>
               )}
