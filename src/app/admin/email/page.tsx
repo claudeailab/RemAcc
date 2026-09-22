@@ -51,13 +51,13 @@ export default function EmailPage() {
   }
 
   async function handleTest() {
-    if (!testTo) { toast.error("Enter a test recipient"); return; }
     setTesting(true);
     try {
-      const r = await fetch("/api/admin/settings/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to: testTo }) });
+      const body = testTo ? { to: testTo } : {};
+      const r = await fetch("/api/admin/settings/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
-      toast.success("Test email sent");
+      toast.success(d.sent ? "Test email sent" : "SMTP connection successful");
     } finally { setTesting(false); }
   }
 
@@ -136,9 +136,9 @@ export default function EmailPage() {
               </Button>
             </form>
             <div className="mt-6 flex flex-col sm:flex-row gap-2 items-start">
-              <Input placeholder="Send test to..." value={testTo} onChange={e => setTestTo(e.target.value)} className="max-w-xs" />
+              <Input placeholder="Recipient (optional — leave blank to verify connection)" value={testTo} onChange={e => setTestTo(e.target.value)} className="max-w-sm" />
               <Button variant="outline" disabled={testing} onClick={handleTest}>
-                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Send Test Email"}
+                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : testTo ? "Send Test Email" : "Test Connection"}
               </Button>
             </div>
           </CardContent>

@@ -5,11 +5,11 @@ import { getSetting } from "@/lib/encryption";
 import { getPlatformInfo } from "@/lib/platform";
 import nodemailer from "nodemailer";
 
-const schema = z.object({ to: z.string().email() });
+const schema = z.object({ to: z.string().email().optional() });
 
 export async function POST(req: NextRequest) {
   await requireAdmin();
-  const body = await req.json().catch(() => null);
+  const body = await req.json().catch(() => ({}));
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
@@ -23,18 +23,23 @@ export async function POST(req: NextRequest) {
 
   if (!host || !fromEmail) return NextResponse.json({ error: "SMTP not configured" }, { status: 400 });
 
-  const platform = await getPlatformInfo();
+  const transporter = nodemailer.createTransport({
+    host,
+    port: Number(port ?? 587),
+    secure: ssl === "true",
+    auth: user && password ? { user, pass: password } : undefined,
+  });
 
   try {
-    const transporter = nodemailer.createTransport({
-      host,
-      port: Number(port ?? 587),
-      secure: ssl === "true",
-      auth: user && password ? { user, pass: password } : undefined,
-    });
-    await transporter.sendMail({ from: `${fromName} <${fromEmail}>`, to: parsed.data.to, subject: "Test Email", text: `This is a test email from ${platform.name}.` });
-    return NextResponse.json({ ok: true });
+    if (parsed.data.to) {
+      const platform = await getPlatformInfo();
+      await transporter.sendMail({ from: `${fromName} <${fromEmail}>`, to: parsed.data.to, subject: "Test Email", text: `This is a test email from ${platform.name}.` });
+      return NextResponse.json({ ok: true, sent: true });
+    } else {
+      await transporter.verify();
+      return NextResponse.json({ ok: true, sent: false });
+    }
   } catch {
-    return NextResponse.json({ error: "Failed to send email" }, { status: 400 });
+    return NextResponse.json({ error: "Failed to connect to SMTP server" }, { status: 400 });
   }
 }
