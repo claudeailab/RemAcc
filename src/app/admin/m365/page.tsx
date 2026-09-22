@@ -63,14 +63,8 @@ export default function M365Page() {
   return (
     <div className={pageWrapper}>
       <div className={pageInner}>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
-          <div className="flex items-center gap-4">
-            <h1 className={pageTitle}>Microsoft 365</h1>
-            <div className="flex items-center gap-2">
-              <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
-              <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
-            </div>
-          </div>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className={pageTitle}>Microsoft 365</h1>
           <Dialog>
             <DialogTrigger asChild><Button variant="outline" size="sm">Setup Guide</Button></DialogTrigger>
             <DialogContent className="max-w-md">
@@ -147,7 +141,18 @@ export default function M365Page() {
           </Dialog>
         </div>
         <Card>
-          <CardHeader><CardTitle>Azure AD Configuration</CardTitle><CardDescription>Connect this platform to your Microsoft 365 tenant.</CardDescription></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Azure AD Configuration</CardTitle>
+                <CardDescription>Connect this platform to your Microsoft 365 tenant.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+                <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+              </div>
+            </div>
+          </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className={fieldGap}>
               <div className="flex flex-col gap-1.5">
