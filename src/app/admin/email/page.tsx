@@ -19,7 +19,6 @@ export default function EmailPage() {
   const [showPass, setShowPass] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testTo, setTestTo] = useState("");
   const savedForm = useRef<FormState>(defaultForm);
 
   useEffect(() => {
@@ -53,11 +52,10 @@ export default function EmailPage() {
   async function handleTest() {
     setTesting(true);
     try {
-      const body = testTo ? { to: testTo } : {};
-      const r = await fetch("/api/admin/settings/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const r = await fetch("/api/admin/settings/email/test", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
-      toast.success(d.sent ? "Test email sent" : "SMTP connection successful");
+      toast.success("SMTP connection successful");
     } finally { setTesting(false); }
   }
 
@@ -131,16 +129,15 @@ export default function EmailPage() {
                   <Input type="email" value={form.fromEmail} onChange={e => setForm(f => ({ ...f, fromEmail: e.target.value }))} />
                 </div>
               </div>
-              <Button type="submit" disabled={!dirty || saving} className="w-full sm:w-auto">
-                {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button type="submit" disabled={!dirty || saving} className="w-full sm:w-auto">
+                  {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
+                </Button>
+                <Button type="button" variant="outline" disabled={testing} onClick={handleTest} className="w-full sm:w-auto">
+                  {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test Connection"}
+                </Button>
+              </div>
             </form>
-            <div className="mt-6 flex flex-col sm:flex-row gap-2 items-start">
-              <Input placeholder="Recipient (optional — leave blank to verify connection)" value={testTo} onChange={e => setTestTo(e.target.value)} className="max-w-sm" />
-              <Button variant="outline" disabled={testing} onClick={handleTest}>
-                {testing ? <Loader2 className="h-4 w-4 animate-spin" /> : testTo ? "Send Test Email" : "Test Connection"}
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

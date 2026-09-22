@@ -162,7 +162,7 @@ export default function AIPage() {
                     {savingAnthropic ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
                   </Button>
                   <Button variant="outline" onClick={testAnthropic} disabled={testingAnthropic} className="w-full sm:w-auto">
-                    {testingAnthropic ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test"}
+                    {testingAnthropic ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test Connection"}
                   </Button>
                 </div>
               </CardContent>
@@ -200,7 +200,7 @@ export default function AIPage() {
                     {savingOpenai ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
                   </Button>
                   <Button variant="outline" onClick={testOpenai} disabled={testingOpenai} className="w-full sm:w-auto">
-                    {testingOpenai ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test"}
+                    {testingOpenai ? <Loader2 className="h-4 w-4 animate-spin" /> : "Test Connection"}
                   </Button>
                 </div>
               </CardContent>
