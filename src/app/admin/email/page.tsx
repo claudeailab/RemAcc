@@ -10,8 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
 
-type FormState = { host: string; port: string; ssl: boolean; user: string; password: string; fromName: string; fromEmail: string };
-const defaultForm: FormState = { host: "", port: "587", ssl: false, user: "", password: "", fromName: "", fromEmail: "" };
+type FormState = { enabled: boolean; host: string; port: string; ssl: boolean; user: string; password: string; fromName: string; fromEmail: string };
+const defaultForm: FormState = { enabled: true, host: "", port: "587", ssl: false, user: "", password: "", fromName: "", fromEmail: "" };
 
 export default function EmailPage() {
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -35,6 +35,7 @@ export default function EmailPage() {
   }, []);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm.current);
+  const passConfigured = passwordSet && form.password === "";
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -65,7 +66,18 @@ export default function EmailPage() {
       <div className={pageInner}>
         <h1 className={pageTitle}>Email / SMTP Settings</h1>
         <Card className="mt-6">
-          <CardHeader><CardTitle>SMTP Configuration</CardTitle><CardDescription>Configure outbound email settings.</CardDescription></CardHeader>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>SMTP Configuration</CardTitle>
+                <CardDescription>Configure outbound email settings.</CardDescription>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+                <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+              </div>
+            </div>
+          </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className={fieldGap}>
               <div className="grid gap-4 sm:grid-cols-2">
@@ -90,16 +102,23 @@ export default function EmailPage() {
                 <div className="flex flex-col gap-1.5">
                   <Label>Password</Label>
                   <div className="relative">
-                    <Input type={showPass ? "text" : "password"} value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} className="pr-10" />
-                    <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
-                      {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
+                    <Input
+                      type={showPass ? "text" : "password"}
+                      value={form.password}
+                      onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                      placeholder={passConfigured ? "••••••••" : undefined}
+                      className={passConfigured ? "pr-28 ring-1 ring-emerald-500 border-emerald-500 focus-visible:ring-emerald-500" : "pr-10"}
+                    />
+                    {passConfigured ? (
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 rounded-full px-2 py-0.5 pointer-events-none select-none">
+                        <CheckCircle2 className="h-3 w-3 shrink-0" /> Configured
+                      </span>
+                    ) : (
+                      <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowPass(v => !v)}>
+                        {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                      </button>
+                    )}
                   </div>
-                  {passwordSet && form.password === "" && (
-                    <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Password saved — enter a new one to replace it
-                    </p>
-                  )}
                 </div>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">

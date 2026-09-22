@@ -11,28 +11,28 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
 
-function SecretInput({ value, onChange, placeholder, isSet, setLabel }: {
-  value: string; onChange: (v: string) => void; placeholder: string; isSet: boolean; setLabel: string;
+function SecretInput({ value, onChange, placeholder, isSet }: {
+  value: string; onChange: (v: string) => void; placeholder: string; isSet: boolean;
 }) {
   const [show, setShow] = useState(false);
+  const configured = isSet && value === "";
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="relative">
-        <Input
-          type={show ? "text" : "password"}
-          value={value}
-          onChange={e => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="pr-10"
-        />
+    <div className="relative">
+      <Input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={configured ? "••••••••" : placeholder}
+        className={configured ? "pr-28 ring-1 ring-emerald-500 border-emerald-500 focus-visible:ring-emerald-500" : "pr-10"}
+      />
+      {configured ? (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 rounded-full px-2 py-0.5 pointer-events-none select-none">
+          <CheckCircle2 className="h-3 w-3 shrink-0" /> Configured
+        </span>
+      ) : (
         <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShow(v => !v)}>
           {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
-      </div>
-      {isSet && value === "" && (
-        <p className="flex items-center gap-1.5 text-xs text-emerald-600">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />{setLabel}
-        </p>
       )}
     </div>
   );
@@ -116,11 +116,11 @@ function StripeTab() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Secret Key</Label>
-            <SecretInput value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder="sk_test_..." isSet={secretKeySet} setLabel="Key saved — enter a new one to replace it" />
+            <SecretInput value={form.secretKey} onChange={v => setForm(f => ({ ...f, secretKey: v }))} placeholder="sk_test_..." isSet={secretKeySet} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Webhook Secret</Label>
-            <SecretInput value={form.webhookSecret} onChange={v => setForm(f => ({ ...f, webhookSecret: v }))} placeholder="whsec_..." isSet={webhookSecretSet} setLabel="Secret saved — enter a new one to replace it" />
+            <SecretInput value={form.webhookSecret} onChange={v => setForm(f => ({ ...f, webhookSecret: v }))} placeholder="whsec_..." isSet={webhookSecretSet} />
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button type="submit" disabled={!dirty || saving} className="w-full sm:w-auto">
@@ -211,7 +211,7 @@ function VivaWalletTab() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Client Secret</Label>
-            <SecretInput value={form.clientSecret} onChange={v => setForm(f => ({ ...f, clientSecret: v }))} placeholder="Client Secret" isSet={clientSecretSet} setLabel="Secret saved — enter a new one to replace it" />
+            <SecretInput value={form.clientSecret} onChange={v => setForm(f => ({ ...f, clientSecret: v }))} placeholder="Client Secret" isSet={clientSecretSet} />
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Merchant ID <span className="text-muted-foreground font-normal">(optional)</span></Label>
@@ -305,7 +305,7 @@ function PayPalTab() {
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Client Secret</Label>
-            <SecretInput value={form.clientSecret} onChange={v => setForm(f => ({ ...f, clientSecret: v }))} placeholder="Client Secret" isSet={clientSecretSet} setLabel="Secret saved — enter a new one to replace it" />
+            <SecretInput value={form.clientSecret} onChange={v => setForm(f => ({ ...f, clientSecret: v }))} placeholder="Client Secret" isSet={clientSecretSet} />
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             <Button type="submit" disabled={!dirty || saving} className="w-full sm:w-auto">

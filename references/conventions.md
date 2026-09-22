@@ -19,35 +19,37 @@ All prefixed `WEBAPP_`. Never `NEXT_PUBLIC_*`. Stored server-side only.
 
 **Core vars:** `WEBAPP_JWT_SECRET`, `WEBAPP_ADMIN_JWT_SECRET`, `WEBAPP_ENCRYPTION_KEY`, `WEBAPP_ADMIN_EMAIL`, `WEBAPP_ADMIN_PASSWORD`, `WEBAPP_DB_{HOST,PORT,USER,PASSWORD,NAME}`
 
-**Feature flags** (enable instrumentation startup checks):
-`WEBAPP_M365_ENABLED`, `WEBAPP_SMTP_ENABLED`, `WEBAPP_ANTHROPIC_ENABLED`, `WEBAPP_OPENAI_ENABLED`, `WEBAPP_STRIPE_ENABLED`
-
-**Settings overrides** — when any of these are set, `getSetting()` returns the env value instead of querying the DB. The integration appears pre-configured in the admin UI automatically.
+**Settings overrides** — when any of these are set, `getSetting()` returns the env value instead of querying the DB. The integration appears pre-configured in the admin UI automatically. The mapping lives in `src/lib/encryption.ts` → `getEnvOverride()`.
 
 ```
 # AI
+WEBAPP_ANTHROPIC_ENABLED        → anthropic_enabled  (true/false, default true)
 WEBAPP_ANTHROPIC_API_KEY        → anthropic_apiKey
 WEBAPP_ANTHROPIC_MODEL          → anthropic_model
+WEBAPP_OPENAI_ENABLED           → openai_enabled     (true/false, default true)
 WEBAPP_OPENAI_API_KEY           → openai_apiKey
 WEBAPP_OPENAI_MODEL             → openai_model
 
 # Email / SMTP
+WEBAPP_SMTP_ENABLED             → smtp_enabled       (true/false, default true)
 WEBAPP_SMTP_HOST                → smtp_host
 WEBAPP_SMTP_PORT                → smtp_port
-WEBAPP_SMTP_SSL                 → smtp_ssl        (true/false)
+WEBAPP_SMTP_SSL                 → smtp_ssl           (true/false)
 WEBAPP_SMTP_USER                → smtp_user
 WEBAPP_SMTP_PASSWORD            → smtp_password
 WEBAPP_SMTP_FROM_NAME           → smtp_fromName
 WEBAPP_SMTP_FROM_EMAIL          → smtp_fromEmail
 
 # Microsoft 365
+WEBAPP_M365_ENABLED             → m365_enabled       (true/false, default true)
 WEBAPP_M365_CLIENT_ID           → m365_clientId
 WEBAPP_M365_CLIENT_SECRET       → m365_clientSecret
 WEBAPP_M365_TENANT_ID           → m365_tenantId
-WEBAPP_M365_EXPIRY_DATE         → m365_expiryDate   (ISO date, e.g. 2026-12-31)
+WEBAPP_M365_EXPIRY_DATE         → m365_expiryDate    (ISO date, e.g. 2026-12-31)
 WEBAPP_M365_REMINDER_DAYS       → m365_reminderDays  (default 30)
 
 # Stripe
+WEBAPP_STRIPE_ENABLED           → stripe_enabled     (true/false, default true)
 WEBAPP_STRIPE_LIVE_MODE         → stripe_liveMode    (true/false)
 WEBAPP_STRIPE_PUBLISHABLE_KEY   → stripe_publishableKey
 WEBAPP_STRIPE_SECRET_KEY        → stripe_secretKey
@@ -66,8 +68,6 @@ WEBAPP_VIVA_CLIENT_ID           → vivawallet_clientId
 WEBAPP_VIVA_CLIENT_SECRET       → vivawallet_clientSecret
 WEBAPP_VIVA_MERCHANT_ID         → vivawallet_merchantId
 ```
-
-The mapping lives in `src/lib/encryption.ts` → `ENV_SETTING_MAP`.
 
 ## Database
 

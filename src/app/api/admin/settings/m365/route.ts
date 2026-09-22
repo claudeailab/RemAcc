@@ -5,6 +5,7 @@ import { getSetting, setSetting } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
 
 const schema = z.object({
+  enabled: z.boolean(),
   clientId: z.string(),
   clientSecret: z.string(),
   tenantId: z.string(),
@@ -14,12 +15,15 @@ const schema = z.object({
 
 export async function GET() {
   await requireAdmin();
-  const clientId = await getSetting("m365_clientId");
-  const tenantId = await getSetting("m365_tenantId");
-  const expiryDate = await getSetting("m365_expiryDate");
-  const reminderDays = await getSetting("m365_reminderDays");
-  const clientSecret = await getSetting("m365_clientSecret");
-  return NextResponse.json({ data: { clientId: clientId ?? "", tenantId: tenantId ?? "", expiryDate: expiryDate ?? "", reminderDays: reminderDays ?? "30", clientSecretSet: !!clientSecret } });
+  const [enabled, clientId, tenantId, expiryDate, reminderDays, clientSecret] = await Promise.all([
+    getSetting("m365_enabled"),
+    getSetting("m365_clientId"),
+    getSetting("m365_tenantId"),
+    getSetting("m365_expiryDate"),
+    getSetting("m365_reminderDays"),
+    getSetting("m365_clientSecret"),
+  ]);
+  return NextResponse.json({ data: { enabled: enabled !== "false", clientId: clientId ?? "", tenantId: tenantId ?? "", expiryDate: expiryDate ?? "", reminderDays: reminderDays ?? "30", clientSecretSet: !!clientSecret } });
 }
 
 export async function POST(req: NextRequest) {
@@ -27,7 +31,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { clientId, clientSecret, tenantId, expiryDate, reminderDays } = parsed.data;
+  const { enabled, clientId, clientSecret, tenantId, expiryDate, reminderDays } = parsed.data;
 
   const [prevClientId, prevTenantId, prevExpiry, prevReminder] = await Promise.all([
     getSetting("m365_clientId"),
@@ -36,6 +40,7 @@ export async function POST(req: NextRequest) {
     getSetting("m365_reminderDays"),
   ]);
 
+  await setSetting("m365_enabled", String(enabled));
   await setSetting("m365_clientId", clientId);
   if (clientSecret) await setSetting("m365_clientSecret", clientSecret);
   await setSetting("m365_tenantId", tenantId);
@@ -43,6 +48,7 @@ export async function POST(req: NextRequest) {
   if (reminderDays) await setSetting("m365_reminderDays", String(reminderDays));
 
   const changes: string[] = [];
+  changes.push(`enabled: ${enabled}`);
   if (clientId !== (prevClientId ?? "")) changes.push(`clientId: ${prevClientId ?? "(unset)"}→${clientId}`);
   if (clientSecret) changes.push("clientSecret: [updated]");
   if (tenantId !== (prevTenantId ?? "")) changes.push(`tenantId: ${prevTenantId ?? "(unset)"}→${tenantId}`);

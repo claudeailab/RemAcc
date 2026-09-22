@@ -6,22 +6,52 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
+
+function SecretInput({ value, onChange, placeholder, isSet }: {
+  value: string; onChange: (v: string) => void; placeholder: string; isSet: boolean;
+}) {
+  const [show, setShow] = useState(false);
+  const configured = isSet && value === "";
+  return (
+    <div className="relative">
+      <Input
+        type={show ? "text" : "password"}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        placeholder={configured ? "••••••••" : placeholder}
+        className={configured ? "pr-28 ring-1 ring-emerald-500 border-emerald-500 focus-visible:ring-emerald-500" : "pr-10"}
+      />
+      {configured ? (
+        <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 rounded-full px-2 py-0.5 pointer-events-none select-none">
+          <CheckCircle2 className="h-3 w-3 shrink-0" /> Configured
+        </span>
+      ) : (
+        <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShow(v => !v)}>
+          {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default function AIPage() {
   const [anthropicKey, setAnthropicKey] = useState("");
   const [anthropicModel, setAnthropicModel] = useState("claude-sonnet-4-6");
   const [savedAnthropicModel, setSavedAnthropicModel] = useState("claude-sonnet-4-6");
   const [anthropicKeySet, setAnthropicKeySet] = useState(false);
+  const [anthropicEnabled, setAnthropicEnabled] = useState(true);
+  const [savedAnthropicEnabled, setSavedAnthropicEnabled] = useState(true);
   const [openaiKey, setOpenaiKey] = useState("");
   const [openaiModel, setOpenaiModel] = useState("gpt-4o");
   const [savedOpenaiModel, setSavedOpenaiModel] = useState("gpt-4o");
   const [openaiKeySet, setOpenaiKeySet] = useState(false);
-  const [showAnthropicKey, setShowAnthropicKey] = useState(false);
-  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [openaiEnabled, setOpenaiEnabled] = useState(true);
+  const [savedOpenaiEnabled, setSavedOpenaiEnabled] = useState(true);
   const [savingAnthropic, setSavingAnthropic] = useState(false);
   const [savingOpenai, setSavingOpenai] = useState(false);
   const [testingAnthropic, setTestingAnthropic] = useState(false);
@@ -33,21 +63,26 @@ export default function AIPage() {
       if (d.openaiModel) { setOpenaiModel(d.openaiModel); setSavedOpenaiModel(d.openaiModel); }
       setAnthropicKeySet(!!d.anthropicKeySet);
       setOpenaiKeySet(!!d.openaiKeySet);
+      const ae = d.anthropicEnabled !== false;
+      const oe = d.openaiEnabled !== false;
+      setAnthropicEnabled(ae); setSavedAnthropicEnabled(ae);
+      setOpenaiEnabled(oe); setSavedOpenaiEnabled(oe);
     });
   }, []);
 
-  const dirtyAnthropic = anthropicKey !== "" || anthropicModel !== savedAnthropicModel;
-  const dirtyOpenai = openaiKey !== "" || openaiModel !== savedOpenaiModel;
+  const dirtyAnthropic = anthropicKey !== "" || anthropicModel !== savedAnthropicModel || anthropicEnabled !== savedAnthropicEnabled;
+  const dirtyOpenai = openaiKey !== "" || openaiModel !== savedOpenaiModel || openaiEnabled !== savedOpenaiEnabled;
 
   async function saveAnthropic() {
     setSavingAnthropic(true);
     try {
-      const r = await fetch("/api/admin/settings/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "anthropic", apiKey: anthropicKey, model: anthropicModel }) });
+      const r = await fetch("/api/admin/settings/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "anthropic", apiKey: anthropicKey, model: anthropicModel, enabled: anthropicEnabled }) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
       toast.success("Anthropic settings saved");
       setAnthropicKey("");
       setSavedAnthropicModel(anthropicModel);
+      setSavedAnthropicEnabled(anthropicEnabled);
       setAnthropicKeySet(true);
     } finally { setSavingAnthropic(false); }
   }
@@ -65,12 +100,13 @@ export default function AIPage() {
   async function saveOpenai() {
     setSavingOpenai(true);
     try {
-      const r = await fetch("/api/admin/settings/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "openai", apiKey: openaiKey, model: openaiModel }) });
+      const r = await fetch("/api/admin/settings/ai", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ provider: "openai", apiKey: openaiKey, model: openaiModel, enabled: openaiEnabled }) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
       toast.success("OpenAI settings saved");
       setOpenaiKey("");
       setSavedOpenaiModel(openaiModel);
+      setSavedOpenaiEnabled(openaiEnabled);
       setOpenaiKeySet(true);
     } finally { setSavingOpenai(false); }
   }
@@ -96,22 +132,19 @@ export default function AIPage() {
           </TabsList>
           <TabsContent value="anthropic">
             <Card>
-              <CardHeader><CardTitle>Anthropic</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>Anthropic</CardTitle>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Label className="text-sm">{anthropicEnabled ? "Enabled" : "Disabled"}</Label>
+                    <Switch checked={anthropicEnabled} onCheckedChange={setAnthropicEnabled} />
+                  </div>
+                </div>
+              </CardHeader>
               <CardContent className={fieldGap}>
                 <div className="flex flex-col gap-1.5">
                   <Label>API Key</Label>
-                  <div className="relative">
-                    <Input type={showAnthropicKey ? "text" : "password"} value={anthropicKey} onChange={e => setAnthropicKey(e.target.value)} placeholder="sk-ant-..." className="pr-10" />
-                    <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowAnthropicKey(v => !v)}>
-                      {showAnthropicKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {anthropicKeySet && anthropicKey === "" && (
-                    <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      API key saved — enter a new one to replace it
-                    </p>
-                  )}
+                  <SecretInput value={anthropicKey} onChange={setAnthropicKey} placeholder="sk-ant-..." isSet={anthropicKeySet} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Model</Label>
@@ -137,22 +170,19 @@ export default function AIPage() {
           </TabsContent>
           <TabsContent value="openai">
             <Card>
-              <CardHeader><CardTitle>OpenAI</CardTitle></CardHeader>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle>OpenAI</CardTitle>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Label className="text-sm">{openaiEnabled ? "Enabled" : "Disabled"}</Label>
+                    <Switch checked={openaiEnabled} onCheckedChange={setOpenaiEnabled} />
+                  </div>
+                </div>
+              </CardHeader>
               <CardContent className={fieldGap}>
                 <div className="flex flex-col gap-1.5">
                   <Label>API Key</Label>
-                  <div className="relative">
-                    <Input type={showOpenaiKey ? "text" : "password"} value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} placeholder="sk-..." className="pr-10" />
-                    <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowOpenaiKey(v => !v)}>
-                      {showOpenaiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  {openaiKeySet && openaiKey === "" && (
-                    <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-                      API key saved — enter a new one to replace it
-                    </p>
-                  )}
+                  <SecretInput value={openaiKey} onChange={setOpenaiKey} placeholder="sk-..." isSet={openaiKeySet} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Model</Label>

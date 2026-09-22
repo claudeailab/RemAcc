@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Loader2, Eye, EyeOff, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
 
-type FormState = { clientId: string; clientSecret: string; tenantId: string; expiryDate: string; reminderDays: string };
-const defaultForm: FormState = { clientId: "", clientSecret: "", tenantId: "", expiryDate: "", reminderDays: "30" };
+type FormState = { enabled: boolean; clientId: string; clientSecret: string; tenantId: string; expiryDate: string; reminderDays: string };
+const defaultForm: FormState = { enabled: true, clientId: "", clientSecret: "", tenantId: "", expiryDate: "", reminderDays: "30" };
 
 export default function M365Page() {
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -34,6 +35,7 @@ export default function M365Page() {
   }, []);
 
   const dirty = JSON.stringify(form) !== JSON.stringify(savedForm.current);
+  const secretConfigured = clientSecretSet && form.clientSecret === "";
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -61,8 +63,14 @@ export default function M365Page() {
   return (
     <div className={pageWrapper}>
       <div className={pageInner}>
-        <div className="flex items-center justify-between mb-6">
-          <h1 className={pageTitle}>Microsoft 365</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div className="flex items-center gap-4">
+            <h1 className={pageTitle}>Microsoft 365</h1>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+              <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+            </div>
+          </div>
           <Dialog>
             <DialogTrigger asChild><Button variant="outline" size="sm">Setup Guide</Button></DialogTrigger>
             <DialogContent className="max-w-md">
@@ -149,16 +157,23 @@ export default function M365Page() {
               <div className="flex flex-col gap-1.5">
                 <Label>Client Secret</Label>
                 <div className="relative">
-                  <Input type={showSecret ? "text" : "password"} value={form.clientSecret} onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))} className="pr-10" />
-                  <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowSecret(v => !v)}>
-                    {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </button>
+                  <Input
+                    type={showSecret ? "text" : "password"}
+                    value={form.clientSecret}
+                    onChange={e => setForm(f => ({ ...f, clientSecret: e.target.value }))}
+                    placeholder={secretConfigured ? "••••••••" : undefined}
+                    className={secretConfigured ? "pr-28 ring-1 ring-emerald-500 border-emerald-500 focus-visible:ring-emerald-500" : "pr-10"}
+                  />
+                  {secretConfigured ? (
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-900/60 rounded-full px-2 py-0.5 pointer-events-none select-none">
+                      <CheckCircle2 className="h-3 w-3 shrink-0" /> Configured
+                    </span>
+                  ) : (
+                    <button type="button" className="absolute right-3 top-3 text-muted-foreground" onClick={() => setShowSecret(v => !v)}>
+                      {showSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  )}
                 </div>
-                {clientSecretSet && form.clientSecret === "" && (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />Secret saved — enter a new one to replace it
-                  </p>
-                )}
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Tenant ID</Label>

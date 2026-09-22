@@ -9,11 +9,14 @@ const ALGO = "aes-256-gcm";
 export function getEnvOverride(key: string): string | undefined {
   switch (key) {
     // AI
+    case "anthropic_enabled":       return process.env.WEBAPP_ANTHROPIC_ENABLED;
     case "anthropic_apiKey":        return process.env.WEBAPP_ANTHROPIC_API_KEY;
     case "anthropic_model":         return process.env.WEBAPP_ANTHROPIC_MODEL;
+    case "openai_enabled":          return process.env.WEBAPP_OPENAI_ENABLED;
     case "openai_apiKey":           return process.env.WEBAPP_OPENAI_API_KEY;
     case "openai_model":            return process.env.WEBAPP_OPENAI_MODEL;
     // Email / SMTP
+    case "smtp_enabled":            return process.env.WEBAPP_SMTP_ENABLED;
     case "smtp_host":               return process.env.WEBAPP_SMTP_HOST;
     case "smtp_port":               return process.env.WEBAPP_SMTP_PORT;
     case "smtp_ssl":                return process.env.WEBAPP_SMTP_SSL;
@@ -22,12 +25,14 @@ export function getEnvOverride(key: string): string | undefined {
     case "smtp_fromName":           return process.env.WEBAPP_SMTP_FROM_NAME;
     case "smtp_fromEmail":          return process.env.WEBAPP_SMTP_FROM_EMAIL;
     // Microsoft 365
+    case "m365_enabled":            return process.env.WEBAPP_M365_ENABLED;
     case "m365_clientId":           return process.env.WEBAPP_M365_CLIENT_ID;
     case "m365_clientSecret":       return process.env.WEBAPP_M365_CLIENT_SECRET;
     case "m365_tenantId":           return process.env.WEBAPP_M365_TENANT_ID;
     case "m365_expiryDate":         return process.env.WEBAPP_M365_EXPIRY_DATE;
     case "m365_reminderDays":       return process.env.WEBAPP_M365_REMINDER_DAYS;
     // Stripe
+    case "stripe_enabled":          return process.env.WEBAPP_STRIPE_ENABLED;
     case "stripe_liveMode":         return process.env.WEBAPP_STRIPE_LIVE_MODE;
     case "stripe_publishableKey":   return process.env.WEBAPP_STRIPE_PUBLISHABLE_KEY;
     case "stripe_secretKey":        return process.env.WEBAPP_STRIPE_SECRET_KEY;
@@ -49,10 +54,11 @@ export function getEnvOverride(key: string): string | undefined {
 
 // Keys that can be overridden via env vars (for UI "locked" state detection)
 export const ENV_SETTING_KEYS = new Set([
-  "anthropic_apiKey","anthropic_model","openai_apiKey","openai_model",
-  "smtp_host","smtp_port","smtp_ssl","smtp_user","smtp_password","smtp_fromName","smtp_fromEmail",
-  "m365_clientId","m365_clientSecret","m365_tenantId","m365_expiryDate","m365_reminderDays",
-  "stripe_liveMode","stripe_publishableKey","stripe_secretKey","stripe_webhookSecret",
+  "anthropic_enabled","anthropic_apiKey","anthropic_model",
+  "openai_enabled","openai_apiKey","openai_model",
+  "smtp_enabled","smtp_host","smtp_port","smtp_ssl","smtp_user","smtp_password","smtp_fromName","smtp_fromEmail",
+  "m365_enabled","m365_clientId","m365_clientSecret","m365_tenantId","m365_expiryDate","m365_reminderDays",
+  "stripe_enabled","stripe_liveMode","stripe_publishableKey","stripe_secretKey","stripe_webhookSecret",
   "paypal_enabled","paypal_liveMode","paypal_clientId","paypal_clientSecret",
   "vivawallet_enabled","vivawallet_liveMode","vivawallet_clientId","vivawallet_clientSecret","vivawallet_merchantId",
 ]);

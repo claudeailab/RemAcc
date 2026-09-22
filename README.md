@@ -130,22 +130,19 @@ docker compose pull && docker compose up -d
 | `WEBAPP_DB_USER` | MySQL user |
 | `WEBAPP_DB_PASSWORD` | MySQL password |
 | `WEBAPP_DB_NAME` | MySQL database name |
-| `WEBAPP_M365_ENABLED` | Set `true` to enable M365 startup health check |
-| `WEBAPP_SMTP_ENABLED` | Set `true` to enable SMTP startup health check |
-| `WEBAPP_ANTHROPIC_ENABLED` | Set `true` to enable Anthropic startup health check |
-| `WEBAPP_OPENAI_ENABLED` | Set `true` to enable OpenAI startup health check |
-| `WEBAPP_STRIPE_ENABLED` | Set `true` to enable Stripe startup health check |
-
 ### Settings Overrides
 
-Setting any of these env vars pre-configures that integration in the admin UI — no manual entry needed. The env value always takes precedence over anything saved in the database.
+Setting any of these env vars pre-configures that integration in the admin UI — no manual entry needed. The env value always takes precedence over anything saved in the database. Configured secrets show a prominent **Configured** badge inside the field in the UI.
 
 | Variable | Setting |
 |---|---|
+| `WEBAPP_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
 | `WEBAPP_ANTHROPIC_API_KEY` | Anthropic API key |
 | `WEBAPP_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
+| `WEBAPP_OPENAI_ENABLED` | Enable OpenAI (`true`/`false`, default `true`) |
 | `WEBAPP_OPENAI_API_KEY` | OpenAI API key |
 | `WEBAPP_OPENAI_MODEL` | OpenAI model (default: `gpt-4o`) |
+| `WEBAPP_SMTP_ENABLED` | Enable SMTP email (`true`/`false`, default `true`) |
 | `WEBAPP_SMTP_HOST` | SMTP hostname |
 | `WEBAPP_SMTP_PORT` | SMTP port |
 | `WEBAPP_SMTP_SSL` | SMTP TLS (`true`/`false`) |
@@ -153,24 +150,26 @@ Setting any of these env vars pre-configures that integration in the admin UI �
 | `WEBAPP_SMTP_PASSWORD` | SMTP password |
 | `WEBAPP_SMTP_FROM_NAME` | Sender display name |
 | `WEBAPP_SMTP_FROM_EMAIL` | Sender email address |
+| `WEBAPP_M365_ENABLED` | Enable Microsoft 365 (`true`/`false`, default `true`) |
 | `WEBAPP_M365_CLIENT_ID` | Azure app client ID |
 | `WEBAPP_M365_CLIENT_SECRET` | Azure app client secret |
 | `WEBAPP_M365_TENANT_ID` | Azure tenant ID |
 | `WEBAPP_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `2027-01-01`) |
 | `WEBAPP_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
+| `WEBAPP_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
 | `WEBAPP_STRIPE_SECRET_KEY` | Stripe secret key |
 | `WEBAPP_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `WEBAPP_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `WEBAPP_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
+| `WEBAPP_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
 | `WEBAPP_PAYPAL_CLIENT_ID` | PayPal client ID |
 | `WEBAPP_PAYPAL_CLIENT_SECRET` | PayPal client secret |
 | `WEBAPP_PAYPAL_LIVE_MODE` | PayPal live mode (`true`/`false`) |
-| `WEBAPP_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
+| `WEBAPP_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
 | `WEBAPP_VIVA_CLIENT_ID` | Viva Wallet client ID |
 | `WEBAPP_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
 | `WEBAPP_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
 | `WEBAPP_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |
-| `WEBAPP_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
 
 ---
 
