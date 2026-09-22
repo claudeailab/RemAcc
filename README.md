@@ -63,47 +63,83 @@ A production-ready Next.js SaaS foundation with admin panel, multi-provider auth
 
 ## Getting Started
 
-```yaml
-services:
+Add the service to your `docker-compose.yml` and define the variables in a `.env` file alongside it.
 
-  app:
+```yaml
+  webapp:
     image: ghcr.io/claudeailab/webapp
-    container_name: app
-    hostname: app
+    container_name: webapp
+    hostname: webapp
     restart: unless-stopped
     user: "0"
     environment:
-      TZ: UTC
-      WEBAPP_JWT_SECRET: change-me
-      WEBAPP_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
-      WEBAPP_ADMIN_JWT_SECRET: change-me
-      WEBAPP_ADMIN_EMAIL: admin@example.com
-      WEBAPP_ADMIN_PASSWORD: change-me
-      WEBAPP_DB_HOST: db
-      WEBAPP_DB_PORT: 3306
-      WEBAPP_DB_USER: app
-      WEBAPP_DB_PASSWORD: change-me
-      WEBAPP_DB_NAME: app
+      TZ: ${TZ}
+
+      WEBAPP_JWT_SECRET: ${WEBAPP_JWT_SECRET}
+      WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
+      WEBAPP_ADMIN_JWT_SECRET: ${WEBAPP_ADMIN_JWT_SECRET}
+
+      WEBAPP_ADMIN_EMAIL: ${WEBAPP_ADMIN_EMAIL}
+      WEBAPP_ADMIN_PASSWORD: ${WEBAPP_ADMIN_PASSWORD}
+
+      WEBAPP_DB_HOST: ${WEBAPP_DB_HOST}
+      WEBAPP_DB_PORT: ${WEBAPP_DB_PORT}
+      WEBAPP_DB_USER: ${WEBAPP_DB_USER}
+      WEBAPP_DB_NAME: ${WEBAPP_DB_NAME}
+      WEBAPP_DB_PASSWORD: ${WEBAPP_DB_PASSWORD}
+
+      WEBAPP_SMTP_ENABLED: ${WEBAPP_SMTP_ENABLED}
+      WEBAPP_SMTP_SSL: ${WEBAPP_SMTP_SSL}
+      WEBAPP_SMTP_HOST: ${WEBAPP_SMTP_HOST}
+      WEBAPP_SMTP_PORT: ${WEBAPP_SMTP_PORT}
+      WEBAPP_SMTP_USER: ${WEBAPP_SMTP_USER}
+      WEBAPP_SMTP_PASSWORD: ${WEBAPP_SMTP_PASSWORD}
+      WEBAPP_SMTP_FROM_NAME: ${WEBAPP_SMTP_FROM_NAME}
+      WEBAPP_SMTP_FROM_EMAIL: ${WEBAPP_SMTP_FROM_EMAIL}
+
+      WEBAPP_M365_ENABLED: ${WEBAPP_M365_ENABLED}
+      WEBAPP_M365_CLIENT_ID: ${WEBAPP_M365_CLIENT_ID}
+      WEBAPP_M365_TENANT_ID: ${WEBAPP_M365_TENANT_ID}
+      WEBAPP_M365_CLIENT_SECRET: ${WEBAPP_M365_CLIENT_SECRET}
+      WEBAPP_M365_EXPIRY_DATE: ${WEBAPP_M365_EXPIRY_DATE}
+      WEBAPP_M365_REMINDER_DAYS: ${WEBAPP_M365_REMINDER_DAYS}
+
+      WEBAPP_STRIPE_ENABLED: ${WEBAPP_STRIPE_ENABLED}
+      WEBAPP_STRIPE_LIVE_MODE: ${WEBAPP_STRIPE_LIVE_MODE}
+      WEBAPP_STRIPE_PUBLISHABLE_KEY: ${WEBAPP_STRIPE_PUBLISHABLE_KEY}
+      WEBAPP_STRIPE_SECRET_KEY: ${WEBAPP_STRIPE_SECRET_KEY}
+      WEBAPP_STRIPE_WEBHOOK_SECRET: ${WEBAPP_STRIPE_WEBHOOK_SECRET}
+
+      WEBAPP_ANTHROPIC_ENABLED: ${WEBAPP_ANTHROPIC_ENABLED}
+      WEBAPP_ANTHROPIC_MODEL: ${WEBAPP_ANTHROPIC_MODEL}
+      WEBAPP_ANTHROPIC_API_KEY: ${WEBAPP_ANTHROPIC_API_KEY}
+
+      WEBAPP_OPENAI_ENABLED: ${WEBAPP_OPENAI_ENABLED}
+      WEBAPP_OPENAI_MODEL: ${WEBAPP_OPENAI_MODEL}
+      WEBAPP_OPENAI_API_KEY: ${WEBAPP_OPENAI_API_KEY}
     ports:
       - 8095:8095
     volumes:
-      - ./config/app/data:/data
+      - ./config/webapp/data:/data
+    networks:
+      - network
+    depends_on:
+      mysql:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8095/api/health"]
+      test:
+        - CMD
+        - wget
+        - -qO
+        - /dev/null
+        - http://127.0.0.1:8095/api/health
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 10s
-    # depends_on:
-    #   db:
-    #     condition: service_healthy
-
-networks:
-  default:
-    name: app
+      start_period: 30s
 ```
 
-> **Generate a valid encryption key:** `openssl rand -hex 32`
+> **Generate secrets:** `openssl rand -hex 32` (use once each for `WEBAPP_JWT_SECRET`, `WEBAPP_ADMIN_JWT_SECRET`, and `WEBAPP_ENCRYPTION_KEY`)
 
 ---
 
