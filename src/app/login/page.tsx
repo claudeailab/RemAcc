@@ -56,7 +56,7 @@ function LoginForm({ platformName }: { platformName: string }) {
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="username">Username</Label>
-        <Input id="username" type="text" required value={username} onChange={e => setUsername(e.target.value)} placeholder="username" autoComplete="username" />
+        <Input id="username" type="text" required value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Password</Label>
