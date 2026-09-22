@@ -139,8 +139,6 @@ Add the service to your `docker-compose.yml` and define the variables in a `.env
       start_period: 30s
 ```
 
-> **Generate secrets:** `openssl rand -hex 32` (use once each for `WEBAPP_JWT_SECRET`, `WEBAPP_ADMIN_JWT_SECRET`, and `WEBAPP_ENCRYPTION_KEY`)
-
 ---
 
 ## Updating
@@ -153,25 +151,21 @@ docker compose pull && docker compose up -d
 
 ## Environment Variables
 
+Setting any of these env vars pre-configures that integration in the admin UI â€” no manual entry needed. The env value always takes precedence over anything saved in the database. Configured secrets show a prominent **Configured** badge inside the field in the UI.
+
 | Variable | Description |
 |---|---|
 | `TZ` | Timezone (e.g. `UTC`) |
 | `WEBAPP_JWT_SECRET` | Session signing secret |
 | `WEBAPP_ADMIN_JWT_SECRET` | Admin JWT signing secret |
 | `WEBAPP_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
-| `WEBAPP_ADMIN_EMAIL` | Seeds first admin user on first login |
-| `WEBAPP_ADMIN_PASSWORD` | Seeds first admin password on first login |
+| `WEBAPP_ADMIN_EMAIL` | Seeds first admin user on first boot |
+| `WEBAPP_ADMIN_PASSWORD` | Seeds first admin password on first boot |
 | `WEBAPP_DB_HOST` | MySQL host |
 | `WEBAPP_DB_PORT` | MySQL port (default: `3306`) |
 | `WEBAPP_DB_USER` | MySQL user |
 | `WEBAPP_DB_PASSWORD` | MySQL password |
 | `WEBAPP_DB_NAME` | MySQL database name |
-### Settings Overrides
-
-Setting any of these env vars pre-configures that integration in the admin UI â€” no manual entry needed. The env value always takes precedence over anything saved in the database. Configured secrets show a prominent **Configured** badge inside the field in the UI.
-
-| Variable | Setting |
-|---|---|
 | `WEBAPP_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
 | `WEBAPP_ANTHROPIC_API_KEY` | Anthropic API key |
 | `WEBAPP_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
@@ -190,11 +184,11 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | `WEBAPP_M365_CLIENT_ID` | Azure app client ID |
 | `WEBAPP_M365_CLIENT_SECRET` | Azure app client secret |
 | `WEBAPP_M365_TENANT_ID` | Azure tenant ID |
-| `WEBAPP_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `2027-01-01`) |
+| `WEBAPP_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
 | `WEBAPP_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
 | `WEBAPP_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
-| `WEBAPP_STRIPE_SECRET_KEY` | Stripe secret key |
 | `WEBAPP_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `WEBAPP_STRIPE_SECRET_KEY` | Stripe secret key |
 | `WEBAPP_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
 | `WEBAPP_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
 | `WEBAPP_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
@@ -206,18 +200,3 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | `WEBAPP_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
 | `WEBAPP_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
 | `WEBAPP_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |
-
----
-
-## Tech Stack
-
-- **Framework:** Next.js (App Router, standalone), TypeScript, React 19
-- **Styling:** TailwindCSS 4, shadcn/ui, Radix UI primitives
-- **Database:** MySQL + Drizzle ORM
-- **Auth:** bcrypt, custom session tokens, MSAL (Azure AD)
-- **AI:** @anthropic-ai/sdk, openai
-- **Payments:** Stripe, PayPal, Viva Wallet
-- **Email:** nodemailer
-- **M365:** @azure/msal-node, @microsoft/microsoft-graph-client
-- **Validation:** Zod
-- **Containerisation:** Docker (node:22-alpine, multi-arch)
