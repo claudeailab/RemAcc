@@ -8,7 +8,7 @@ import { createSession } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
-const schema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const schema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for") ?? "unknown";
@@ -20,13 +20,13 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { email, password } = parsed.data;
+  const { username, password } = parsed.data;
 
   // Auto-seed first admin with Administrators group
-  const adminEmail = process.env.WEBAPP_ADMIN_EMAIL;
+  const adminUsername = process.env.WEBAPP_ADMIN_USERNAME;
   const adminPassword = process.env.WEBAPP_ADMIN_PASSWORD;
-  if (adminEmail && adminPassword) {
-    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, adminEmail)).limit(1);
+  if (adminUsername && adminPassword) {
+    const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, adminUsername)).limit(1);
     if (!existing) {
       // Ensure Administrators group exists
       let groupId: number;
@@ -46,15 +46,26 @@ export async function POST(req: NextRequest) {
         groupId = Number(result[0].insertId);
       }
       const hash = await bcrypt.hash(adminPassword, 12);
-      await db.insert(users).values({ email: adminEmail, source: "local", passwordHash: hash, groupId });
+      await db.insert(users).values({ email: adminUsername, username: adminUsername, source: "local", passwordHash: hash, groupId });
     }
   }
 
-  const [user] = await db
-    .select({ id: users.id, email: users.email, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source })
+  // Try local user lookup by username first, then fall back to email (for Azure detection)
+  const [userByUsername] = await db
+    .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source })
     .from(users)
-    .where(eq(users.email, email))
+    .where(eq(users.username, username))
     .limit(1);
+
+  const [userByEmail] = !userByUsername
+    ? await db
+        .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source })
+        .from(users)
+        .where(eq(users.email, username))
+        .limit(1)
+    : [undefined];
+
+  const user = userByUsername ?? userByEmail;
 
   if (user?.source === "azure") {
     return NextResponse.json({ azureLogin: true });
@@ -81,7 +92,7 @@ export async function POST(req: NextRequest) {
   const token = await createSession(user.id);
   const redirectPath = isAdmin ? "/admin" : "/dashboard";
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
-  await logAudit({ userEmail: user.email, action: "login", resource: "auth", ip });
+  await logAudit({ userEmail: user.username ?? user.email, action: "login", resource: "auth", ip });
 
   const res = NextResponse.json({ redirect: redirectPath });
   res.cookies.set("webapp-session", token, {

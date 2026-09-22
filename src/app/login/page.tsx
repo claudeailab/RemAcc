@@ -20,7 +20,7 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function LoginForm({ platformName }: { platformName: string }) {
   const searchParams = useSearchParams();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -36,11 +36,11 @@ function LoginForm({ platformName }: { platformName: string }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (data.azureLogin) {
-        window.location.href = `/api/auth/azure?email=${encodeURIComponent(email)}`;
+        window.location.href = `/api/auth/azure?email=${encodeURIComponent(username)}`;
         return;
       }
       if (!res.ok) { toast.error(data.error ?? "Login failed"); return; }
@@ -55,8 +55,8 @@ function LoginForm({ platformName }: { platformName: string }) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1.5">
-        <Label htmlFor="email">Email</Label>
-        <Input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" />
+        <Label htmlFor="username">Username</Label>
+        <Input id="username" type="text" required value={username} onChange={e => setUsername(e.target.value)} placeholder="username" autoComplete="username" />
       </div>
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="password">Password</Label>

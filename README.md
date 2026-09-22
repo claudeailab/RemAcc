@@ -80,7 +80,7 @@ services:
       WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
       WEBAPP_ADMIN_JWT_SECRET: ${WEBAPP_ADMIN_JWT_SECRET}
 
-      WEBAPP_ADMIN_EMAIL: ${WEBAPP_ADMIN_EMAIL}
+      WEBAPP_ADMIN_USERNAME: ${WEBAPP_ADMIN_USERNAME}
       WEBAPP_ADMIN_PASSWORD: ${WEBAPP_ADMIN_PASSWORD}
 
       WEBAPP_DB_HOST: ${WEBAPP_DB_HOST}
@@ -160,7 +160,7 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | `WEBAPP_JWT_SECRET` | Session signing secret |
 | `WEBAPP_ADMIN_JWT_SECRET` | Admin JWT signing secret |
 | `WEBAPP_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
-| `WEBAPP_ADMIN_EMAIL` | Seeds first admin user on first boot |
+| `WEBAPP_ADMIN_USERNAME` | Seeds first admin user on first boot (used as login username) |
 | `WEBAPP_ADMIN_PASSWORD` | Seeds first admin password on first boot |
 | `WEBAPP_DB_HOST` | MySQL host |
 | `WEBAPP_DB_PORT` | MySQL port (default: `3306`) |

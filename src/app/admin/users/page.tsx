@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Plus, Pencil, Trash2, CloudDownload, Search } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
-interface User { id: number; email: string; displayName: string | null; source: string; groupId: number | null }
+interface User { id: number; email: string; username: string | null; displayName: string | null; source: string; groupId: number | null }
 interface Group { id: number; name: string }
 interface AzureDirectoryUser {
   oid: string;
@@ -28,7 +28,7 @@ export default function UsersPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [form, setForm] = useState({ id: 0, source: "local", email: "", displayName: "", password: "", groupId: "" });
+  const [form, setForm] = useState({ id: 0, source: "local", username: "", email: "", displayName: "", password: "", groupId: "" });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -55,12 +55,12 @@ export default function UsersPage() {
   useEffect(() => { load(); }, [load]);
 
   function openNew() {
-    setForm({ id: 0, source: "local", email: "", displayName: "", password: "", groupId: "" });
+    setForm({ id: 0, source: "local", username: "", email: "", displayName: "", password: "", groupId: "" });
     setDialogOpen(true);
   }
 
   function openEdit(u: User) {
-    setForm({ id: u.id, source: u.source, email: u.email, displayName: u.displayName ?? "", password: "", groupId: u.groupId?.toString() ?? "" });
+    setForm({ id: u.id, source: u.source, username: u.username ?? "", email: u.email, displayName: u.displayName ?? "", password: "", groupId: u.groupId?.toString() ?? "" });
     setDialogOpen(true);
   }
 
@@ -70,7 +70,8 @@ export default function UsersPage() {
       const method = form.id ? "PUT" : "POST";
       const payload = {
         ...(form.id ? { id: form.id } : {}),
-        email: form.email,
+        username: form.username,
+        ...(form.email ? { email: form.email } : {}),
         displayName: form.displayName || undefined,
         ...(form.password ? { password: form.password } : {}),
         groupId: form.groupId ? Number(form.groupId) : null,
@@ -193,8 +194,8 @@ export default function UsersPage() {
                 {localUsers.map(u => (
                   <div key={u.id} className="flex items-center justify-between rounded-lg border p-4">
                     <div>
-                      <p className="font-medium text-sm">{u.displayName ?? u.email}</p>
-                      <p className={muted}>{u.email}</p>
+                      <p className="font-medium text-sm">{u.displayName ?? u.username ?? u.email}</p>
+                      <p className={muted}>{u.username ?? u.email}</p>
                       {u.groupId && groups.find(g => g.id === u.groupId) && (
                         <p className="text-xs text-primary mt-0.5">{groups.find(g => g.id === u.groupId)?.name}</p>
                       )}
@@ -272,8 +273,8 @@ export default function UsersPage() {
               ) : (
                 <>
                   <div className="flex flex-col gap-1.5">
-                    <Label>Email</Label>
-                    <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                    <Label>Username</Label>
+                    <Input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} autoComplete="off" />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Display Name</Label>

@@ -30,6 +30,7 @@ export async function register() {
       `CREATE TABLE IF NOT EXISTS \`webapp_users\` (
         \`id\` int NOT NULL AUTO_INCREMENT,
         \`email\` varchar(255) NOT NULL,
+        \`username\` varchar(255) NULL,
         \`display_name\` varchar(255),
         \`source\` varchar(50) NOT NULL DEFAULT 'local',
         \`azure_oid\` varchar(255),
@@ -38,7 +39,8 @@ export async function register() {
         \`last_login_at\` timestamp NULL,
         \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`),
-        UNIQUE KEY \`webapp_users_email_unique\` (\`email\`)
+        UNIQUE KEY \`webapp_users_email_unique\` (\`email\`),
+        UNIQUE KEY \`webapp_users_username_unique\` (\`username\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       `CREATE TABLE IF NOT EXISTS \`webapp_sessions\` (
         \`id\` varchar(255) NOT NULL,
@@ -75,10 +77,12 @@ export async function register() {
       await db.execute(sql as unknown as Parameters<typeof db.execute>[0]);
     }
 
-    // Drop deprecated columns from older deployments (no-op if already removed)
+    // Schema migrations (no-op if already applied)
     const migrations = [
       "ALTER TABLE `webapp_users` DROP COLUMN `role`",
       "ALTER TABLE `webapp_permission_groups` DROP COLUMN `is_default`",
+      "ALTER TABLE `webapp_users` ADD COLUMN `username` varchar(255) NULL",
+      "ALTER TABLE `webapp_users` ADD UNIQUE KEY `webapp_users_username_unique` (`username`)",
     ];
     for (const sql of migrations) {
       try {

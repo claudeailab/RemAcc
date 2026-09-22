@@ -8,13 +8,15 @@ import { eq, sql } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
-  email: z.string().email(),
+  username: z.string().min(1),
+  email: z.string().email().optional(),
   displayName: z.string().optional(),
   password: z.string().min(8),
   groupId: z.number().int().positive().nullable().optional(),
 });
 const updateSchema = z.object({
   id: z.number().int().positive(),
+  username: z.string().min(1).optional(),
   email: z.string().email().optional(),
   displayName: z.string().optional(),
   password: z.string().min(8).optional(),
@@ -24,7 +26,7 @@ const updateSchema = z.object({
 export async function GET() {
   await requireAdmin();
   const list = await db
-    .select({ id: users.id, email: users.email, displayName: users.displayName, source: users.source, groupId: users.groupId })
+    .select({ id: users.id, email: users.email, username: users.username, displayName: users.displayName, source: users.source, groupId: users.groupId })
     .from(users)
     .limit(200);
   return NextResponse.json({ users: list });
@@ -35,11 +37,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { email, displayName, password, groupId } = parsed.data;
+  const { username, email, displayName, password, groupId } = parsed.data;
+  const effectiveEmail = email ?? username;
   const passwordHash = await bcrypt.hash(password, 12);
-  await db.insert(users).values({ email, displayName, passwordHash, source: "local", groupId: groupId ?? null });
+  await db.insert(users).values({ email: effectiveEmail, username, displayName, passwordHash, source: "local", groupId: groupId ?? null });
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
-  const parts = [`email=${email}`];
+  const parts = [`username=${username}`];
   if (displayName) parts.push(`displayName=${displayName}`);
   if (groupId) parts.push(`groupId=${groupId}`);
   await logAudit({ userEmail: admin.email, action: "create", resource: "user", detail: parts.join("; "), ip });
@@ -54,7 +57,7 @@ export async function PUT(req: NextRequest) {
   const { id, email, displayName, password, groupId } = parsed.data;
 
   const [existing] = await db
-    .select({ email: users.email, displayName: users.displayName, groupId: users.groupId })
+    .select({ email: users.email, username: users.username, displayName: users.displayName, groupId: users.groupId })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -62,6 +65,7 @@ export async function PUT(req: NextRequest) {
   const passwordHash = password ? await bcrypt.hash(password, 12) : undefined;
   type UpdateSet = Parameters<ReturnType<typeof db.update<typeof users>>["set"]>[0];
   const set: UpdateSet = {};
+  if (username) set.username = sql`${username}`;
   if (email) set.email = sql`${email}`;
   if (displayName !== undefined) set.displayName = sql`${displayName}`;
   if (passwordHash) set.passwordHash = sql`${passwordHash}`;
@@ -70,6 +74,7 @@ export async function PUT(req: NextRequest) {
   await db.update(users).set(set).where(eq(users.id, id));
 
   const changes: string[] = [`id=${id}`];
+  if (username && username !== existing?.username) changes.push(`username: ${existing?.username ?? "(unset)"}→${username}`);
   if (email && email !== existing?.email) changes.push(`email: ${existing?.email ?? "(unset)"}→${email}`);
   if (displayName !== undefined && displayName !== existing?.displayName) changes.push(`displayName: ${existing?.displayName ?? "(unset)"}→${displayName || "(cleared)"}`);
   if (password) changes.push("password: [updated]");

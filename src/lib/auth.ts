@@ -28,6 +28,7 @@ export async function getUser() {
     .select({
       id: users.id,
       email: users.email,
+      username: users.username,
       displayName: users.displayName,
       groupId: users.groupId,
       permissions: permission_groups.permissions,
@@ -39,7 +40,7 @@ export async function getUser() {
 
   if (!row) return null;
   const perms = JSON.parse(row.permissions ?? "[]") as string[];
-  return { id: row.id, email: row.email, displayName: row.displayName, groupId: row.groupId, isAdmin: perms.includes("administrator") };
+  return { id: row.id, email: row.username ?? row.email, displayName: row.displayName, groupId: row.groupId, isAdmin: perms.includes("administrator") };
 }
 
 export async function requireSession() {

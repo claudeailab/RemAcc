@@ -25,6 +25,7 @@ export const permission_groups = mysqlTable("webapp_permission_groups", {
 export const users = mysqlTable("webapp_users", {
   id: int("id").autoincrement().primaryKey(),
   email: varchar("email", { length: 255 }).notNull().unique(),
+  username: varchar("username", { length: 255 }).unique(),
   displayName: varchar("display_name", { length: 255 }),
   source: varchar("source", { length: 50 }).notNull().default("local"),
   azureOid: varchar("azure_oid", { length: 255 }),
