@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { id, email, displayName, password, groupId } = parsed.data;
+  const { id, username, email, displayName, password, groupId } = parsed.data;
 
   const [existing] = await db
     .select({ email: users.email, username: users.username, displayName: users.displayName, groupId: users.groupId })
