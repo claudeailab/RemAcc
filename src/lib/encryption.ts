@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-const KEY = Buffer.from(process.env.WEBAPP_ENCRYPTION_KEY ?? "", "hex");
+const KEY = crypto.createHash("sha256").update(process.env.WEBAPP_ENCRYPTION_KEY ?? "").digest();
 const ALGO = "aes-256-gcm";
 
 export function encrypt(plain: string): string {
