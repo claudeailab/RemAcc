@@ -70,7 +70,7 @@ export default function M365Page() {
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Azure App Registration</DialogTitle>
-                <p className="text-sm text-emerald-600 dark:text-emerald-400 font-medium">Setup guide — takes about 5 minutes</p>
+                <p className="text-sm text-primary font-medium">Setup guide — takes about 5 minutes</p>
               </DialogHeader>
               <div className="space-y-4 text-sm">
                 {[
@@ -79,10 +79,10 @@ export default function M365Page() {
                     title: "Create the App Registration",
                     body: (
                       <div className="space-y-2">
-                        <p>In the <strong>Azure Portal</strong>, go to <strong>Microsoft Entra ID → App registrations → New registration</strong>.</p>
+                        <p>In the <strong>Azure Portal</strong>, go to <strong>App registrations → New registration</strong>.</p>
                         <ul className="space-y-1 pl-2">
-                          <li><span className="text-muted-foreground">· </span><strong>Name:</strong> your platform name</li>
-                          <li><span className="text-muted-foreground">· </span><strong>Supported account types:</strong> Accounts in any organizational directory (Multitenant)</li>
+                          <li><span className="text-muted-foreground">· </span><strong>Name:</strong> your app name</li>
+                          <li><span className="text-muted-foreground">· </span><strong>Supported account types:</strong> Any Microsoft Entra ID tenant + Personal Microsoft accounts</li>
                           <li className="flex flex-wrap items-center gap-1.5">
                             <span className="text-muted-foreground">· </span><strong>Redirect URI:</strong>
                             <span className="text-muted-foreground">Web →</span>
@@ -105,10 +105,10 @@ export default function M365Page() {
                   },
                   {
                     n: 2,
-                    title: "Copy the Client ID & Grant API Permissions",
+                    title: "Copy IDs & Grant API Permissions",
                     body: (
                       <div className="space-y-2">
-                        <p>From the app&apos;s <strong>Overview</strong> page, copy the <strong>Application (client) ID</strong> and paste it in the form.</p>
+                        <p>From the app&apos;s <strong>Overview</strong> page, copy the <strong>Application (client) ID</strong> and <strong>Directory (tenant) ID</strong> and paste them in the form.</p>
                         <p>Then go to <strong>API permissions → Add a permission → Microsoft Graph → Application permissions</strong>, search for <code className="bg-muted px-1 py-0.5 rounded text-xs">User.Read.All</code> and add it. Finally, click <strong>Grant admin consent</strong>.</p>
                       </div>
                     ),
@@ -120,16 +120,16 @@ export default function M365Page() {
                       <div className="space-y-2">
                         <p>Go to <strong>Certificates &amp; secrets → Client secrets → New client secret</strong>.</p>
                         <ul className="space-y-1 pl-2">
-                          <li><span className="text-muted-foreground">· </span><strong>Description:</strong> your platform name</li>
-                          <li><span className="text-muted-foreground">· </span><strong>Expires:</strong> 24 months</li>
+                          <li><span className="text-muted-foreground">· </span><strong>Description:</strong> your app name</li>
+                          <li><span className="text-muted-foreground">· </span><strong>Expires:</strong> 730 days</li>
                         </ul>
-                        <p>Copy the <strong>Value</strong> (not the Secret ID) and paste it in the form. <span className="text-orange-500 font-medium">The value is only shown once.</span></p>
+                        <p>Copy the <strong>Value</strong> (not the Secret ID) and paste it in the form. <span className="text-destructive font-medium">The value is only shown once.</span></p>
                       </div>
                     ),
                   },
                 ].map(({ n, title, body }) => (
                   <div key={n} className="flex gap-3">
-                    <span className="shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-orange-500 text-white text-xs font-bold mt-0.5">{n}</span>
+                    <span className="shrink-0 flex items-center justify-center h-6 w-6 rounded-full bg-primary text-primary-foreground text-xs font-bold mt-0.5">{n}</span>
                     <div className="space-y-1.5">
                       <p className="font-semibold">{title}</p>
                       {body}
