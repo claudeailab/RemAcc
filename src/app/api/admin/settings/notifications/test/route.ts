@@ -48,40 +48,42 @@ export async function POST() {
     )
   );
 
-  // Clean up expired subscriptions (HTTP 410 Gone)
-  const expiredIds = subs
-    .filter((_, i) => {
-      const r = results[i];
-      if (r.status === "rejected") {
-        const err = r.reason as { statusCode?: number };
-        return err?.statusCode === 410;
+  // Categorise results per subscription
+  const expiredIds: number[] = [];
+  const failedIds: number[] = [];
+  let sent = 0;
+
+  results.forEach((r, i) => {
+    if (r.status === "fulfilled") {
+      sent++;
+    } else {
+      const err = r.reason as { statusCode?: number; body?: string };
+      console.error("Push send failed:", { statusCode: err?.statusCode, body: err?.body, endpoint: subs[i].endpoint.slice(0, 60) });
+      if (err?.statusCode === 410) {
+        expiredIds.push(subs[i].id);
+      } else {
+        failedIds.push(subs[i].id);
       }
-      return false;
-    })
-    .map(s => s.id);
+    }
+  });
 
   if (expiredIds.length > 0) {
     await db.delete(push_subscriptions).where(inArray(push_subscriptions.id, expiredIds));
   }
 
-  const sent = results.filter(r => r.status === "fulfilled").length;
-
   if (sent === 0) {
-    const firstErr = results[0];
-    if (firstErr.status === "rejected") {
-      const err = firstErr.reason as { statusCode?: number };
-      if (err?.statusCode === 410 || expiredIds.length > 0) {
-        return NextResponse.json({ error: "Subscription expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
-      }
-      if (err?.statusCode === 401 || err?.statusCode === 403) {
-        const body = (err as { body?: string })?.body ?? "";
-        console.error("Push 401/403:", { statusCode: err.statusCode, body, endpoint: subs[0]?.endpoint?.slice(0, 60) });
-        return NextResponse.json({ error: `Push auth failed (${err.statusCode}): ${body || "no body"} — endpoint: ${subs[0]?.endpoint?.slice(0, 50)}`, expired: true }, { status: 400 });
-      }
-      console.error("Push send failed:", { statusCode: err?.statusCode, body: (err as { body?: string })?.body });
+    const allExpired = expiredIds.length === results.length;
+    if (allExpired) {
+      return NextResponse.json({ error: "All subscriptions have expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
+    }
+    const firstFailed = results.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
+    const err = firstFailed?.reason as { statusCode?: number; body?: string } | undefined;
+    if (err?.statusCode === 401 || err?.statusCode === 403) {
+      return NextResponse.json({ error: `Push auth failed (${err.statusCode}): ${err.body || "no body"}`, expired: true }, { status: 400 });
     }
     return NextResponse.json({ error: "Failed to deliver notification. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, sent });
+  const failed = expiredIds.length + failedIds.length;
+  return NextResponse.json({ ok: true, sent, failed });
 }

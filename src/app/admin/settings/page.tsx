@@ -467,7 +467,11 @@ function NotificationsTab() {
         if (d.expired) setSubscribed(false);
         return;
       }
-      toast.success("Test notification sent");
+      if (d.failed > 0) {
+        toast.success(`Test sent to ${d.sent} device${d.sent !== 1 ? "s" : ""}. ${d.failed} subscription${d.failed !== 1 ? "s" : ""} failed — disable and re-enable notifications on the affected device to refresh it.`);
+      } else {
+        toast.success(`Test notification sent to ${d.sent} device${d.sent !== 1 ? "s" : ""}`);
+      }
     } finally { setTesting(false); }
   }
 
