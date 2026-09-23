@@ -355,13 +355,13 @@ function PermissionsTab() {
   );
 }
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const raw = atob(base64);
   const arr = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
-  return arr;
+  return arr.buffer;
 }
 
 function NotificationsTab() {
@@ -431,7 +431,7 @@ function NotificationsTab() {
         if (permission !== "granted") { toast.error("Notification permission denied"); return; }
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToUint8Array(publicKey),
+          applicationServerKey: urlBase64ToArrayBuffer(publicKey),
         });
         const json = sub.toJSON();
         await fetch("/api/push/subscribe", {
