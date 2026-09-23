@@ -15,7 +15,7 @@ export async function POST() {
     getRawSetting("vapid_privateKey"),
   ]);
   if (!publicKey || !privateKey) {
-    return NextResponse.json({ error: "Push notifications not configured. Enable notifications on this device first." }, { status: 400 });
+    return NextResponse.json({ error: "Push notifications not configured. Enable notifications on this device first.", expired: true }, { status: 400 });
   }
 
   const subs = await db

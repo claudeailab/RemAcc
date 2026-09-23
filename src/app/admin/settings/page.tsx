@@ -433,11 +433,15 @@ function NotificationsTab() {
         if (permission !== "granted") { toast.error("Notification permission denied"); return; }
         // Always unsubscribe any stale browser subscription first so the new
         // subscription uses the current VAPID key (prevents key mismatch)
+        // Fetch the current VAPID key fresh so we never use a stale state value
+        const vapidResp = await fetch("/api/push/vapid-public-key");
+        if (!vapidResp.ok) throw new Error("Push not configured — please reload the page and try again");
+        const { publicKey: currentKey } = await vapidResp.json();
         const existing = await reg.pushManager.getSubscription();
         if (existing) await existing.unsubscribe();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlBase64ToArrayBuffer(publicKey),
+          applicationServerKey: urlBase64ToArrayBuffer(currentKey),
         });
         const json = sub.toJSON();
         await fetch("/api/push/subscribe", {
