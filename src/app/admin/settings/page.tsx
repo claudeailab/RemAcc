@@ -524,6 +524,7 @@ const ICON_SETS = [
   { label: "Lucide", value: "lucide" },
   { label: "Tabler", value: "tabler" },
 ];
+const CURATED_PREFIXES = ICON_SETS.map(s => s.value).join(",");
 
 const FEATURED_ICONS = [
   "solar:layers-bold", "solar:box-bold", "solar:planet-bold", "solar:rocket-bold",
@@ -546,6 +547,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
   const [setFilter, setSetFilter] = useState("All");
   const [icons, setIcons] = useState<string[]>(FEATURED_ICONS);
   const [loading, setLoading] = useState(false);
+  const [loadedIcons, setLoadedIcons] = useState<Set<string>>(new Set(FEATURED_ICONS));
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -553,9 +555,11 @@ function IconPickerDialog({ value, onSelect, onClose }: {
     const q = query.trim();
     if (!q && setFilter === "All") {
       setIcons(FEATURED_ICONS);
+      setLoadedIcons(new Set(FEATURED_ICONS));
       return;
     }
     setLoading(true);
+    setLoadedIcons(new Set());
     debounceRef.current = setTimeout(async () => {
       try {
         let result: string[] = [];
@@ -566,7 +570,8 @@ function IconPickerDialog({ value, onSelect, onClose }: {
           result = d.icons ?? [];
         } else {
           const params = new URLSearchParams({ query: q || setFilter, limit: "80" });
-          if (setFilter !== "All") params.set("prefixes", setFilter);
+          // Always restrict to curated sets to avoid broken icons from unofficial sets
+          params.set("prefixes", setFilter !== "All" ? setFilter : CURATED_PREFIXES);
           const r = await fetch(`/api/icon/search?${params}`);
           const d = await r.json();
           result = d.icons ?? [];
@@ -616,7 +621,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
                     key={id}
                     type="button"
                     title={id}
-                    onClick={() => { onSelect(id); onClose(); }}
+                    onClick={() => { if (loadedIcons.has(id)) { onSelect(id); onClose(); } }}
                     className={`flex flex-col items-center justify-center p-2 rounded-lg border transition-all hover:border-primary/50 hover:bg-primary/5 group ${id === value ? "border-primary bg-primary/10" : "border-transparent"}`}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -624,6 +629,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
                       src={iconUrl(id)}
                       alt={id}
                       className="h-6 w-6 dark:brightness-0 dark:invert"
+                      onLoad={() => setLoadedIcons(prev => new Set(prev).add(id))}
                       onError={e => { (e.target as HTMLImageElement).closest("button")!.style.display = "none"; }}
                     />
                   </button>
