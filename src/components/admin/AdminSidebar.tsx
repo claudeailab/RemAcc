@@ -140,10 +140,10 @@ export default function AdminSidebar({ user, features, platform }: Props) {
       {/* ── Mobile slide-in drawer ── */}
       <DialogPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DialogPrimitive.Portal>
-          <DialogPrimitive.Overlay className="md:hidden fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200" />
+          <DialogPrimitive.Overlay className="md:hidden fixed inset-0 z-50 bg-black/50 drawer-overlay" />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            className="md:hidden sidebar-panel fixed inset-y-0 left-0 z-50 w-72 flex flex-col border-r shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left duration-200 ease-out"
+            className="md:hidden sidebar-panel drawer-content fixed inset-y-0 left-0 z-50 w-72 flex flex-col border-r shadow-xl"
           >
             <DialogPrimitive.Title className="sr-only">Navigation menu</DialogPrimitive.Title>
 
@@ -163,10 +163,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
                   />
                   <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
-                  <span className="text-xs text-foreground/60 font-mono font-semibold leading-tight">v{version.version}</span>
-                </div>
+                <span className="font-bold text-base tracking-tight text-foreground truncate">{platform.name}</span>
               </div>
               <DialogPrimitive.Close className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-foreground/60 shrink-0">
                 <X className="h-4 w-4" />
