@@ -33,13 +33,13 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
   }
 
   if (action === "update" && resource === "user") {
-    const id = d.match(/id=(\d+)/)?.[1];
-    const who = id ? ` (id ${id})` : "";
+    const who = d.match(/user=([^;]+)/)?.[1]?.trim() ?? "";
+    const whoStr = who ? ` ${who}` : "";
     const disabledM = d.match(/disabled: (\w+)→(\w+)/);
-    if (disabledM) return disabledM[2] === "true" ? `Disabled user${who}` : `Re-enabled user${who}`;
-    const changes = d.replace(/^id=\d+(; )?/, "").trim();
-    if (changes) return `Updated user${who}: ${changes}`;
-    return `Updated user${who}`;
+    if (disabledM) return disabledM[2] === "true" ? `Disabled user${whoStr}` : `Re-enabled user${whoStr}`;
+    const changes = d.replace(/^user=[^;]+(; )?/, "").trim();
+    if (changes) return `Updated user${whoStr}: ${changes}`;
+    return `Updated user${whoStr}`;
   }
 
   if (action === "delete" && resource === "user") {

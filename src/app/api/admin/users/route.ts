@@ -3,8 +3,8 @@ import { z } from "zod";
 import bcrypt from "bcrypt";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, permission_groups } from "@/lib/db/schema";
+import { eq, sql, inArray } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
@@ -75,12 +75,26 @@ export async function PUT(req: NextRequest) {
   if (Object.keys(set).length === 0) return NextResponse.json({ ok: true });
   await db.update(users).set(set).where(eq(users.id, id));
 
-  const changes: string[] = [`id=${id}`];
+  // Resolve group names for readable audit entries
+  let fromGroupName: string | null = null;
+  let toGroupName: string | null = null;
+  if (groupId !== undefined && groupId !== existing?.groupId) {
+    const gIds = [existing?.groupId, groupId].filter((x): x is number => x != null);
+    if (gIds.length > 0) {
+      const gRows = await db.select({ id: permission_groups.id, name: permission_groups.name }).from(permission_groups).where(inArray(permission_groups.id, gIds));
+      const gMap = new Map(gRows.map(g => [g.id, g.name]));
+      fromGroupName = existing?.groupId != null ? (gMap.get(existing.groupId) ?? `#${existing.groupId}`) : null;
+      toGroupName = groupId != null ? (gMap.get(groupId) ?? `#${groupId}`) : null;
+    }
+  }
+
+  const who = existing?.email ?? `id=${id}`;
+  const changes: string[] = [`user=${who}`];
   if (username && username !== existing?.username) changes.push(`username: ${existing?.username ?? "(unset)"}→${username}`);
   if (email && email !== existing?.email) changes.push(`email: ${existing?.email ?? "(unset)"}→${email}`);
-  if (displayName !== undefined && displayName !== existing?.displayName) changes.push(`displayName: ${existing?.displayName ?? "(unset)"}→${displayName || "(cleared)"}`);
+  if (displayName !== undefined && displayName !== existing?.displayName) changes.push(`display name: ${existing?.displayName ?? "(unset)"}→${displayName || "(cleared)"}`);
   if (password) changes.push("password: [updated]");
-  if (groupId !== undefined && groupId !== existing?.groupId) changes.push(`groupId: ${existing?.groupId ?? "(unset)"}→${groupId ?? "(cleared)"}`);
+  if (groupId !== undefined && groupId !== existing?.groupId) changes.push(`group: ${fromGroupName ?? "(none)"}→${toGroupName ?? "(none)"}`);
   if (disabled !== undefined && disabled !== existing?.disabled) changes.push(`disabled: ${existing?.disabled ?? false}→${disabled}`);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
