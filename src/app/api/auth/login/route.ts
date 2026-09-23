@@ -52,14 +52,14 @@ export async function POST(req: NextRequest) {
 
   // Try local user lookup by username first, then fall back to email (for Azure detection)
   const [userByUsername] = await db
-    .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source })
+    .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source, disabled: users.disabled })
     .from(users)
     .where(eq(users.username, username))
     .limit(1);
 
   const [userByEmail] = !userByUsername
     ? await db
-        .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source })
+        .select({ id: users.id, email: users.email, username: users.username, groupId: users.groupId, passwordHash: users.passwordHash, source: users.source, disabled: users.disabled })
         .from(users)
         .where(eq(users.email, username))
         .limit(1)
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
   if (user?.source === "azure") {
     return NextResponse.json({ azureLogin: true });
   }
+
+  if (user?.disabled) return NextResponse.json({ error: "Your account has been disabled" }, { status: 401 });
 
   if (!user?.passwordHash) return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   const valid = await bcrypt.compare(password, user.passwordHash);

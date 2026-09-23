@@ -9,10 +9,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { Loader2, Plus, Pencil, Trash2, CloudDownload, Search } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
-interface User { id: number; email: string; username: string | null; displayName: string | null; source: string; groupId: number | null }
+interface User { id: number; email: string; username: string | null; displayName: string | null; source: string; groupId: number | null; disabled: boolean }
 interface Group { id: number; name: string }
 interface AzureDirectoryUser {
   oid: string;
@@ -91,6 +92,15 @@ export default function UsersPage() {
     toast.success("User deleted");
     setDeleteId(null);
     load();
+  }
+
+  async function handleToggle(id: number, disabled: boolean) {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, disabled } : u));
+    const r = await fetch("/api/admin/users", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, disabled }) });
+    if (!r.ok) {
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, disabled: !disabled } : u));
+      toast.error("Update failed");
+    }
   }
 
   async function browseAzure() {
@@ -192,15 +202,16 @@ export default function UsersPage() {
             ) : (
               <div className="space-y-2">
                 {localUsers.map(u => (
-                  <div key={u.id} className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
+                  <div key={u.id} className={`flex items-center justify-between rounded-lg border p-4 transition-opacity ${u.disabled ? "opacity-50" : ""}`}>
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm">{u.displayName ?? u.username ?? u.email}</p>
                       <p className={muted}>{u.username ?? u.email}</p>
                       {u.groupId && groups.find(g => g.id === u.groupId) && (
                         <p className="text-xs text-primary mt-0.5">{groups.find(g => g.id === u.groupId)?.name}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Switch checked={!u.disabled} onCheckedChange={checked => handleToggle(u.id, !checked)} title={u.disabled ? "Enable access" : "Disable access"} />
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => setDeleteId(u.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                     </div>
@@ -222,16 +233,17 @@ export default function UsersPage() {
             ) : (
               <div className="space-y-2">
                 {platformAzureUsers.map(u => (
-                  <div key={u.id} className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
+                  <div key={u.id} className={`flex items-center justify-between rounded-lg border p-4 transition-opacity ${u.disabled ? "opacity-50" : ""}`}>
+                    <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm">{u.displayName ?? u.email}</p>
                       <p className={muted}>{u.email}</p>
                       {u.groupId && groups.find(g => g.id === u.groupId) && (
                         <p className="text-xs text-primary mt-0.5">{groups.find(g => g.id === u.groupId)?.name}</p>
                       )}
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 shrink-0">
                       <Badge variant="outline" className="text-sky-600 border-sky-300 dark:text-sky-400 dark:border-sky-700">Azure</Badge>
+                      <Switch checked={!u.disabled} onCheckedChange={checked => handleToggle(u.id, !checked)} title={u.disabled ? "Enable access" : "Disable access"} />
                       <Button size="icon" variant="ghost" onClick={() => openEdit(u)}><Pencil className="h-4 w-4" /></Button>
                     </div>
                   </div>

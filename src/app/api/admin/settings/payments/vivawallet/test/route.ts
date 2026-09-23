@@ -9,7 +9,7 @@ export async function POST() {
     getSetting("vivawallet_clientSecret"),
     getSetting("vivawallet_liveMode"),
   ]);
-  if (!clientId || !clientSecret) return NextResponse.json({ error: "Viva Wallet not configured" }, { status: 400 });
+  if (!clientId || !clientSecret) return NextResponse.json({ error: "Viva not configured" }, { status: 400 });
 
   const url = liveMode === "true"
     ? "https://accounts.vivapayments.com/connect/token"

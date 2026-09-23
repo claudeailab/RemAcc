@@ -167,7 +167,7 @@ function VivaWalletTab() {
       const r = await fetch("/api/admin/settings/payments/vivawallet", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
-      toast.success("Viva Wallet settings saved");
+      toast.success("Viva settings saved");
       savedRef.current = { enabled: form.enabled, liveMode: form.liveMode, clientId: form.clientId, merchantId: form.merchantId };
       if (form.clientSecret) setClientSecretSet(true);
       setForm(f => ({ ...f, clientSecret: "" }));
@@ -180,7 +180,7 @@ function VivaWalletTab() {
       const r = await fetch("/api/admin/settings/payments/vivawallet/test", { method: "POST" });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
-      toast.success("Viva Wallet connection OK");
+      toast.success("Viva connection OK");
     } finally { setTesting(false); }
   }
 
@@ -188,7 +188,7 @@ function VivaWalletTab() {
     <Card>
       <CardHeader className="border-b">
         <div className="flex items-center justify-between gap-3 flex-wrap">
-          <CardTitle>Viva Wallet</CardTitle>
+          <CardTitle>Viva</CardTitle>
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex items-center gap-2">
               <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
@@ -326,7 +326,7 @@ export default function PaymentsPage() {
         <Tabs defaultValue="stripe" className="mt-6">
           <TabsList>
             <TabsTrigger value="stripe">Stripe</TabsTrigger>
-            <TabsTrigger value="vivawallet">Viva Wallet</TabsTrigger>
+            <TabsTrigger value="vivawallet">Viva</TabsTrigger>
             <TabsTrigger value="paypal">PayPal</TabsTrigger>
           </TabsList>
           <TabsContent value="stripe"><StripeTab /></TabsContent>

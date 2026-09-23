@@ -18,7 +18,7 @@ import { iconUrl, DEFAULT_ICON, DEFAULT_PRIMARY_COLOR } from "@/lib/platform-sha
 
 const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = [
   { key: "users", label: "Users", description: "User management, registration, and profiles" },
-  { key: "payments", label: "Payments", description: "Stripe, Viva Wallet, and PayPal billing" },
+  { key: "payments", label: "Payments", description: "Stripe, Viva, and PayPal billing" },
   { key: "subscriptions", label: "Subscriptions", description: "Subscription plans and management" },
   { key: "m365", label: "Microsoft 365", description: "Azure AD sync and Microsoft SSO login" },
   { key: "email", label: "Email / SMTP", description: "Transactional email via SMTP" },
@@ -810,16 +810,14 @@ export default function SettingsPage() {
       <div className={pageInner}>
         <h1 className={pageTitle}>Settings</h1>
         <Tabs defaultValue="platform" className="mt-6">
-          <div className="overflow-x-auto">
-            <TabsList className="w-max">
-              <TabsTrigger value="platform">Platform</TabsTrigger>
-              <TabsTrigger value="visual">Visual</TabsTrigger>
-              <TabsTrigger value="features">Features</TabsTrigger>
-              <TabsTrigger value="permissions">Permissions</TabsTrigger>
-              <TabsTrigger value="notifications">Notifications</TabsTrigger>
-              <TabsTrigger value="audit">Audit</TabsTrigger>
-            </TabsList>
-          </div>
+          <TabsList className="h-auto flex-wrap">
+            <TabsTrigger value="platform">Platform</TabsTrigger>
+            <TabsTrigger value="visual">Visual</TabsTrigger>
+            <TabsTrigger value="features">Features</TabsTrigger>
+            <TabsTrigger value="permissions">Permissions</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
+            <TabsTrigger value="audit">Audit</TabsTrigger>
+          </TabsList>
           <TabsContent value="platform">
             <Card><CardContent className="pt-6"><PlatformTab /></CardContent></Card>
           </TabsContent>

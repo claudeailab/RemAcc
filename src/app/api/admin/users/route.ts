@@ -21,12 +21,13 @@ const updateSchema = z.object({
   displayName: z.string().optional(),
   password: z.string().min(8).optional(),
   groupId: z.number().int().positive().nullable().optional(),
+  disabled: z.boolean().optional(),
 });
 
 export async function GET() {
   await requireAdmin();
   const list = await db
-    .select({ id: users.id, email: users.email, username: users.username, displayName: users.displayName, source: users.source, groupId: users.groupId })
+    .select({ id: users.id, email: users.email, username: users.username, displayName: users.displayName, source: users.source, groupId: users.groupId, disabled: users.disabled })
     .from(users)
     .limit(200);
   return NextResponse.json({ users: list });
@@ -54,10 +55,10 @@ export async function PUT(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = updateSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  const { id, username, email, displayName, password, groupId } = parsed.data;
+  const { id, username, email, displayName, password, groupId, disabled } = parsed.data;
 
   const [existing] = await db
-    .select({ email: users.email, username: users.username, displayName: users.displayName, groupId: users.groupId })
+    .select({ email: users.email, username: users.username, displayName: users.displayName, groupId: users.groupId, disabled: users.disabled })
     .from(users)
     .where(eq(users.id, id))
     .limit(1);
@@ -70,6 +71,7 @@ export async function PUT(req: NextRequest) {
   if (displayName !== undefined) set.displayName = sql`${displayName}`;
   if (passwordHash) set.passwordHash = sql`${passwordHash}`;
   if (groupId !== undefined) set.groupId = groupId;
+  if (disabled !== undefined) set.disabled = disabled;
   if (Object.keys(set).length === 0) return NextResponse.json({ ok: true });
   await db.update(users).set(set).where(eq(users.id, id));
 
@@ -79,6 +81,7 @@ export async function PUT(req: NextRequest) {
   if (displayName !== undefined && displayName !== existing?.displayName) changes.push(`displayName: ${existing?.displayName ?? "(unset)"}→${displayName || "(cleared)"}`);
   if (password) changes.push("password: [updated]");
   if (groupId !== undefined && groupId !== existing?.groupId) changes.push(`groupId: ${existing?.groupId ?? "(unset)"}→${groupId ?? "(cleared)"}`);
+  if (disabled !== undefined && disabled !== existing?.disabled) changes.push(`disabled: ${existing?.disabled ?? false}→${disabled}`);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
   await logAudit({ userEmail: admin.email, action: "update", resource: "user", detail: changes.join("; "), ip });

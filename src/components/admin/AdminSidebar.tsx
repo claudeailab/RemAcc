@@ -123,7 +123,10 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             />
             <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
           </div>
-          <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
+          <div className="flex flex-col min-w-0">
+            <span className="font-semibold text-sm tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
+            <span className="text-[11px] text-foreground/50 font-mono font-medium leading-tight">v{version.version}</span>
+          </div>
         </div>
         <button
           onClick={() => setDrawerOpen(true)}

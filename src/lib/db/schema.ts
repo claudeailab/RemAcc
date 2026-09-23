@@ -31,6 +31,7 @@ export const users = mysqlTable("webapp_users", {
   azureOid: varchar("azure_oid", { length: 255 }),
   passwordHash: varchar("password_hash", { length: 255 }),
   groupId: int("group_id"),
+  disabled: boolean("disabled").notNull().default(false),
   lastLoginAt: timestamp("last_login_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });
