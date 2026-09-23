@@ -464,10 +464,7 @@ function NotificationsTab() {
       const d = await r.json();
       if (!r.ok) {
         toast.error(d.error ?? "Test failed");
-        if (d.expired) {
-          setSubscribed(false);
-          if (d.newPublicKey) setPublicKey(d.newPublicKey);
-        }
+        if (d.expired) setSubscribed(false);
         return;
       }
       toast.success("Test notification sent");

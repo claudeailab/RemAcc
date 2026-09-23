@@ -68,14 +68,22 @@ export async function POST() {
         return NextResponse.json({ error: "Subscription expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       if (err?.statusCode === 401 || err?.statusCode === 403) {
-        // Key mismatch — generate a fresh valid pair immediately (don't leave empty)
-        const newKeys = webpush.generateVAPIDKeys();
-        await Promise.all([
-          setRawSetting("vapid_publicKey", newKeys.publicKey),
-          setRawSetting("vapid_privateKey", newKeys.privateKey),
-          db.delete(push_subscriptions),
-        ]);
-        return NextResponse.json({ error: "Key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true, newPublicKey: newKeys.publicKey }, { status: 400 });
+        // Stale subscription — the subscription was created with a different VAPID key.
+        // Delete only the failed subscriptions; VAPID keys are valid (don't cycle them).
+        const staleIds = subs
+          .filter((_, i) => {
+            const r = results[i];
+            if (r.status === "rejected") {
+              const e = r.reason as { statusCode?: number };
+              return e?.statusCode === 401 || e?.statusCode === 403;
+            }
+            return false;
+          })
+          .map(s => s.id);
+        if (staleIds.length > 0) {
+          await db.delete(push_subscriptions).where(inArray(push_subscriptions.id, staleIds));
+        }
+        return NextResponse.json({ error: "Subscription is stale. Please tap Enable to re-subscribe this device.", expired: true }, { status: 400 });
       }
       console.error("Push send failed:", { statusCode: err?.statusCode, body: (err as { body?: string })?.body });
     }
