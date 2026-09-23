@@ -33,11 +33,11 @@ type DesignTheme = "default" | "slate" | "midnight" | "forest" | "rose" | "obsid
 
 const DESIGN_THEMES: { value: DesignTheme; label: string; description: string; light: { bg: string; card: string; accent: string }; dark: { bg: string; card: string; accent: string } }[] = [
   { value: "default", label: "Default", description: "Warm stone — timeless and neutral", light: { bg: "#fafaf9", card: "#ffffff", accent: "#e7e5e4" }, dark: { bg: "#171411", card: "#201e1b", accent: "#2c2a27" } },
-  { value: "slate", label: "Slate", description: "Cool blue-gray — professional", light: { bg: "#f3f5f9", card: "#ffffff", accent: "#e2e6ed" }, dark: { bg: "#0e1220", card: "#161d2e", accent: "#1e273b" } },
-  { value: "midnight", label: "Midnight", description: "Deep navy — focused and elegant", light: { bg: "#f2f4f9", card: "#ffffff", accent: "#e1e5ef" }, dark: { bg: "#080e1a", card: "#0e1628", accent: "#152033" } },
-  { value: "forest", label: "Forest", description: "Sage green — calm and natural", light: { bg: "#f3f7f4", card: "#ffffff", accent: "#e1ebe4" }, dark: { bg: "#0c1410", card: "#131e16", accent: "#192819" } },
-  { value: "rose", label: "Rose", description: "Warm blush — soft and inviting", light: { bg: "#faf3f4", card: "#ffffff", accent: "#eddee0" }, dark: { bg: "#160e10", card: "#201518", accent: "#2a1b1e" } },
-  { value: "obsidian", label: "Obsidian", description: "Near-black — crisp and minimal", light: { bg: "#fafafa", card: "#ffffff", accent: "#efefef" }, dark: { bg: "#0d0d0d", card: "#171717", accent: "#242424" } },
+  { value: "slate", label: "Slate", description: "Cool blue-gray — professional", light: { bg: "#dde3ed", card: "#f7f8fb", accent: "#cdd4e0" }, dark: { bg: "#0e1220", card: "#161d2e", accent: "#1e273b" } },
+  { value: "midnight", label: "Midnight", description: "Deep navy — focused and elegant", light: { bg: "#d8dfe9", card: "#f6f7fb", accent: "#c8d1e0" }, dark: { bg: "#080e1a", card: "#0e1628", accent: "#152033" } },
+  { value: "forest", label: "Forest", description: "Sage green — calm and natural", light: { bg: "#d5e2d8", card: "#f6f9f7", accent: "#c4d5c8" }, dark: { bg: "#0c1410", card: "#131e16", accent: "#192819" } },
+  { value: "rose", label: "Rose", description: "Warm blush — soft and inviting", light: { bg: "#e8d4d6", card: "#fdf7f8", accent: "#d9c2c5" }, dark: { bg: "#160e10", card: "#201518", accent: "#2a1b1e" } },
+  { value: "obsidian", label: "Obsidian", description: "Near-black — crisp and minimal", light: { bg: "#e8e8e8", card: "#fdfdfd", accent: "#d4d4d4" }, dark: { bg: "#0d0d0d", card: "#171717", accent: "#242424" } },
 ];
 
 function ThemeButton({ value, current, label, onClick }: { value: Theme; current: Theme; label: string; onClick: (v: Theme) => void }) {

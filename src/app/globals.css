@@ -85,18 +85,18 @@
 
 /* Slate — cool blue-gray, professional */
 :root[data-design-theme="slate"] {
-  --color-background:          hsl(216 30% 97%);
+  --color-background:          hsl(215 22% 93%);
   --color-foreground:          hsl(220 13% 9%);
-  --color-card:                hsl(0 0% 100%);
+  --color-card:                hsl(215 18% 98%);
   --color-card-foreground:     hsl(220 13% 9%);
-  --color-popover:             hsl(0 0% 100%);
+  --color-popover:             hsl(215 18% 98%);
   --color-popover-foreground:  hsl(220 13% 9%);
-  --color-secondary:           hsl(216 18% 93%);
+  --color-secondary:           hsl(215 16% 88%);
   --color-secondary-foreground:hsl(220 12% 23%);
-  --color-muted:               hsl(216 18% 93%);
-  --color-muted-foreground:    hsl(215 13% 46%);
-  --color-border:              hsl(215 16% 88%);
-  --color-input:               hsl(215 16% 88%);
+  --color-muted:               hsl(215 16% 88%);
+  --color-muted-foreground:    hsl(215 13% 44%);
+  --color-border:              hsl(215 14% 82%);
+  --color-input:               hsl(215 14% 82%);
   --radius: 0.625rem;
 }
 :root[data-design-theme="slate"][data-theme="dark"] {
@@ -134,18 +134,18 @@
 
 /* Midnight — deep navy */
 :root[data-design-theme="midnight"] {
-  --color-background:          hsl(220 28% 97%);
+  --color-background:          hsl(222 20% 92%);
   --color-foreground:          hsl(222 18% 9%);
-  --color-card:                hsl(0 0% 100%);
+  --color-card:                hsl(220 14% 98%);
   --color-card-foreground:     hsl(222 18% 9%);
-  --color-popover:             hsl(0 0% 100%);
+  --color-popover:             hsl(220 14% 98%);
   --color-popover-foreground:  hsl(222 18% 9%);
-  --color-secondary:           hsl(220 16% 93%);
+  --color-secondary:           hsl(220 15% 87%);
   --color-secondary-foreground:hsl(220 12% 23%);
-  --color-muted:               hsl(220 16% 93%);
-  --color-muted-foreground:    hsl(220 10% 46%);
-  --color-border:              hsl(220 14% 87%);
-  --color-input:               hsl(220 14% 87%);
+  --color-muted:               hsl(220 15% 87%);
+  --color-muted-foreground:    hsl(220 10% 44%);
+  --color-border:              hsl(220 13% 81%);
+  --color-input:               hsl(220 13% 81%);
   --radius: 0.5rem;
 }
 :root[data-design-theme="midnight"][data-theme="dark"] {
@@ -183,18 +183,18 @@
 
 /* Forest — sage green */
 :root[data-design-theme="forest"] {
-  --color-background:          hsl(153 18% 97%);
+  --color-background:          hsl(150 18% 92%);
   --color-foreground:          hsl(155 18% 8%);
-  --color-card:                hsl(0 0% 100%);
+  --color-card:                hsl(150 10% 98%);
   --color-card-foreground:     hsl(155 18% 8%);
-  --color-popover:             hsl(0 0% 100%);
+  --color-popover:             hsl(150 10% 98%);
   --color-popover-foreground:  hsl(155 18% 8%);
-  --color-secondary:           hsl(150 14% 93%);
+  --color-secondary:           hsl(150 13% 87%);
   --color-secondary-foreground:hsl(152 12% 22%);
-  --color-muted:               hsl(150 14% 93%);
-  --color-muted-foreground:    hsl(152 8% 46%);
-  --color-border:              hsl(150 10% 87%);
-  --color-input:               hsl(150 10% 87%);
+  --color-muted:               hsl(150 13% 87%);
+  --color-muted-foreground:    hsl(152 8% 44%);
+  --color-border:              hsl(148 10% 81%);
+  --color-input:               hsl(148 10% 81%);
   --radius: 0.5rem;
 }
 :root[data-design-theme="forest"][data-theme="dark"] {
@@ -232,18 +232,18 @@
 
 /* Rose — warm blush */
 :root[data-design-theme="rose"] {
-  --color-background:          hsl(348 35% 97%);
+  --color-background:          hsl(350 25% 93%);
   --color-foreground:          hsl(345 18% 9%);
-  --color-card:                hsl(0 0% 100%);
+  --color-card:                hsl(350 15% 99%);
   --color-card-foreground:     hsl(345 18% 9%);
-  --color-popover:             hsl(0 0% 100%);
+  --color-popover:             hsl(350 15% 99%);
   --color-popover-foreground:  hsl(345 18% 9%);
-  --color-secondary:           hsl(348 18% 93%);
+  --color-secondary:           hsl(348 18% 88%);
   --color-secondary-foreground:hsl(345 12% 22%);
-  --color-muted:               hsl(348 18% 93%);
-  --color-muted-foreground:    hsl(345 8% 47%);
-  --color-border:              hsl(348 14% 88%);
-  --color-input:               hsl(348 14% 88%);
+  --color-muted:               hsl(348 18% 88%);
+  --color-muted-foreground:    hsl(345 8% 45%);
+  --color-border:              hsl(348 14% 83%);
+  --color-input:               hsl(348 14% 83%);
   --radius: 0.75rem;
 }
 :root[data-design-theme="rose"][data-theme="dark"] {
@@ -281,18 +281,18 @@
 
 /* Obsidian — near-black, crisp */
 :root[data-design-theme="obsidian"] {
-  --color-background:          hsl(0 0% 98%);
+  --color-background:          hsl(0 0% 91%);
   --color-foreground:          hsl(0 0% 8%);
-  --color-card:                hsl(0 0% 100%);
+  --color-card:                hsl(0 0% 99%);
   --color-card-foreground:     hsl(0 0% 8%);
-  --color-popover:             hsl(0 0% 100%);
+  --color-popover:             hsl(0 0% 99%);
   --color-popover-foreground:  hsl(0 0% 8%);
-  --color-secondary:           hsl(0 0% 94%);
+  --color-secondary:           hsl(0 0% 86%);
   --color-secondary-foreground:hsl(0 0% 20%);
-  --color-muted:               hsl(0 0% 94%);
-  --color-muted-foreground:    hsl(0 0% 46%);
-  --color-border:              hsl(0 0% 87%);
-  --color-input:               hsl(0 0% 87%);
+  --color-muted:               hsl(0 0% 86%);
+  --color-muted-foreground:    hsl(0 0% 44%);
+  --color-border:              hsl(0 0% 80%);
+  --color-input:               hsl(0 0% 80%);
   --radius: 0.375rem;
 }
 :root[data-design-theme="obsidian"][data-theme="dark"] {
@@ -386,16 +386,16 @@
     :root:not([data-theme="light"]) body { background-image: none; }
   }
   :root[data-design-theme="slate"] body {
-    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(216 40% 97%) 0%, transparent 65%);
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(215 28% 96%) 0%, transparent 65%);
   }
   :root[data-design-theme="midnight"] body {
-    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(220 35% 97%) 0%, transparent 65%);
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(222 24% 95%) 0%, transparent 65%);
   }
   :root[data-design-theme="forest"] body {
-    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(150 25% 97%) 0%, transparent 65%);
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(150 22% 95%) 0%, transparent 65%);
   }
   :root[data-design-theme="rose"] body {
-    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(348 45% 97%) 0%, transparent 65%);
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(350 30% 96%) 0%, transparent 65%);
   }
   :root[data-design-theme="obsidian"] body { background-image: none; }
   :root[data-design-theme][data-theme="dark"] body { background-image: none; }
@@ -471,8 +471,8 @@
 
   /* Design theme sidebar overrides */
   :root[data-design-theme="slate"] .sidebar-panel {
-    background: hsl(216 28% 99%);
-    border-color: hsl(215 16% 88%);
+    background: hsl(215 20% 96%);
+    border-color: hsl(215 14% 82%);
   }
   :root[data-design-theme="slate"][data-theme="dark"] .sidebar-panel {
     background: hsl(222 28% 10%);
@@ -485,8 +485,8 @@
     }
   }
   :root[data-design-theme="midnight"] .sidebar-panel {
-    background: hsl(220 26% 99%);
-    border-color: hsl(220 14% 87%);
+    background: hsl(222 18% 96%);
+    border-color: hsl(220 13% 81%);
   }
   :root[data-design-theme="midnight"][data-theme="dark"] .sidebar-panel {
     background: hsl(224 48% 8%);
@@ -499,8 +499,8 @@
     }
   }
   :root[data-design-theme="forest"] .sidebar-panel {
-    background: hsl(153 16% 99%);
-    border-color: hsl(150 10% 87%);
+    background: hsl(150 15% 96%);
+    border-color: hsl(148 10% 81%);
   }
   :root[data-design-theme="forest"][data-theme="dark"] .sidebar-panel {
     background: hsl(155 20% 9%);
@@ -513,8 +513,8 @@
     }
   }
   :root[data-design-theme="rose"] .sidebar-panel {
-    background: hsl(348 32% 99%);
-    border-color: hsl(348 14% 88%);
+    background: hsl(350 22% 96%);
+    border-color: hsl(348 14% 83%);
   }
   :root[data-design-theme="rose"][data-theme="dark"] .sidebar-panel {
     background: hsl(348 20% 10%);
@@ -527,8 +527,8 @@
     }
   }
   :root[data-design-theme="obsidian"] .sidebar-panel {
-    background: hsl(0 0% 100%);
-    border-color: hsl(0 0% 87%);
+    background: hsl(0 0% 95%);
+    border-color: hsl(0 0% 80%);
   }
   :root[data-design-theme="obsidian"][data-theme="dark"] .sidebar-panel {
     background: hsl(0 0% 7%);
