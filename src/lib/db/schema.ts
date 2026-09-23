@@ -59,6 +59,8 @@ export const push_subscriptions = mysqlTable("webapp_push_subscriptions", {
   endpoint: text("endpoint").notNull(),
   p256dh: text("p256dh").notNull(),
   auth: varchar("auth", { length: 255 }).notNull(),
+  label: varchar("label", { length: 255 }),
+  enabled: boolean("enabled").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

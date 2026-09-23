@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getRawSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getPlatformInfo, iconUrl } from "@/lib/platform";
 import webpush from "web-push";
 
@@ -22,7 +22,7 @@ export async function POST() {
   const subs = await db
     .select({ id: push_subscriptions.id, endpoint: push_subscriptions.endpoint, p256dh: push_subscriptions.p256dh, auth: push_subscriptions.auth })
     .from(push_subscriptions)
-    .where(eq(push_subscriptions.userId, admin.id));
+    .where(and(eq(push_subscriptions.userId, admin.id), eq(push_subscriptions.enabled, true)));
 
   if (subs.length === 0) {
     return NextResponse.json({ error: "No active subscription found. Please tap Enable to subscribe this device.", expired: true }, { status: 400 });

@@ -380,6 +380,14 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
   return arr.buffer;
 }
 
+interface PushDevice {
+  id: number;
+  label: string;
+  enabled: boolean;
+  endpointPrefix: string;
+  createdAt: string | null;
+}
+
 function NotificationsTab() {
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -387,13 +395,26 @@ function NotificationsTab() {
   const [subscribing, setSubscribing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [supported, setSupported] = useState(false);
+  const [devices, setDevices] = useState<PushDevice[]>([]);
+  const [thisEndpointPrefix, setThisEndpointPrefix] = useState<string | null>(null);
+
+  const loadDevices = useCallback(async () => {
+    const r = await fetch("/api/admin/settings/notifications/devices");
+    const d = await r.json();
+    setDevices(d.devices ?? []);
+  }, []);
 
   const checkSubscription = useCallback(async (key: string) => {
     if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
     try {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
-      setSubscribed(!!sub && sub.endpoint.length > 0 && key.length > 0);
+      if (sub) {
+        setThisEndpointPrefix(sub.endpoint.slice(0, 60));
+        setSubscribed(key.length > 0);
+      } else {
+        setSubscribed(false);
+      }
     } catch { /* ignore */ }
   }, []);
 
@@ -402,14 +423,14 @@ function NotificationsTab() {
     fetch("/api/admin/settings/notifications").then(r => r.json()).then(d => {
       setPublicKey(d.publicKey);
       if (d.keysRegenerated) {
-        // Server just generated new VAPID keys — any browser subscription is now stale
         setSubscribed(false);
       } else if (d.publicKey) {
         checkSubscription(d.publicKey);
       }
       setLoading(false);
     });
-  }, [checkSubscription]);
+    loadDevices();
+  }, [checkSubscription, loadDevices]);
 
   async function toggleSubscription() {
     if (!publicKey) return;
@@ -427,13 +448,11 @@ function NotificationsTab() {
           await sub.unsubscribe();
         }
         setSubscribed(false);
+        setThisEndpointPrefix(null);
         toast.success("Notifications disabled for this device");
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") { toast.error("Notification permission denied"); return; }
-        // Always unsubscribe any stale browser subscription first so the new
-        // subscription uses the current VAPID key (prevents key mismatch)
-        // Fetch the current VAPID key fresh so we never use a stale state value
         const vapidResp = await fetch("/api/push/vapid-public-key");
         if (!vapidResp.ok) throw new Error("Push not configured — please reload the page and try again");
         const { publicKey: currentKey } = await vapidResp.json();
@@ -450,11 +469,37 @@ function NotificationsTab() {
           body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
         });
         setSubscribed(true);
+        setThisEndpointPrefix((json.endpoint ?? "").slice(0, 60));
         toast.success("Notifications enabled for this device");
       }
+      await loadDevices();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update notifications");
     } finally { setSubscribing(false); }
+  }
+
+  async function toggleDevice(id: number, enabled: boolean) {
+    await fetch("/api/admin/settings/notifications/devices", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, enabled }),
+    });
+    setDevices(prev => prev.map(d => d.id === id ? { ...d, enabled } : d));
+  }
+
+  async function removeDevice(id: number) {
+    await fetch("/api/admin/settings/notifications/devices", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setDevices(prev => prev.filter(d => d.id !== id));
+    // If this was the current device, update subscribed state
+    const removed = devices.find(d => d.id === id);
+    if (removed && thisEndpointPrefix && removed.endpointPrefix === thisEndpointPrefix) {
+      setSubscribed(false);
+      setThisEndpointPrefix(null);
+    }
   }
 
   async function sendTest() {
@@ -464,11 +509,12 @@ function NotificationsTab() {
       const d = await r.json();
       if (!r.ok) {
         toast.error(d.error ?? "Test failed");
-        if (d.expired) setSubscribed(false);
+        if (d.expired) { setSubscribed(false); await loadDevices(); }
         return;
       }
       if (d.failed > 0) {
-        toast.success(`Test sent to ${d.sent} device${d.sent !== 1 ? "s" : ""}. ${d.failed} subscription${d.failed !== 1 ? "s" : ""} failed — disable and re-enable notifications on the affected device to refresh it.`);
+        toast.success(`Test sent to ${d.sent} device${d.sent !== 1 ? "s" : ""}. ${d.failed} failed — re-enable notifications on the affected device to refresh it.`);
+        await loadDevices();
       } else {
         toast.success(`Test notification sent to ${d.sent} device${d.sent !== 1 ? "s" : ""}`);
       }
@@ -483,10 +529,11 @@ function NotificationsTab() {
         Receive push notifications when the platform is saved as an app on your device.
       </p>
 
+      {/* This device */}
       <div className="rounded-xl border p-4 bg-card">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">Notifications on this device</p>
+            <p className="text-sm font-medium">This device</p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {!supported
                 ? "Push notifications are not supported in this browser."
@@ -508,12 +555,57 @@ function NotificationsTab() {
         </div>
       </div>
 
+      {/* Subscribed devices list */}
+      {devices.length > 0 && (
+        <div>
+          <p className="text-sm font-medium mb-2">Subscribed devices</p>
+          <div className="rounded-xl border divide-y divide-border">
+            {devices.map(device => {
+              const isThis = thisEndpointPrefix !== null && device.endpointPrefix === thisEndpointPrefix;
+              return (
+                <div key={device.id} className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium truncate">{device.label}</span>
+                      {isThis && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-primary/10 text-primary shrink-0">This device</span>
+                      )}
+                    </div>
+                    {device.createdAt && (
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Added {new Date(device.createdAt).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={device.enabled}
+                    onCheckedChange={v => toggleDevice(device.id, v)}
+                    aria-label={`Toggle notifications for ${device.label}`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeDevice(device.id)}
+                    className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive shrink-0"
+                    aria-label={`Remove ${device.label}`}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Test button */}
       <div>
-        <Button onClick={sendTest} disabled={testing || !subscribed} variant="outline" size="sm">
+        <Button onClick={sendTest} disabled={testing || devices.filter(d => d.enabled).length === 0} variant="outline" size="sm">
           {testing ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Sending…</> : "Send Test Notification"}
         </Button>
-        {!subscribed && supported && (
-          <p className="text-xs text-muted-foreground mt-2">Enable notifications on this device first.</p>
+        {devices.filter(d => d.enabled).length === 0 && (
+          <p className="text-xs text-muted-foreground mt-2">
+            {devices.length === 0 ? "Enable notifications on this device first." : "All devices are disabled."}
+          </p>
         )}
       </div>
     </div>

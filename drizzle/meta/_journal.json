@@ -8,6 +8,13 @@
       "when": 1753228800000,
       "tag": "0000_add_user_disabled",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1753315200000,
+      "tag": "0001_push_subscription_label_enabled",
+      "breakpoints": true
     }
   ]
 }
