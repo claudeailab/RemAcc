@@ -45,7 +45,7 @@
   --color-card-foreground:     hsl(40 10% 93%);
   --color-popover:             hsl(20 8% 13%);
   --color-popover-foreground:  hsl(40 10% 93%);
-  --color-primary-foreground:  hsl(20 14% 6%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(20 8% 18%);
   --color-secondary-foreground:hsl(40 8% 82%);
   --color-muted:               hsl(20 8% 16%);
@@ -67,7 +67,7 @@
     --color-card-foreground:     hsl(40 10% 93%);
     --color-popover:             hsl(20 8% 13%);
     --color-popover-foreground:  hsl(40 10% 93%);
-    --color-primary-foreground:  hsl(20 14% 6%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(20 8% 18%);
     --color-secondary-foreground:hsl(40 8% 82%);
     --color-muted:               hsl(20 8% 16%);
@@ -106,7 +106,7 @@
   --color-card-foreground:     hsl(214 15% 93%);
   --color-popover:             hsl(222 24% 12%);
   --color-popover-foreground:  hsl(214 15% 93%);
-  --color-primary-foreground:  hsl(222 30% 6%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(222 22% 17%);
   --color-secondary-foreground:hsl(214 12% 83%);
   --color-muted:               hsl(222 20% 15%);
@@ -122,7 +122,7 @@
     --color-card-foreground:     hsl(214 15% 93%);
     --color-popover:             hsl(222 24% 12%);
     --color-popover-foreground:  hsl(214 15% 93%);
-    --color-primary-foreground:  hsl(222 30% 6%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(222 22% 17%);
     --color-secondary-foreground:hsl(214 12% 83%);
     --color-muted:               hsl(222 20% 15%);
@@ -155,7 +155,7 @@
   --color-card-foreground:     hsl(210 20% 93%);
   --color-popover:             hsl(222 44% 10%);
   --color-popover-foreground:  hsl(210 20% 93%);
-  --color-primary-foreground:  hsl(224 50% 4%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(222 38% 14%);
   --color-secondary-foreground:hsl(210 15% 83%);
   --color-muted:               hsl(222 35% 12%);
@@ -171,7 +171,7 @@
     --color-card-foreground:     hsl(210 20% 93%);
     --color-popover:             hsl(222 44% 10%);
     --color-popover-foreground:  hsl(210 20% 93%);
-    --color-primary-foreground:  hsl(224 50% 4%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(222 38% 14%);
     --color-secondary-foreground:hsl(210 15% 83%);
     --color-muted:               hsl(222 35% 12%);
@@ -204,7 +204,7 @@
   --color-card-foreground:     hsl(145 10% 92%);
   --color-popover:             hsl(155 18% 11%);
   --color-popover-foreground:  hsl(145 10% 92%);
-  --color-primary-foreground:  hsl(155 22% 5%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(152 16% 16%);
   --color-secondary-foreground:hsl(145 8% 82%);
   --color-muted:               hsl(152 15% 14%);
@@ -220,7 +220,7 @@
     --color-card-foreground:     hsl(145 10% 92%);
     --color-popover:             hsl(155 18% 11%);
     --color-popover-foreground:  hsl(145 10% 92%);
-    --color-primary-foreground:  hsl(155 22% 5%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(152 16% 16%);
     --color-secondary-foreground:hsl(145 8% 82%);
     --color-muted:               hsl(152 15% 14%);
@@ -253,7 +253,7 @@
   --color-card-foreground:     hsl(10 10% 92%);
   --color-popover:             hsl(348 18% 12%);
   --color-popover-foreground:  hsl(10 10% 92%);
-  --color-primary-foreground:  hsl(348 22% 6%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(348 15% 17%);
   --color-secondary-foreground:hsl(10 8% 82%);
   --color-muted:               hsl(348 12% 15%);
@@ -269,7 +269,7 @@
     --color-card-foreground:     hsl(10 10% 92%);
     --color-popover:             hsl(348 18% 12%);
     --color-popover-foreground:  hsl(10 10% 92%);
-    --color-primary-foreground:  hsl(348 22% 6%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(348 15% 17%);
     --color-secondary-foreground:hsl(10 8% 82%);
     --color-muted:               hsl(348 12% 15%);
@@ -302,7 +302,7 @@
   --color-card-foreground:     hsl(0 0% 93%);
   --color-popover:             hsl(0 0% 9%);
   --color-popover-foreground:  hsl(0 0% 93%);
-  --color-primary-foreground:  hsl(0 0% 3%);
+  --color-primary-foreground:  hsl(0 0% 100%);
   --color-secondary:           hsl(0 0% 14%);
   --color-secondary-foreground:hsl(0 0% 82%);
   --color-muted:               hsl(0 0% 11%);
@@ -318,7 +318,7 @@
     --color-card-foreground:     hsl(0 0% 93%);
     --color-popover:             hsl(0 0% 9%);
     --color-popover-foreground:  hsl(0 0% 93%);
-    --color-primary-foreground:  hsl(0 0% 3%);
+    --color-primary-foreground:  hsl(0 0% 100%);
     --color-secondary:           hsl(0 0% 14%);
     --color-secondary-foreground:hsl(0 0% 82%);
     --color-muted:               hsl(0 0% 11%);
