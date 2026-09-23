@@ -449,7 +449,11 @@ function NotificationsTab() {
     try {
       const r = await fetch("/api/admin/settings/notifications/test", { method: "POST" });
       const d = await r.json();
-      if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
+      if (!r.ok) {
+        toast.error(d.error ?? "Test failed");
+        if (d.expired) setSubscribed(false);
+        return;
+      }
       toast.success("Test notification sent");
     } finally { setTesting(false); }
   }
