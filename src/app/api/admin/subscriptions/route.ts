@@ -6,7 +6,7 @@ import { plans } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
-const planSchema = z.object({ name: z.string().min(1), monthlyPrice: z.number().int().min(0), yearlyPrice: z.number().int().min(0), features: z.string().default("[]") });
+const planSchema = z.object({ name: z.string().min(1), monthlyPrice: z.number().int().min(0), yearlyPrice: z.number().int().min(0), features: z.array(z.string()).default([]) });
 const updateSchema = planSchema.extend({ id: z.number().int().positive() });
 
 function centsToStr(cents: number) { return `$${(cents / 100).toFixed(2)}`; }
@@ -22,9 +22,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = planSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
-  await db.insert(plans).values(parsed.data);
+  const { name, monthlyPrice, yearlyPrice, features } = parsed.data;
+  await db.insert(plans).values({ name, monthlyPrice, yearlyPrice, features: JSON.stringify(features) });
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
-  const { name, monthlyPrice, yearlyPrice } = parsed.data;
   await logAudit({ userEmail: admin.email, action: "create", resource: "plan", detail: `name=${name}; monthly=${centsToStr(monthlyPrice)}; yearly=${centsToStr(yearlyPrice)}`, ip });
   return NextResponse.json({ ok: true });
 }
@@ -43,7 +43,7 @@ export async function PUT(req: NextRequest) {
     name: sql`${name}`,
     monthlyPrice: sql`${monthlyPrice}`,
     yearlyPrice: sql`${yearlyPrice}`,
-    features: sql`${features}`,
+    features: sql`${JSON.stringify(features)}`,
   }).where(eq(plans.id, id));
 
   const changes: string[] = [`id=${id}`];

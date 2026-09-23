@@ -1053,6 +1053,122 @@ function VisualAppearanceSection() {
   );
 }
 
+interface CatalogFeature { id: number; name: string; description: string | null }
+
+function PlanFeaturesTab() {
+  const [features, setFeatures] = useState<CatalogFeature[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [form, setForm] = useState({ id: 0, name: "", description: "" });
+  const [saving, setSaving] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/admin/features/catalog");
+      const d = await r.json();
+      setFeatures(d.features ?? []);
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  function openNew() { setForm({ id: 0, name: "", description: "" }); setDialogOpen(true); }
+  function openEdit(f: CatalogFeature) { setForm({ id: f.id, name: f.name, description: f.description ?? "" }); setDialogOpen(true); }
+
+  async function handleSave() {
+    if (!form.name.trim()) return;
+    setSaving(true);
+    try {
+      const method = form.id ? "PUT" : "POST";
+      const r = await fetch("/api/admin/features/catalog", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: form.id || undefined, name: form.name.trim(), description: form.description.trim() || null }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
+      toast.success(form.id ? "Feature updated" : "Feature added");
+      setDialogOpen(false);
+      load();
+    } finally { setSaving(false); }
+  }
+
+  async function handleDelete(id: number) {
+    const r = await fetch(`/api/admin/features/catalog?id=${id}`, { method: "DELETE" });
+    if (!r.ok) { toast.error("Delete failed"); return; }
+    toast.success("Feature removed");
+    setDeleteId(null);
+    load();
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">Define the features available for subscription plans.</p>
+        <Button size="sm" onClick={openNew}><Plus className="h-4 w-4 mr-1.5" />Add Feature</Button>
+      </div>
+
+      {features.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-8">No features yet. Add your first feature above.</p>
+      ) : (
+        <div className="rounded-xl border divide-y divide-border">
+          {features.map(f => (
+            <div key={f.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">{f.name}</p>
+                {f.description && <p className="text-xs text-muted-foreground truncate mt-0.5">{f.description}</p>}
+              </div>
+              <button type="button" onClick={() => openEdit(f)} className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0">
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
+              <button type="button" onClick={() => setDeleteId(f.id)} className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-destructive/10 transition-colors text-muted-foreground hover:text-destructive shrink-0">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{form.id ? "Edit Feature" : "Add Feature"}</DialogTitle></DialogHeader>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label>Name</Label>
+              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Priority support" autoFocus />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label>Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Short description shown in plans" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saving || !form.name.trim()}>
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Remove Feature</DialogTitle></DialogHeader>
+          <p className="text-sm">This removes the feature from the catalog. Existing plans that include it are not affected.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)}>Remove</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [theme, setTheme] = useState<Theme>("system");
   const [saving, setSaving] = useState(false);
@@ -1085,6 +1201,7 @@ export default function SettingsPage() {
             <TabsTrigger value="platform">Platform</TabsTrigger>
             <TabsTrigger value="visual">Visual</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
+            <TabsTrigger value="plan-features">Plan Features</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
             <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
@@ -1110,6 +1227,9 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="features">
             <Card><CardContent className="pt-6"><FeaturesTab /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="plan-features">
+            <Card><CardContent className="pt-6"><PlanFeaturesTab /></CardContent></Card>
           </TabsContent>
           <TabsContent value="permissions">
             <Card><CardContent className="pt-6"><PermissionsTab /></CardContent></Card>

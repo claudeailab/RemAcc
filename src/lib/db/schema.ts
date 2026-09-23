@@ -64,6 +64,13 @@ export const push_subscriptions = mysqlTable("webapp_push_subscriptions", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const feature_catalog = mysqlTable("webapp_feature_catalog", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  description: varchar("description", { length: 500 }),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const plans = mysqlTable("webapp_plans", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
