@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
 
@@ -62,14 +62,11 @@ export default function EmailPage() {
   return (
     <div className={pageWrapper}>
       <div className={pageInner}>
-        <h1 className={pageTitle}>Email / SMTP Settings</h1>
+        <h1 className={pageTitle}>Email Settings</h1>
         <Card className="mt-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>SMTP Configuration</CardTitle>
-                <CardDescription>Configure outbound email settings.</CardDescription>
-              </div>
+              <CardTitle>SMTP Configuration</CardTitle>
               <div className="flex items-center gap-2 shrink-0">
                 <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
                 <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />

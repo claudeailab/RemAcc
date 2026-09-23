@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, Eye, EyeOff, CheckCircle2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
@@ -93,23 +93,22 @@ function StripeTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Stripe</CardTitle>
-            <CardDescription>Configure Stripe for payments and subscriptions.</CardDescription>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
-            <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle>Stripe</CardTitle>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
+              <Label className="text-sm">{form.liveMode ? "Live Mode" : "Test Mode"}</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+              <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className={fieldGap}>
-          <div className="flex items-center gap-2">
-            <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
-            <Label>{form.liveMode ? "Live Mode" : "Test Mode"}</Label>
-          </div>
           <div className="flex flex-col gap-1.5">
             <Label>Publishable Key</Label>
             <Input value={form.publishableKey} onChange={e => setForm(f => ({ ...f, publishableKey: e.target.value }))} placeholder="pk_test_..." />
@@ -188,23 +187,22 @@ function VivaWalletTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Viva Wallet</CardTitle>
-            <CardDescription>Configure Viva Wallet (formerly Viva Payments) for payment processing.</CardDescription>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
-            <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle>Viva Wallet</CardTitle>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
+              <Label className="text-sm">{form.liveMode ? "Production" : "Demo Mode"}</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+              <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className={fieldGap}>
-          <div className="flex items-center gap-2">
-            <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
-            <Label>{form.liveMode ? "Production" : "Demo Mode"}</Label>
-          </div>
           <div className="flex flex-col gap-1.5">
             <Label>Client ID</Label>
             <Input value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} placeholder="Client ID from Viva Wallet dashboard" />
@@ -282,23 +280,22 @@ function PayPalTab() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>PayPal</CardTitle>
-            <CardDescription>Configure PayPal for payment processing.</CardDescription>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
-            <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle>PayPal</CardTitle>
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
+              <Label className="text-sm">{form.liveMode ? "Live" : "Sandbox"}</Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
+              <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />
+            </div>
           </div>
         </div>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSave} className={fieldGap}>
-          <div className="flex items-center gap-2">
-            <Switch checked={form.liveMode} onCheckedChange={v => setForm(f => ({ ...f, liveMode: v }))} />
-            <Label>{form.liveMode ? "Live" : "Sandbox"}</Label>
-          </div>
           <div className="flex flex-col gap-1.5">
             <Label>Client ID</Label>
             <Input value={form.clientId} onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))} placeholder="Client ID from PayPal Developer Dashboard" />

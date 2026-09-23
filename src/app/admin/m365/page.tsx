@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Loader2, Eye, EyeOff, Copy, ExternalLink, CheckCircle2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
@@ -143,10 +143,7 @@ export default function M365Page() {
         <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Azure AD Configuration</CardTitle>
-                <CardDescription>Connect this platform to your Microsoft 365 tenant.</CardDescription>
-              </div>
+              <CardTitle>Azure AD</CardTitle>
               <div className="flex items-center gap-2 shrink-0">
                 <Label className="text-sm">{form.enabled ? "Enabled" : "Disabled"}</Label>
                 <Switch checked={form.enabled} onCheckedChange={v => setForm(f => ({ ...f, enabled: v }))} />

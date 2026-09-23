@@ -810,14 +810,16 @@ export default function SettingsPage() {
       <div className={pageInner}>
         <h1 className={pageTitle}>Settings</h1>
         <Tabs defaultValue="platform" className="mt-6">
-          <TabsList>
-            <TabsTrigger value="platform">Platform</TabsTrigger>
-            <TabsTrigger value="visual">Visual</TabsTrigger>
-            <TabsTrigger value="features">Features</TabsTrigger>
-            <TabsTrigger value="permissions">Permissions</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="audit">Audit</TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto">
+            <TabsList className="w-max">
+              <TabsTrigger value="platform">Platform</TabsTrigger>
+              <TabsTrigger value="visual">Visual</TabsTrigger>
+              <TabsTrigger value="features">Features</TabsTrigger>
+              <TabsTrigger value="permissions">Permissions</TabsTrigger>
+              <TabsTrigger value="notifications">Notifications</TabsTrigger>
+              <TabsTrigger value="audit">Audit</TabsTrigger>
+            </TabsList>
+          </div>
           <TabsContent value="platform">
             <Card><CardContent className="pt-6"><PlatformTab /></CardContent></Card>
           </TabsContent>
