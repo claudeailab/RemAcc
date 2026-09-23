@@ -79,32 +79,49 @@ function AuditTab() {
       ) : logs.length === 0 ? (
         <p className="text-sm text-muted-foreground py-8 text-center">No audit logs yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/30">
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Time</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">User</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Action</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Resource</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Detail</th>
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {logs.map(log => (
-                <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{new Date(log.createdAt).toLocaleString()}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{log.userEmail ?? "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap"><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{log.action}</span></td>
-                  <td className="px-3 py-2 whitespace-nowrap">{log.resource}</td>
-                  <td className="px-3 py-2 text-muted-foreground text-xs max-w-xs truncate">{log.detail ?? "—"}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{log.ip ?? "—"}</td>
+        <>
+          {/* Mobile: card list */}
+          <div className="md:hidden flex flex-col divide-y divide-border rounded-lg border border-border">
+            {logs.map(log => (
+              <div key={log.id} className="p-3 space-y-1">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{log.action}</span>
+                  <span className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</span>
+                </div>
+                <div className="text-sm font-medium truncate">{log.resource}</div>
+                {log.userEmail && <div className="text-xs text-muted-foreground truncate">{log.userEmail}</div>}
+                {log.detail && <div className="text-xs text-muted-foreground truncate">{log.detail}</div>}
+              </div>
+            ))}
+          </div>
+          {/* Desktop: table */}
+          <div className="hidden md:block overflow-x-auto rounded-lg border border-border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Time</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">User</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Action</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Resource</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Detail</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">IP</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {logs.map(log => (
+                  <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{new Date(log.createdAt).toLocaleString()}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{log.userEmail ?? "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap"><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{log.action}</span></td>
+                    <td className="px-3 py-2 whitespace-nowrap">{log.resource}</td>
+                    <td className="px-3 py-2 text-muted-foreground text-xs max-w-xs truncate">{log.detail ?? "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{log.ip ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
       {pages > 1 && (
         <div className="flex items-center justify-between">
