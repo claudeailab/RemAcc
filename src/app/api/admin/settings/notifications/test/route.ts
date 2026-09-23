@@ -68,15 +68,16 @@ export async function POST() {
         return NextResponse.json({ error: "Subscription expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       if (err?.statusCode === 401 || err?.statusCode === 403) {
-        // Reset VAPID keys — next page load will regenerate
+        // Key mismatch — generate a fresh valid pair immediately (don't leave empty)
+        const newKeys = webpush.generateVAPIDKeys();
         await Promise.all([
-          setRawSetting("vapid_publicKey", ""),
-          setRawSetting("vapid_privateKey", ""),
+          setRawSetting("vapid_publicKey", newKeys.publicKey),
+          setRawSetting("vapid_privateKey", newKeys.privateKey),
           db.delete(push_subscriptions),
         ]);
-        return NextResponse.json({ error: "Key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true }, { status: 400 });
+        return NextResponse.json({ error: "Key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true, newPublicKey: newKeys.publicKey }, { status: 400 });
       }
-      console.error("Push send failed:", err);
+      console.error("Push send failed:", { statusCode: err?.statusCode, body: (err as { body?: string })?.body });
     }
     return NextResponse.json({ error: "Failed to deliver notification. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
   }
