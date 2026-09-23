@@ -19,6 +19,7 @@ import { iconUrl, DEFAULT_ICON, DEFAULT_PRIMARY_COLOR } from "@/lib/platform-sha
 const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = [
   { key: "users", label: "Users", description: "User management, registration, and profiles" },
   { key: "payments", label: "Payments", description: "Stripe, Viva, and PayPal billing" },
+  { key: "featureCatalog", label: "Features", description: "Feature catalog for subscription plans" },
   { key: "subscriptions", label: "Subscriptions", description: "Subscription plans and management" },
   { key: "m365", label: "Microsoft 365", description: "Azure AD sync and Microsoft SSO login" },
   { key: "email", label: "Email Settings", description: "Transactional email via SMTP" },
@@ -236,7 +237,7 @@ function AuditTab() {
 function FeaturesTab() {
   const router = useRouter();
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
-    users: true, payments: true, m365: true, email: true, ai: true, subscriptions: true,
+    users: true, payments: true, featureCatalog: true, subscriptions: true, m365: true, email: true, ai: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<FeatureKey | null>(null);
