@@ -33,12 +33,12 @@ export default function AdminSidebar({ user, features, platform }: Props) {
   const allNavItems: NavItem[] = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
-    { href: "/admin/audit", label: "Audit Log", icon: ClipboardList },
+    ...(features.audit ? [{ href: "/admin/audit", label: "Audit", icon: ClipboardList }] : []),
     ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
     ...(features.featureCatalog ? [{ href: "/admin/features", label: "Features", icon: Sparkles }] : []),
     ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard }] : []),
-    { href: "/admin/notifications", label: "Notifications", icon: Bell },
+    ...(features.notifications ? [{ href: "/admin/notifications", label: "Notifications", icon: Bell }] : []),
     ...(features.m365 ? [{ href: "/admin/m365", label: "Microsoft 365", icon: Settings }] : []),
     ...(features.email ? [{ href: "/admin/email", label: "Email Settings", icon: Mail }] : []),
     ...(features.ai ? [{ href: "/admin/ai", label: "Artificial Intelligence", icon: Bot }] : []),
@@ -52,7 +52,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         href={item.href}
         onClick={onClick}
         className={cn(
-          "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all duration-150",
+          "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all duration-150",
           active ? "nav-active font-medium" : "text-foreground/80 hover:bg-secondary hover:text-foreground"
         )}
       >
@@ -91,8 +91,8 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
           {navLink({ href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true })}
-          <div className="mt-5">
-            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
+          <div className="mt-3">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
             <div className="flex flex-col gap-0.5">
               {systemItems.map(item => navLink(item))}
             </div>

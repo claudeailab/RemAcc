@@ -17,10 +17,12 @@ import type { FeatureKey } from "@/lib/features";
 import { iconUrl, DEFAULT_ICON, DEFAULT_PRIMARY_COLOR } from "@/lib/platform-shared";
 
 const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = [
+  { key: "audit", label: "Audit", description: "Admin audit log of all platform actions" },
   { key: "users", label: "Users", description: "User management, registration, and profiles" },
   { key: "payments", label: "Payments", description: "Stripe, Viva, and PayPal billing" },
   { key: "featureCatalog", label: "Features", description: "Feature catalog for subscription plans" },
   { key: "subscriptions", label: "Subscriptions", description: "Subscription plans and management" },
+  { key: "notifications", label: "Notifications", description: "Push notification device management" },
   { key: "m365", label: "Microsoft 365", description: "Azure AD sync and Microsoft SSO login" },
   { key: "email", label: "Email Settings", description: "Transactional email via SMTP" },
   { key: "ai", label: "Artificial Intelligence", description: "Anthropic and OpenAI integrations" },
@@ -44,7 +46,7 @@ function ThemeButton({ value, current, label, onClick }: { value: Theme; current
 function FeaturesTab() {
   const router = useRouter();
   const [features, setFeatures] = useState<Record<FeatureKey, boolean>>({
-    users: true, payments: true, featureCatalog: true, subscriptions: true, m365: true, email: true, ai: true,
+    audit: true, users: true, payments: true, featureCatalog: true, subscriptions: true, notifications: true, m365: true, email: true, ai: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<FeatureKey | null>(null);

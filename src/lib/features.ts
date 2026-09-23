@@ -1,6 +1,6 @@
 import { getSetting } from "./encryption";
 
-export const FEATURE_KEYS = ["users", "payments", "featureCatalog", "subscriptions", "m365", "email", "ai"] as const;
+export const FEATURE_KEYS = ["users", "payments", "featureCatalog", "subscriptions", "notifications", "m365", "email", "ai", "audit"] as const;
 export type FeatureKey = typeof FEATURE_KEYS[number];
 export type Features = Record<FeatureKey, boolean>;
 
