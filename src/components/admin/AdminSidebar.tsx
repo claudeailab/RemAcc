@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles } from "lucide-react";
+import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles, Bell, ClipboardList } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
@@ -33,10 +33,12 @@ export default function AdminSidebar({ user, features, platform }: Props) {
   const allNavItems: NavItem[] = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
+    { href: "/admin/audit", label: "Audit Log", icon: ClipboardList },
     ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
     ...(features.featureCatalog ? [{ href: "/admin/features", label: "Features", icon: Sparkles }] : []),
     ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard }] : []),
+    { href: "/admin/notifications", label: "Notifications", icon: Bell },
     ...(features.m365 ? [{ href: "/admin/m365", label: "Microsoft 365", icon: Settings }] : []),
     ...(features.email ? [{ href: "/admin/email", label: "Email Settings", icon: Mail }] : []),
     ...(features.ai ? [{ href: "/admin/ai", label: "Artificial Intelligence", icon: Bot }] : []),
