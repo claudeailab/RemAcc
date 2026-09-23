@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { getRawSetting, setRawSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import webpush from "web-push";
 
 export async function GET() {
   await requireAdmin();
-  let publicKey = await getSetting("push_vapidPublicKey");
+  let publicKey = await getRawSetting("vapid_publicKey");
   if (!publicKey) {
-    // Keys missing or decryption failed — regenerate and invalidate all subscriptions
+    // No keys yet — generate and invalidate all existing subscriptions
     const keys = webpush.generateVAPIDKeys();
     await Promise.all([
-      setSetting("push_vapidPublicKey", keys.publicKey),
-      setSetting("push_vapidPrivateKey", keys.privateKey),
-      db.delete(push_subscriptions), // all existing subscriptions are now invalid
+      setRawSetting("vapid_publicKey", keys.publicKey),
+      setRawSetting("vapid_privateKey", keys.privateKey),
+      db.delete(push_subscriptions),
     ]);
     publicKey = keys.publicKey;
   }

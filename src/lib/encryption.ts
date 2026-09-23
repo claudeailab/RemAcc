@@ -97,3 +97,20 @@ export async function setSetting(key: string, value: string): Promise<void> {
   await db.insert(settings).values({ key, value: encrypted })
     .onDuplicateKeyUpdate({ set: { value: sql`values(value)`, updatedAt: sql`now()` } });
 }
+
+// Plain-text storage for stable non-secret values (e.g. VAPID signing keys)
+export async function getRawSetting(key: string): Promise<string | null> {
+  const { db } = await import("./db");
+  const { settings } = await import("./db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, key)).limit(1);
+  return row?.value ?? null;
+}
+
+export async function setRawSetting(key: string, value: string): Promise<void> {
+  const { db } = await import("./db");
+  const { settings } = await import("./db/schema");
+  const { sql } = await import("drizzle-orm");
+  await db.insert(settings).values({ key, value })
+    .onDuplicateKeyUpdate({ set: { value: sql`values(value)`, updatedAt: sql`now()` } });
+}

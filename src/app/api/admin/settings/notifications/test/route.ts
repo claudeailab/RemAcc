@@ -1,19 +1,18 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { getRawSetting, setRawSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 import { getPlatformInfo } from "@/lib/platform";
 import webpush from "web-push";
 
-export async function POST(req: NextRequest) {
-  void req;
+export async function POST() {
   const admin = await requireAdmin();
 
   const [publicKey, privateKey] = await Promise.all([
-    getSetting("push_vapidPublicKey"),
-    getSetting("push_vapidPrivateKey"),
+    getRawSetting("vapid_publicKey"),
+    getRawSetting("vapid_privateKey"),
   ]);
   if (!publicKey || !privateKey) {
     return NextResponse.json({ error: "Push notifications not configured. Enable notifications on this device first." }, { status: 400 });
@@ -62,21 +61,20 @@ export async function POST(req: NextRequest) {
   const sent = results.filter(r => r.status === "fulfilled").length;
 
   if (sent === 0) {
-    // All failed — give a specific reason
     const firstErr = results[0];
     if (firstErr.status === "rejected") {
-      const err = firstErr.reason as { statusCode?: number; message?: string };
+      const err = firstErr.reason as { statusCode?: number };
       if (err?.statusCode === 410 || expiredIds.length > 0) {
         return NextResponse.json({ error: "Subscription expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       if (err?.statusCode === 401 || err?.statusCode === 403) {
-        // Wipe VAPID keys so the next GET auto-regenerates fresh ones
+        // Reset VAPID keys — next page load will regenerate
         await Promise.all([
-          setSetting("push_vapidPublicKey", ""),
-          setSetting("push_vapidPrivateKey", ""),
+          setRawSetting("vapid_publicKey", ""),
+          setRawSetting("vapid_privateKey", ""),
           db.delete(push_subscriptions),
         ]);
-        return NextResponse.json({ error: "VAPID key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true }, { status: 400 });
+        return NextResponse.json({ error: "Key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       console.error("Push send failed:", err);
     }
