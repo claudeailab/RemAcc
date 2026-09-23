@@ -71,7 +71,7 @@ export default function UsersPage() {
       const method = form.id ? "PUT" : "POST";
       const payload = {
         ...(form.id ? { id: form.id } : {}),
-        username: form.username,
+        ...(form.username ? { username: form.username } : {}),
         ...(form.email ? { email: form.email } : {}),
         displayName: form.displayName || undefined,
         ...(form.password ? { password: form.password } : {}),
