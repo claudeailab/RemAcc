@@ -78,9 +78,9 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             <span hidden className="text-primary text-xs font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
           </div>
           <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
-            {platform.title && <span className="text-[10px] text-muted-foreground truncate">{platform.title}</span>}
-            <span className="text-[11px] text-foreground/50 font-mono font-medium">v{version.version}</span>
+            <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
+            {platform.title && <span className="text-xs text-muted-foreground truncate leading-tight">{platform.title}</span>}
+            <span className="text-xs text-foreground/60 font-mono font-semibold leading-tight">v{version.version}</span>
           </div>
         </div>
 
@@ -123,9 +123,9 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             />
             <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
           </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-semibold text-sm tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
-            <span className="text-[11px] text-foreground/50 font-mono font-medium leading-tight">v{version.version}</span>
+          <div className="flex items-baseline gap-1.5 min-w-0">
+            <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
+            <span className="text-xs text-foreground/60 font-mono font-semibold shrink-0">v{version.version}</span>
           </div>
         </div>
         <button
@@ -143,7 +143,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
           <DialogPrimitive.Overlay className="md:hidden fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200" />
           <DialogPrimitive.Content
             aria-describedby={undefined}
-            className="md:hidden sidebar-panel fixed inset-y-0 left-0 z-50 w-72 flex flex-col border-r shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left duration-300"
+            className="md:hidden sidebar-panel fixed inset-y-0 left-0 z-50 w-72 flex flex-col border-r shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left duration-200 ease-out"
           >
             <DialogPrimitive.Title className="sr-only">Navigation menu</DialogPrimitive.Title>
 
@@ -164,8 +164,8 @@ export default function AdminSidebar({ user, features, platform }: Props) {
                   <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
                 </div>
                 <div className="flex flex-col min-w-0">
-                  <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
-                  <span className="text-[11px] text-foreground/50 font-mono font-medium">v{version.version}</span>
+                  <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
+                  <span className="text-xs text-foreground/60 font-mono font-semibold leading-tight">v{version.version}</span>
                 </div>
               </div>
               <DialogPrimitive.Close className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-foreground/60 shrink-0">

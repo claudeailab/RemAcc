@@ -5,14 +5,15 @@ export async function GET(req: NextRequest) {
   const color = req.nextUrl.searchParams.get("color") ?? "%236366f1";
   if (!icon) return new NextResponse("Missing icon", { status: 400 });
 
+  const encodedColor = color.startsWith("#") ? encodeURIComponent(color) : color;
   const colon = icon.indexOf(":");
   let upstreamUrl: string;
   if (colon === -1) {
-    upstreamUrl = `https://api.iconify.design/${icon}.svg?color=${color}`;
+    upstreamUrl = `https://api.iconify.design/${icon}.svg?color=${encodedColor}`;
   } else {
     const prefix = icon.slice(0, colon);
     const name = icon.slice(colon + 1);
-    upstreamUrl = `https://api.iconify.design/${prefix}/${name}.svg?color=${color}`;
+    upstreamUrl = `https://api.iconify.design/${prefix}/${name}.svg?color=${encodedColor}`;
   }
 
   try {

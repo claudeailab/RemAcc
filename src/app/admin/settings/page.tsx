@@ -581,7 +581,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
                       src={iconUrl(id)}
                       alt={id}
                       className="h-6 w-6"
-                      onError={e => { (e.target as HTMLImageElement).style.opacity = "0.2"; }}
+                      onError={e => { (e.target as HTMLImageElement).closest("button")!.style.display = "none"; }}
                     />
                   </button>
                 ))}
