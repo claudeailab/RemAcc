@@ -44,7 +44,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
     ...(features.ai ? [{ href: "/admin/ai", label: "Artificial Intelligence", icon: Bot }] : []),
   ];
 
-  const navLink = (item: NavItem, onClick?: () => void) => {
+  const navLink = (item: NavItem, onClick?: () => void, inDrawer = false) => {
     const active = item.exact ? path === item.href : path.startsWith(item.href);
     return (
       <Link
@@ -52,7 +52,8 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         href={item.href}
         onClick={onClick}
         className={cn(
-          "group flex items-center gap-2.5 rounded-md px-3 py-1 text-sm transition-all duration-150",
+          "group flex items-center gap-2.5 rounded-md px-3 text-sm transition-all duration-150",
+          inDrawer ? "py-2" : "py-1",
           active ? "nav-active font-medium" : "text-foreground/80 hover:bg-secondary hover:text-foreground"
         )}
       >
@@ -185,7 +186,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
             {/* Nav */}
             <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
-              {allNavItems.map(item => navLink(item, () => setDrawerOpen(false)))}
+              {allNavItems.map(item => navLink(item, () => setDrawerOpen(false), true))}
             </nav>
 
             {/* User + logout */}
