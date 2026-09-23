@@ -15,3 +15,25 @@ self.addEventListener("fetch", (e) => {
       .catch(() => caches.match(e.request))
   );
 });
+
+self.addEventListener("push", (e) => {
+  let data = { title: "Notification", body: "" };
+  try { data = e.data?.json() ?? data; } catch { /* use defaults */ }
+  e.waitUntil(
+    self.registration.showNotification(data.title, {
+      body: data.body,
+      icon: data.icon ?? "/favicon.svg",
+      badge: "/favicon.svg",
+    })
+  );
+});
+
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+      if (list.length > 0) return list[0].focus();
+      return clients.openWindow("/");
+    })
+  );
+});

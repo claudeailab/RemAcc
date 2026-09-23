@@ -52,6 +52,15 @@ export const audit_logs = mysqlTable("webapp_audit_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const push_subscriptions = mysqlTable("webapp_push_subscriptions", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: varchar("auth", { length: 255 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const plans = mysqlTable("webapp_plans", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),

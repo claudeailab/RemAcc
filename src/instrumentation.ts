@@ -50,6 +50,16 @@ export async function register() {
         PRIMARY KEY (\`id\`),
         CONSTRAINT \`webapp_sessions_user_id_fk\` FOREIGN KEY (\`user_id\`) REFERENCES \`webapp_users\` (\`id\`) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      `CREATE TABLE IF NOT EXISTS \`webapp_push_subscriptions\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`user_id\` int NOT NULL,
+        \`endpoint\` text NOT NULL,
+        \`p256dh\` text NOT NULL,
+        \`auth\` varchar(255) NOT NULL,
+        \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`),
+        CONSTRAINT \`webapp_push_sub_user_fk\` FOREIGN KEY (\`user_id\`) REFERENCES \`webapp_users\` (\`id\`) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       `CREATE TABLE IF NOT EXISTS \`webapp_plans\` (
         \`id\` int NOT NULL AUTO_INCREMENT,
         \`name\` varchar(255) NOT NULL,

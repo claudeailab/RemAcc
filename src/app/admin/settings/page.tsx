@@ -355,6 +355,165 @@ function PermissionsTab() {
   );
 }
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  return Uint8Array.from(raw, c => c.charCodeAt(0));
+}
+
+function NotificationsTab() {
+  const [configured, setConfigured] = useState(false);
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [subscribed, setSubscribed] = useState(false);
+  const [subscribing, setSubscribing] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [supported, setSupported] = useState(false);
+
+  const checkSubscription = useCallback(async (key: string) => {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      setSubscribed(!!sub && sub.endpoint.length > 0 && key.length > 0);
+    } catch { /* ignore */ }
+  }, []);
+
+  useEffect(() => {
+    setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
+    fetch("/api/admin/settings/notifications").then(r => r.json()).then(d => {
+      setConfigured(d.configured);
+      setPublicKey(d.publicKey);
+      if (d.publicKey) checkSubscription(d.publicKey);
+      setLoading(false);
+    });
+  }, [checkSubscription]);
+
+  async function generateKeys() {
+    setGenerating(true);
+    try {
+      const r = await fetch("/api/admin/settings/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generateKeys: true }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Failed"); return; }
+      setConfigured(true);
+      setPublicKey(d.publicKey);
+      toast.success("VAPID keys generated");
+    } finally { setGenerating(false); }
+  }
+
+  async function toggleSubscription() {
+    if (!publicKey) return;
+    setSubscribing(true);
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      if (subscribed) {
+        const sub = await reg.pushManager.getSubscription();
+        if (sub) {
+          await fetch("/api/push/subscribe", {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ endpoint: sub.endpoint }),
+          });
+          await sub.unsubscribe();
+        }
+        setSubscribed(false);
+        toast.success("Unsubscribed from notifications");
+      } else {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") { toast.error("Notification permission denied"); return; }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+        const json = sub.toJSON();
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
+        });
+        setSubscribed(true);
+        toast.success("Subscribed to notifications on this device");
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Subscription failed");
+    } finally { setSubscribing(false); }
+  }
+
+  async function sendTest() {
+    setTesting(true);
+    try {
+      const r = await fetch("/api/admin/settings/notifications/test", { method: "POST" });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
+      toast.success("Test notification sent");
+    } finally { setTesting(false); }
+  }
+
+  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">
+        Send push notifications to users who have saved the platform as a PWA on their device.
+      </p>
+
+      <div className="rounded-xl border p-4 bg-card space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">VAPID Keys</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {configured ? "Keys are configured. Regenerating will invalidate all existing subscriptions." : "Generate a key pair to enable push notifications."}
+            </p>
+            {publicKey && (
+              <p className="text-xs font-mono text-muted-foreground mt-1 break-all">{publicKey.slice(0, 40)}…</p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {configured && <Badge variant="outline" className="text-emerald-600 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700 text-xs">Configured</Badge>}
+            <Button size="sm" variant="outline" onClick={generateKeys} disabled={generating}>
+              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : configured ? "Regenerate" : "Generate Keys"}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-xl border p-4 bg-card space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">This Device</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {!supported ? "Push notifications are not supported in this browser." : subscribed ? "This browser is subscribed and will receive notifications." : "Subscribe this browser to test notifications."}
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant={subscribed ? "outline" : "default"}
+            onClick={toggleSubscription}
+            disabled={!configured || !supported || subscribing}
+          >
+            {subscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : subscribed ? "Unsubscribe" : "Subscribe"}
+          </Button>
+        </div>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <Button onClick={sendTest} disabled={testing || !configured || !subscribed}>
+          {testing ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Sending…</> : "Send Test Notification"}
+        </Button>
+        {!subscribed && configured && supported && (
+          <p className="text-xs text-muted-foreground">Subscribe this device first to send a test.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const ICON_SETS = [
   { label: "All", value: "" },
   { label: "HugeIcons", value: "hugeicons" },
@@ -688,6 +847,7 @@ export default function SettingsPage() {
             <TabsTrigger value="visual">Visual</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
+            <TabsTrigger value="notifications">Notifications</TabsTrigger>
             <TabsTrigger value="audit">Audit</TabsTrigger>
           </TabsList>
           <TabsContent value="platform">
@@ -714,6 +874,9 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="permissions">
             <Card><CardContent className="pt-6"><PermissionsTab /></CardContent></Card>
+          </TabsContent>
+          <TabsContent value="notifications">
+            <Card><CardContent className="pt-6"><NotificationsTab /></CardContent></Card>
           </TabsContent>
           <TabsContent value="audit">
             <Card><CardContent className="pt-6"><AuditTab /></CardContent></Card>
