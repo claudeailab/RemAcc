@@ -426,6 +426,10 @@ function NotificationsTab() {
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") { toast.error("Notification permission denied"); return; }
+        // Always unsubscribe any stale browser subscription first so the new
+        // subscription uses the current VAPID key (prevents key mismatch)
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) await existing.unsubscribe();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: urlBase64ToArrayBuffer(publicKey),

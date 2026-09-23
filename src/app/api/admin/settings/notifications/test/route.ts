@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting } from "@/lib/encryption";
+import { getSetting, setSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -70,7 +70,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "Subscription expired. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       if (err?.statusCode === 401 || err?.statusCode === 403) {
-        return NextResponse.json({ error: "VAPID key mismatch. Please disable and re-enable notifications on this device.", expired: true }, { status: 400 });
+        // Wipe VAPID keys so the next GET auto-regenerates fresh ones
+        await Promise.all([
+          setSetting("push_vapidPublicKey", ""),
+          setSetting("push_vapidPrivateKey", ""),
+          db.delete(push_subscriptions),
+        ]);
+        return NextResponse.json({ error: "VAPID key mismatch — keys have been reset. Please re-enable notifications on this device.", expired: true }, { status: 400 });
       }
       console.error("Push send failed:", err);
     }
