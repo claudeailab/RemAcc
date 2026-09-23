@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/auth";
-import { getRawSetting, setRawSetting } from "@/lib/encryption";
+import { getRawSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
@@ -28,10 +29,11 @@ export async function POST() {
   }
 
   const platform = await getPlatformInfo();
-  // Apple Web Push requires an https:// subject; mailto: causes BadJwtToken on iOS
-  const vapidSubject = process.env.WEBAPP_URL?.startsWith("https://")
-    ? process.env.WEBAPP_URL
-    : `mailto:admin@${new URL(process.env.WEBAPP_URL ?? "http://localhost").hostname}`;
+  // Apple Web Push requires an https:// subject; mailto: causes BadJwtToken on iOS.
+  // Derive origin from the incoming request host header so it works on any deployment.
+  const hdrs = await headers();
+  const host = hdrs.get("host") ?? "localhost";
+  const vapidSubject = `https://${host}`;
   webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
 
   const payload = JSON.stringify({
