@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
@@ -26,7 +26,13 @@ function initials(str: string) {
 
 export default function AdminSidebar({ user, features, platform }: Props) {
   const path = usePathname();
+  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+  };
 
   const allNavItems: NavItem[] = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
@@ -72,7 +78,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             <img
               src={iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}
               alt=""
-              className="h-5 w-5"
+              className="h-8 w-8"
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("hidden"); }}
             />
             <span hidden className="text-primary text-xs font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
@@ -94,8 +100,8 @@ export default function AdminSidebar({ user, features, platform }: Props) {
           </div>
         </nav>
 
-        <div className="p-3 border-t">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-secondary transition-colors cursor-default">
+        <div className="p-3 border-t space-y-1">
+          <div className="flex items-center gap-2.5 px-2 py-2 rounded-md cursor-default">
             <div
               className="h-7 w-7 rounded-full flex items-center justify-center text-primary text-[10px] font-bold shrink-0"
               style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
@@ -104,6 +110,14 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             </div>
             <span className="text-xs text-foreground/70 truncate">{user.displayName ?? user.email}</span>
           </div>
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground/70 hover:bg-secondary hover:text-foreground transition-colors"
+          >
+            <LogOut className="h-4 w-4 opacity-50" />
+            Log out
+          </button>
         </div>
       </aside>
 
@@ -118,7 +132,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             <img
               src={iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}
               alt=""
-              className="h-4 w-4"
+              className="h-6 w-6"
               onError={e => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("hidden"); }}
             />
             <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
@@ -158,7 +172,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
                   <img
                     src={iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}
                     alt=""
-                    className="h-4 w-4"
+                    className="h-7 w-7"
                     onError={e => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("hidden"); }}
                   />
                   <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
@@ -186,15 +200,14 @@ export default function AdminSidebar({ user, features, platform }: Props) {
                 </div>
                 <span className="text-xs text-foreground/70 truncate">{user.displayName ?? user.email}</span>
               </div>
-              <form action="/api/auth/logout" method="POST">
-                <button
-                  type="submit"
-                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground/70 hover:bg-secondary hover:text-foreground transition-colors"
-                >
-                  <LogOut className="h-4 w-4 opacity-50" />
-                  Log out
-                </button>
-              </form>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground/70 hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <LogOut className="h-4 w-4 opacity-50" />
+                Log out
+              </button>
             </div>
           </DialogPrimitive.Content>
         </DialogPrimitive.Portal>
