@@ -21,7 +21,7 @@ const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = 
   { key: "payments", label: "Payments", description: "Stripe, Viva, and PayPal billing" },
   { key: "subscriptions", label: "Subscriptions", description: "Subscription plans and management" },
   { key: "m365", label: "Microsoft 365", description: "Azure AD sync and Microsoft SSO login" },
-  { key: "email", label: "Email / SMTP", description: "Transactional email via SMTP" },
+  { key: "email", label: "Email Settings", description: "Transactional email via SMTP" },
   { key: "ai", label: "Artificial Intelligence", description: "Anthropic and OpenAI integrations" },
 ];
 
