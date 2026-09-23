@@ -13,7 +13,7 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const body = await req.json().catch(() => null);
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
@@ -24,6 +24,6 @@ export async function POST(req: NextRequest) {
   const changes = Object.entries(parsed.data)
     .map(([k, v]) => k === "primaryColor" ? `primaryColor=${v}` : `${k}="${v}"`)
     .join("; ");
-  await logAudit({ action: "update", resource: "platform", detail: changes || "no changes", ip });
+  await logAudit({ userEmail: admin.email, action: "update", resource: "platform", detail: changes || "no changes", ip });
   return NextResponse.json({ ok: true });
 }
