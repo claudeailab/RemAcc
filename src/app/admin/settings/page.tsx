@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Loader2, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, CheckCircle2, Search } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, CheckCircle2, Search, Bell } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
 import { PLATFORM_PERMISSIONS } from "@/lib/permissions";
 import type { FeatureKey } from "@/lib/features";
@@ -100,6 +100,49 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
       return `${m[3] === "true" ? "Enabled" : "Disabled"} ${label}`;
     });
     return parts.join(", ");
+  }
+
+  if (resource === "settings.email") return "Updated email settings";
+  if (resource === "settings.m365") return "Updated Microsoft 365 settings";
+  if (resource === "settings.payments") return "Updated payment settings";
+  if (resource === "settings.paypal") return "Updated PayPal settings";
+  if (resource === "settings.vivawallet") return "Updated Viva Wallet settings";
+  if (resource.startsWith("settings.ai.")) {
+    const provider = resource.slice("settings.ai.".length);
+    return `Updated ${provider.charAt(0).toUpperCase() + provider.slice(1)} AI settings`;
+  }
+
+  if (resource === "plan") {
+    const name = d.match(/name=([^;]+)/)?.[1];
+    if (action === "create") return `Created plan${name ? ` "${name}"` : ""}`;
+    if (action === "delete") return `Deleted plan${name ? ` "${name}"` : ""}`;
+    if (action === "update") return `Updated plan${name ? ` "${name}"` : ""}`;
+  }
+
+  if (resource === "group") {
+    const name = d.match(/name=([^;]+)/)?.[1];
+    if (action === "create") return `Created group${name ? ` "${name}"` : ""}`;
+    if (action === "delete") return `Deleted group`;
+    if (action === "update") return `Updated group${name ? ` "${name}"` : ""}`;
+  }
+
+  if (resource === "notification") {
+    const target = d.match(/target=([^;]+)/)?.[1] ?? "all devices";
+    const sent = d.match(/sent=(\d+)/)?.[1];
+    const failed = d.match(/failed=(\d+)/)?.[1];
+    let msg = `Sent test notification to ${target}`;
+    if (sent !== undefined) msg += ` (${sent} delivered`;
+    if (failed !== undefined && failed !== "0") msg += `, ${failed} failed`;
+    if (sent !== undefined) msg += ")";
+    return msg;
+  }
+
+  if (resource === "notification.device") {
+    const label = d.match(/label=([^;]+)/)?.[1] ?? "device";
+    if (action === "enable") return `Enabled notifications for ${label}`;
+    if (action === "disable") return `Disabled notifications for ${label}`;
+    if (action === "delete") return `Removed device ${label}`;
+    if (action === "update") return `Renamed notification device: ${label}`;
   }
 
   // fallback
@@ -446,6 +489,7 @@ function NotificationsTab() {
   const [subscribed, setSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [notifyingDevice, setNotifyingDevice] = useState<number | null>(null);
   const [supported, setSupported] = useState(false);
   const [devices, setDevices] = useState<PushDevice[]>([]);
   const [thisEndpointPrefix, setThisEndpointPrefix] = useState<string | null>(null);
@@ -554,6 +598,22 @@ function NotificationsTab() {
     }
   }
 
+  async function sendToDevice(deviceId: number) {
+    setNotifyingDevice(deviceId);
+    try {
+      const r = await fetch("/api/admin/settings/notifications/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deviceId }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Test failed"); return; }
+      toast.success("Test notification sent");
+    } catch {
+      toast.error("Failed to send notification");
+    } finally { setNotifyingDevice(null); }
+  }
+
   async function sendTest() {
     setTesting(true);
     try {
@@ -629,6 +689,20 @@ function NotificationsTab() {
                       </p>
                     )}
                   </div>
+                  {device.enabled && (
+                    <button
+                      type="button"
+                      onClick={() => sendToDevice(device.id)}
+                      disabled={notifyingDevice === device.id}
+                      className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-muted-foreground hover:text-foreground shrink-0"
+                      aria-label={`Send test notification to ${device.label}`}
+                      title="Send test notification"
+                    >
+                      {notifyingDevice === device.id
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Bell className="h-3.5 w-3.5" />}
+                    </button>
+                  )}
                   <Switch
                     checked={device.enabled}
                     onCheckedChange={v => toggleDevice(device.id, v)}

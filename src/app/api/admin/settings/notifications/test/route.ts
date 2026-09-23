@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { requireAdmin } from "@/lib/auth";
 import { getRawSetting } from "@/lib/encryption";
@@ -6,10 +6,14 @@ import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import { eq, and, inArray } from "drizzle-orm";
 import { getPlatformInfo, iconUrl } from "@/lib/platform";
+import { logAudit } from "@/lib/audit";
 import webpush from "web-push";
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   const admin = await requireAdmin();
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? req.headers.get("x-real-ip") ?? "unknown";
+  const body = await req.json().catch(() => ({}));
+  const deviceId: number | undefined = typeof body.deviceId === "number" ? body.deviceId : undefined;
 
   const [publicKey, privateKey] = await Promise.all([
     getRawSetting("vapid_publicKey"),
@@ -19,10 +23,15 @@ export async function POST() {
     return NextResponse.json({ error: "Push notifications not configured. Enable notifications on this device first.", expired: true }, { status: 400 });
   }
 
+  const baseWhere = and(eq(push_subscriptions.userId, admin.id), eq(push_subscriptions.enabled, true));
+  const whereClause = deviceId !== undefined
+    ? and(baseWhere, eq(push_subscriptions.id, deviceId))
+    : baseWhere;
+
   const subs = await db
-    .select({ id: push_subscriptions.id, endpoint: push_subscriptions.endpoint, p256dh: push_subscriptions.p256dh, auth: push_subscriptions.auth })
+    .select({ id: push_subscriptions.id, label: push_subscriptions.label, endpoint: push_subscriptions.endpoint, p256dh: push_subscriptions.p256dh, auth: push_subscriptions.auth })
     .from(push_subscriptions)
-    .where(and(eq(push_subscriptions.userId, admin.id), eq(push_subscriptions.enabled, true)));
+    .where(whereClause);
 
   if (subs.length === 0) {
     return NextResponse.json({ error: "No active subscription found. Please tap Enable to subscribe this device.", expired: true }, { status: 400 });
@@ -85,5 +94,7 @@ export async function POST() {
   }
 
   const failed = expiredIds.length + failedIds.length;
+  const target = deviceId !== undefined ? (subs[0]?.label ?? `device ${deviceId}`) : "all devices";
+  await logAudit({ userEmail: admin.email, action: "send", resource: "notification", detail: `target=${target}; sent=${sent}; failed=${failed}`, ip });
   return NextResponse.json({ ok: true, sent, failed });
 }
