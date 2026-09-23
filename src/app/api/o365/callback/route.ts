@@ -90,8 +90,8 @@ export async function GET(req: NextRequest) {
       return fail("no_access");
     }
   } else {
-    console.error(`[azure-sso] no_access: user=${user.email} — no group assigned`);
-    return fail("no_access");
+    console.error(`[azure-sso] no_group: user=${user.email} — no group assigned`);
+    return fail("no_group");
   }
 
   const token = await createSession(user.id);

@@ -15,7 +15,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   token_failed: "Could not authenticate with Microsoft.",
   invalid_token: "Invalid authentication response.",
   not_provisioned: "Your account has not been added to this platform.",
-  no_access: "Your account does not have access to this platform.",
+  no_access: "Your account exists but has no permission group assigned. Ask an administrator to assign you to a group.",
+  no_group: "Your account exists but has no permission group assigned. Ask an administrator to assign you to a group.",
 };
 
 function LoginForm({ platformName }: { platformName: string }) {
