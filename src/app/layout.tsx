@@ -10,7 +10,7 @@ const geist = Geist({ subsets: ["latin"] });
 
 export async function generateMetadata(): Promise<Metadata> {
   const platform = await getPlatformInfo();
-  const favicon = iconUrl(platform.icon);
+  const favicon = iconUrl(platform.icon, encodeURIComponent(platform.primaryColor));
   return {
     title: platform.title ? `${platform.name} · ${platform.title}` : platform.name,
     description: platform.title || `${platform.name} application`,

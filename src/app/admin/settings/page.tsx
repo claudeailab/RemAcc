@@ -50,6 +50,63 @@ interface AuditLog {
   createdAt: string;
 }
 
+const FEATURE_LABELS: Record<string, string> = {
+  users: "Users", payments: "Payments", subscriptions: "Subscriptions",
+  m365: "Microsoft 365", email: "Email Settings", ai: "Artificial Intelligence",
+};
+
+function formatAuditEvent(action: string, resource: string, detail: string | null): string {
+  const d = detail ?? "";
+
+  if (action === "login" && resource === "auth") return "Logged in";
+
+  if (action === "update" && resource === "platform") return "Updated platform settings";
+
+  if (action === "create" && resource === "user") {
+    if (d.startsWith("azure_add")) {
+      const count = d.match(/count=(\d+)/)?.[1] ?? "?";
+      const emails = d.match(/emails=(.+)/)?.[1];
+      return `Added ${count} user${count !== "1" ? "s" : ""} from Azure AD${emails ? `: ${emails}` : ""}`;
+    }
+    const name = d.match(/displayName=([^;]+)/)?.[1];
+    const email = d.match(/email=([^;]+)/)?.[1] ?? d.match(/username=([^;]+)/)?.[1];
+    return `Created user${name ? ` ${name}` : ""}${email ? ` (${email})` : ""}`;
+  }
+
+  if (action === "update" && resource === "user") {
+    const id = d.match(/id=(\d+)/)?.[1];
+    const who = id ? ` (id ${id})` : "";
+    const disabledM = d.match(/disabled: (\w+)→(\w+)/);
+    if (disabledM) return disabledM[2] === "true" ? `Disabled user${who}` : `Re-enabled user${who}`;
+    if (d.includes("password: [updated]")) return `Changed password for user${who}`;
+    const emailM = d.match(/email: ([^;]+)→([^;]+)/);
+    if (emailM) return `Changed email${who}: ${emailM[1].trim()} → ${emailM[2].trim()}`;
+    const nameM = d.match(/displayName: ([^;]+)→([^;]+)/);
+    if (nameM) return `Changed display name${who}: ${nameM[1].trim()} → ${nameM[2].trim()}`;
+    return `Updated user${who}`;
+  }
+
+  if (action === "delete" && resource === "user") {
+    const name = d.match(/displayName=([^;]+)/)?.[1];
+    const email = d.match(/email=([^;]+)/)?.[1];
+    return `Deleted user${name ? ` ${name}` : ""}${email ? ` (${email})` : ""}`;
+  }
+
+  if (action === "update" && resource === "features") {
+    const parts = d.split("; ").map(part => {
+      const m = part.match(/^(\w+): (true|false)→(true|false)$/);
+      if (!m) return part;
+      const label = FEATURE_LABELS[m[1]] ?? (m[1].charAt(0).toUpperCase() + m[1].slice(1));
+      return `${m[3] === "true" ? "Enabled" : "Disabled"} ${label}`;
+    });
+    return parts.join(", ");
+  }
+
+  // fallback
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  return `${cap(action)} ${resource}${d ? `: ${d}` : ""}`;
+}
+
 function AuditTab() {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
@@ -85,12 +142,11 @@ function AuditTab() {
             {logs.map(log => (
               <div key={log.id} className="p-3 space-y-1">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{log.action}</span>
-                  <span className="text-xs text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</span>
+                  <span className="text-sm font-medium">{formatAuditEvent(log.action, log.resource, log.detail)}</span>
+                  <span className="text-xs text-muted-foreground shrink-0">{new Date(log.createdAt).toLocaleString()}</span>
                 </div>
-                <div className="text-sm font-medium truncate">{log.resource}</div>
-                {log.userEmail && <div className="text-xs text-muted-foreground truncate">{log.userEmail}</div>}
-                {log.detail && <div className="text-xs text-muted-foreground truncate">{log.detail}</div>}
+                {log.userEmail && <div className="text-xs text-muted-foreground">{log.userEmail}</div>}
+                {log.ip && <div className="text-xs text-muted-foreground font-mono">{log.ip}</div>}
               </div>
             ))}
           </div>
@@ -101,9 +157,7 @@ function AuditTab() {
                 <tr className="border-b border-border bg-muted/30">
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Time</th>
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">User</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Action</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">Resource</th>
-                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Detail</th>
+                  <th className="px-3 py-2 text-left font-medium text-muted-foreground">Event</th>
                   <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">IP</th>
                 </tr>
               </thead>
@@ -111,11 +165,9 @@ function AuditTab() {
                 {logs.map(log => (
                   <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
                     <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{new Date(log.createdAt).toLocaleString()}</td>
-                    <td className="px-3 py-2 whitespace-nowrap">{log.userEmail ?? "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap"><span className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded">{log.action}</span></td>
-                    <td className="px-3 py-2 whitespace-nowrap">{log.resource}</td>
-                    <td className="px-3 py-2 text-muted-foreground text-xs max-w-xs truncate">{log.detail ?? "—"}</td>
-                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{log.ip ?? "—"}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">{log.userEmail ?? "—"}</td>
+                    <td className="px-3 py-2">{formatAuditEvent(log.action, log.resource, log.detail)}</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs font-mono">{log.ip ?? "—"}</td>
                   </tr>
                 ))}
               </tbody>
