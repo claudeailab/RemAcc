@@ -24,7 +24,7 @@ export async function POST() {
     .where(eq(push_subscriptions.userId, admin.id));
 
   if (subs.length === 0) {
-    return NextResponse.json({ error: "No subscriptions found. Use the Enable button to subscribe this device first." }, { status: 400 });
+    return NextResponse.json({ error: "No active subscription found. Please tap Enable to subscribe this device.", expired: true }, { status: 400 });
   }
 
   const platform = await getPlatformInfo();

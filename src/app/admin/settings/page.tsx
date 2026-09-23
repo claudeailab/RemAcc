@@ -401,7 +401,12 @@ function NotificationsTab() {
     setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
     fetch("/api/admin/settings/notifications").then(r => r.json()).then(d => {
       setPublicKey(d.publicKey);
-      if (d.publicKey) checkSubscription(d.publicKey);
+      if (d.keysRegenerated) {
+        // Server just generated new VAPID keys — any browser subscription is now stale
+        setSubscribed(false);
+      } else if (d.publicKey) {
+        checkSubscription(d.publicKey);
+      }
       setLoading(false);
     });
   }, [checkSubscription]);

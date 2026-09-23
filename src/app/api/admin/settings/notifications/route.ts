@@ -8,6 +8,7 @@ import webpush from "web-push";
 export async function GET() {
   await requireAdmin();
   let publicKey = await getRawSetting("vapid_publicKey");
+  let keysRegenerated = false;
   if (!publicKey) {
     // No keys yet — generate and invalidate all existing subscriptions
     const keys = webpush.generateVAPIDKeys();
@@ -17,6 +18,7 @@ export async function GET() {
       db.delete(push_subscriptions),
     ]);
     publicKey = keys.publicKey;
+    keysRegenerated = true;
   }
-  return NextResponse.json({ publicKey });
+  return NextResponse.json({ publicKey, keysRegenerated });
 }
