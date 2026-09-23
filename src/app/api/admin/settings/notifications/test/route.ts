@@ -28,7 +28,11 @@ export async function POST() {
   }
 
   const platform = await getPlatformInfo();
-  webpush.setVapidDetails(`mailto:admin@${new URL(process.env.WEBAPP_URL ?? "http://localhost").hostname}`, publicKey, privateKey);
+  // Apple Web Push requires an https:// subject; mailto: causes BadJwtToken on iOS
+  const vapidSubject = process.env.WEBAPP_URL?.startsWith("https://")
+    ? process.env.WEBAPP_URL
+    : `mailto:admin@${new URL(process.env.WEBAPP_URL ?? "http://localhost").hostname}`;
+  webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
 
   const payload = JSON.stringify({
     title: platform.name,
