@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, CheckCircle2 } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, CheckCircle2, PlusCircle } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface Plan { id: number; name: string; monthlyPrice: number; yearlyPrice: number; features: string; active: boolean }
@@ -96,8 +96,9 @@ export default function SubscriptionsPage() {
           <p className={`text-center py-12 ${muted}`}>No plans yet.</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {plans.map(p => {
+            {[...plans].sort((a, b) => a.monthlyPrice - b.monthlyPrice).map((p, idx, sorted) => {
               const featureList = parsedFeatures(p.features);
+              const prevFeatures = idx > 0 ? new Set(parsedFeatures(sorted[idx - 1].features)) : new Set<string>();
               return (
                 <Card key={p.id}>
                   <CardHeader className="flex flex-row items-start justify-between pb-2">
@@ -115,12 +116,17 @@ export default function SubscriptionsPage() {
                     </p>
                     {featureList.length > 0 && (
                       <ul className="space-y-1">
-                        {featureList.map(f => (
-                          <li key={f} className="flex items-start gap-1.5 text-sm text-muted-foreground">
-                            <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
-                            {f}
-                          </li>
-                        ))}
+                        {featureList.map(f => {
+                          const isNew = idx > 0 && !prevFeatures.has(f);
+                          return (
+                            <li key={f} className={`flex items-start gap-1.5 text-sm ${isNew ? "text-foreground font-medium" : "text-muted-foreground"}`}>
+                              {isNew
+                                ? <PlusCircle className="h-3.5 w-3.5 mt-0.5 shrink-0 text-primary" />
+                                : <CheckCircle2 className="h-3.5 w-3.5 mt-0.5 shrink-0 text-muted-foreground/60" />}
+                              {f}
+                            </li>
+                          );
+                        })}
                       </ul>
                     )}
                   </CardContent>

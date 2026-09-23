@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut } from "lucide-react";
+import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
@@ -36,6 +36,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
     ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
     ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Subscriptions", icon: CreditCard }] : []),
+    ...(features.subscriptions ? [{ href: "/admin/features", label: "Features", icon: Sparkles }] : []),
     ...(features.m365 ? [{ href: "/admin/m365", label: "Microsoft 365", icon: Settings }] : []),
     ...(features.email ? [{ href: "/admin/email", label: "Email Settings", icon: Mail }] : []),
     ...(features.ai ? [{ href: "/admin/ai", label: "Artificial Intelligence", icon: Bot }] : []),
