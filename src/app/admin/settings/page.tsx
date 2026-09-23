@@ -517,7 +517,6 @@ function NotificationsTab() {
 }
 
 const ICON_SETS = [
-  { label: "All", value: "" },
   { label: "HugeIcons", value: "hugeicons" },
   { label: "Solar", value: "solar" },
   { label: "Material", value: "mdi" },
@@ -544,28 +543,38 @@ function IconPickerDialog({ value, onSelect, onClose }: {
   onClose: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [setFilter, setSetFilter] = useState("");
+  const [setFilter, setSetFilter] = useState("All");
   const [icons, setIcons] = useState<string[]>(FEATURED_ICONS);
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!query.trim()) {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const q = query.trim();
+    if (!q && setFilter === "All") {
       setIcons(FEATURED_ICONS);
       return;
     }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
+    setLoading(true);
     debounceRef.current = setTimeout(async () => {
-      setLoading(true);
       try {
-        const params = new URLSearchParams({ query: query.trim(), limit: "60" });
-        if (setFilter) params.set("prefixes", setFilter);
-        const r = await fetch(`/api/icon/search?${params}`);
-        const d = await r.json();
-        setIcons(d.icons ?? []);
+        let result: string[] = [];
+        if (!q && setFilter !== "All") {
+          // Browse collection when a set is selected with no query
+          const r = await fetch(`/api/icon/collection?prefix=${encodeURIComponent(setFilter)}`);
+          const d = await r.json();
+          result = d.icons ?? [];
+        } else {
+          const params = new URLSearchParams({ query: q || setFilter, limit: "80" });
+          if (setFilter !== "All") params.set("prefixes", setFilter);
+          const r = await fetch(`/api/icon/search?${params}`);
+          const d = await r.json();
+          result = d.icons ?? [];
+        }
+        setIcons(result);
       } catch { setIcons([]); }
       finally { setLoading(false); }
-    }, 350);
+    }, q ? 300 : 0);
   }, [query, setFilter]);
 
   return (
@@ -584,7 +593,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
             />
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {ICON_SETS.map(s => (
+            {[{ label: "All", value: "All" }, ...ICON_SETS].map(s => (
               <button
                 key={s.value}
                 type="button"
@@ -622,7 +631,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
               </div>
             )}
           </div>
-          {!query && <p className="text-xs text-muted-foreground text-center">Showing suggestions — type to search all icons from HugeIcons, Material, Phosphor, Lucide, Tabler &amp; more</p>}
+          {!query && setFilter === "All" && <p className="text-xs text-muted-foreground text-center">Showing suggestions — type to search or pick a set to browse</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
