@@ -5,7 +5,7 @@ import { getRawSetting } from "@/lib/encryption";
 import { db } from "@/lib/db";
 import { push_subscriptions } from "@/lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
-import { getPlatformInfo } from "@/lib/platform";
+import { getPlatformInfo, iconUrl } from "@/lib/platform";
 import webpush from "web-push";
 
 export async function POST() {
@@ -33,13 +33,13 @@ export async function POST() {
   // Derive origin from the incoming request host header so it works on any deployment.
   const hdrs = await headers();
   const host = hdrs.get("host") ?? "localhost";
-  const vapidSubject = `https://${host}`;
-  webpush.setVapidDetails(vapidSubject, publicKey, privateKey);
+  webpush.setVapidDetails(`https://${host}`, publicKey, privateKey);
 
+  const origin = `https://${host}`;
   const payload = JSON.stringify({
     title: platform.name,
     body: "Push notifications are working correctly.",
-    icon: "/favicon.svg",
+    icon: `${origin}${iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}`,
   });
 
   const results = await Promise.allSettled(
