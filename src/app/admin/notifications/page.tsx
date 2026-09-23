@@ -239,6 +239,11 @@ export default function NotificationsPage() {
                           </p>
                         )}
                       </div>
+                      <Switch
+                        checked={device.enabled}
+                        onCheckedChange={v => toggleDevice(device.id, v)}
+                        aria-label={`Toggle notifications for ${device.label}`}
+                      />
                       {device.enabled && (
                         <button
                           type="button"
@@ -253,11 +258,6 @@ export default function NotificationsPage() {
                             : <Bell className="h-3.5 w-3.5" />}
                         </button>
                       )}
-                      <Switch
-                        checked={device.enabled}
-                        onCheckedChange={v => toggleDevice(device.id, v)}
-                        aria-label={`Toggle notifications for ${device.label}`}
-                      />
                       <button
                         type="button"
                         onClick={() => removeDevice(device.id)}
