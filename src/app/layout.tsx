@@ -29,12 +29,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const cookieStore = await cookies();
   const theme = cookieStore.get("webapp-theme")?.value;
   const dataTheme = theme === "light" || theme === "dark" ? theme : undefined;
+  const rawDesign = cookieStore.get("webapp-design-theme")?.value;
+  const DESIGN_THEMES = ["default", "slate", "midnight", "forest", "rose", "obsidian"];
+  const dataDesign = rawDesign && DESIGN_THEMES.includes(rawDesign) && rawDesign !== "default" ? rawDesign : undefined;
   const platform = await getPlatformInfo();
 
   return (
     <html
       lang="en"
       {...(dataTheme ? { "data-theme": dataTheme } : {})}
+      {...(dataDesign ? { "data-design-theme": dataDesign } : {})}
       style={{ "--color-primary": platform.primaryColor, "--color-ring": platform.primaryColor } as React.CSSProperties}
     >
       <head>

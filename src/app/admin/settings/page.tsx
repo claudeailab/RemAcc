@@ -29,6 +29,16 @@ const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = 
 ];
 
 type Theme = "system" | "light" | "dark";
+type DesignTheme = "default" | "slate" | "midnight" | "forest" | "rose" | "obsidian";
+
+const DESIGN_THEMES: { value: DesignTheme; label: string; description: string; light: { bg: string; card: string; accent: string }; dark: { bg: string; card: string; accent: string } }[] = [
+  { value: "default", label: "Default", description: "Warm stone — timeless and neutral", light: { bg: "#fafaf9", card: "#ffffff", accent: "#e7e5e4" }, dark: { bg: "#171411", card: "#201e1b", accent: "#2c2a27" } },
+  { value: "slate", label: "Slate", description: "Cool blue-gray — professional", light: { bg: "#f3f5f9", card: "#ffffff", accent: "#e2e6ed" }, dark: { bg: "#0e1220", card: "#161d2e", accent: "#1e273b" } },
+  { value: "midnight", label: "Midnight", description: "Deep navy — focused and elegant", light: { bg: "#f2f4f9", card: "#ffffff", accent: "#e1e5ef" }, dark: { bg: "#080e1a", card: "#0e1628", accent: "#152033" } },
+  { value: "forest", label: "Forest", description: "Sage green — calm and natural", light: { bg: "#f3f7f4", card: "#ffffff", accent: "#e1ebe4" }, dark: { bg: "#0c1410", card: "#131e16", accent: "#192819" } },
+  { value: "rose", label: "Rose", description: "Warm blush — soft and inviting", light: { bg: "#faf3f4", card: "#ffffff", accent: "#eddee0" }, dark: { bg: "#160e10", card: "#201518", accent: "#2a1b1e" } },
+  { value: "obsidian", label: "Obsidian", description: "Near-black — crisp and minimal", light: { bg: "#fafafa", card: "#ffffff", accent: "#efefef" }, dark: { bg: "#0d0d0d", card: "#171717", accent: "#242424" } },
+];
 
 function ThemeButton({ value, current, label, onClick }: { value: Theme; current: Theme; label: string; onClick: (v: Theme) => void }) {
   return (
@@ -466,6 +476,77 @@ function PlatformTab() {
   );
 }
 
+function DesignThemeSection() {
+  const [designTheme, setDesignTheme] = useState<DesignTheme>("default");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/admin/settings/design-theme").then(r => r.json()).then(d => {
+      if (d.designTheme) setDesignTheme(d.designTheme as DesignTheme);
+      setLoading(false);
+    });
+  }, []);
+
+  async function applyDesignTheme(t: DesignTheme) {
+    setDesignTheme(t);
+    setSaving(true);
+    try {
+      await fetch("/api/admin/settings/design-theme", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ designTheme: t }),
+      });
+      const html = document.documentElement;
+      if (t === "default") {
+        html.removeAttribute("data-design-theme");
+      } else {
+        html.setAttribute("data-design-theme", t);
+      }
+    } finally { setSaving(false); }
+  }
+
+  if (loading) return <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  const isDarkMode = document.documentElement.getAttribute("data-theme") === "dark" ||
+    (!document.documentElement.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">Design Theme</p>
+        {saving && <span className="text-xs text-muted-foreground flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</span>}
+      </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        {DESIGN_THEMES.map(t => {
+          const palette = isDarkMode ? t.dark : t.light;
+          return (
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => applyDesignTheme(t.value)}
+              className={`relative rounded-xl border-2 p-3 text-left transition-all hover:border-primary/60 ${designTheme === t.value ? "border-primary bg-primary/5" : "border-border"}`}
+            >
+              <div className="flex gap-1 mb-2">
+                <div className="h-8 flex-1 rounded-md" style={{ background: palette.bg }} />
+                <div className="h-8 w-8 rounded-md border" style={{ background: palette.card, borderColor: palette.accent }} />
+                <div className="h-8 w-6 rounded-md" style={{ background: palette.accent }} />
+              </div>
+              <p className="text-xs font-semibold leading-tight">{t.label}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{t.description}</p>
+              {designTheme === t.value && (
+                <div className="absolute top-2 right-2 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
+                  <svg className="h-2.5 w-2.5 text-primary-foreground" fill="currentColor" viewBox="0 0 12 12"><path d="M10 3L5 8.5 2 5.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function VisualAppearanceSection() {
   const router = useRouter();
   const [icon, setIcon] = useState(DEFAULT_ICON);
@@ -640,6 +721,7 @@ export default function SettingsPage() {
                   </div>
                   {saving && <p className="text-xs text-muted-foreground mt-2 flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> Saving…</p>}
                 </div>
+                <DesignThemeSection />
                 <VisualAppearanceSection />
               </CardContent>
             </Card>

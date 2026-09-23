@@ -81,6 +81,253 @@
   }
 }
 
+/* ── Design Themes ─────────────────────────────────────────────────────── */
+
+/* Slate — cool blue-gray, professional */
+:root[data-design-theme="slate"] {
+  --color-background:          hsl(216 30% 97%);
+  --color-foreground:          hsl(220 13% 9%);
+  --color-card:                hsl(0 0% 100%);
+  --color-card-foreground:     hsl(220 13% 9%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(220 13% 9%);
+  --color-secondary:           hsl(216 18% 93%);
+  --color-secondary-foreground:hsl(220 12% 23%);
+  --color-muted:               hsl(216 18% 93%);
+  --color-muted-foreground:    hsl(215 13% 46%);
+  --color-border:              hsl(215 16% 88%);
+  --color-input:               hsl(215 16% 88%);
+  --radius: 0.625rem;
+}
+:root[data-design-theme="slate"][data-theme="dark"] {
+  --color-background:          hsl(222 30% 8%);
+  --color-foreground:          hsl(214 15% 93%);
+  --color-card:                hsl(222 24% 12%);
+  --color-card-foreground:     hsl(214 15% 93%);
+  --color-popover:             hsl(222 24% 12%);
+  --color-popover-foreground:  hsl(214 15% 93%);
+  --color-primary-foreground:  hsl(222 30% 6%);
+  --color-secondary:           hsl(222 22% 17%);
+  --color-secondary-foreground:hsl(214 12% 83%);
+  --color-muted:               hsl(222 20% 15%);
+  --color-muted-foreground:    hsl(215 12% 58%);
+  --color-border:              hsl(220 18% 21%);
+  --color-input:               hsl(222 20% 15%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design-theme="slate"]:not([data-theme="light"]) {
+    --color-background:          hsl(222 30% 8%);
+    --color-foreground:          hsl(214 15% 93%);
+    --color-card:                hsl(222 24% 12%);
+    --color-card-foreground:     hsl(214 15% 93%);
+    --color-popover:             hsl(222 24% 12%);
+    --color-popover-foreground:  hsl(214 15% 93%);
+    --color-primary-foreground:  hsl(222 30% 6%);
+    --color-secondary:           hsl(222 22% 17%);
+    --color-secondary-foreground:hsl(214 12% 83%);
+    --color-muted:               hsl(222 20% 15%);
+    --color-muted-foreground:    hsl(215 12% 58%);
+    --color-border:              hsl(220 18% 21%);
+    --color-input:               hsl(222 20% 15%);
+  }
+}
+
+/* Midnight — deep navy */
+:root[data-design-theme="midnight"] {
+  --color-background:          hsl(220 28% 97%);
+  --color-foreground:          hsl(222 18% 9%);
+  --color-card:                hsl(0 0% 100%);
+  --color-card-foreground:     hsl(222 18% 9%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(222 18% 9%);
+  --color-secondary:           hsl(220 16% 93%);
+  --color-secondary-foreground:hsl(220 12% 23%);
+  --color-muted:               hsl(220 16% 93%);
+  --color-muted-foreground:    hsl(220 10% 46%);
+  --color-border:              hsl(220 14% 87%);
+  --color-input:               hsl(220 14% 87%);
+  --radius: 0.5rem;
+}
+:root[data-design-theme="midnight"][data-theme="dark"] {
+  --color-background:          hsl(224 50% 6%);
+  --color-foreground:          hsl(210 20% 93%);
+  --color-card:                hsl(222 44% 10%);
+  --color-card-foreground:     hsl(210 20% 93%);
+  --color-popover:             hsl(222 44% 10%);
+  --color-popover-foreground:  hsl(210 20% 93%);
+  --color-primary-foreground:  hsl(224 50% 4%);
+  --color-secondary:           hsl(222 38% 14%);
+  --color-secondary-foreground:hsl(210 15% 83%);
+  --color-muted:               hsl(222 35% 12%);
+  --color-muted-foreground:    hsl(215 15% 55%);
+  --color-border:              hsl(220 32% 17%);
+  --color-input:               hsl(222 35% 12%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design-theme="midnight"]:not([data-theme="light"]) {
+    --color-background:          hsl(224 50% 6%);
+    --color-foreground:          hsl(210 20% 93%);
+    --color-card:                hsl(222 44% 10%);
+    --color-card-foreground:     hsl(210 20% 93%);
+    --color-popover:             hsl(222 44% 10%);
+    --color-popover-foreground:  hsl(210 20% 93%);
+    --color-primary-foreground:  hsl(224 50% 4%);
+    --color-secondary:           hsl(222 38% 14%);
+    --color-secondary-foreground:hsl(210 15% 83%);
+    --color-muted:               hsl(222 35% 12%);
+    --color-muted-foreground:    hsl(215 15% 55%);
+    --color-border:              hsl(220 32% 17%);
+    --color-input:               hsl(222 35% 12%);
+  }
+}
+
+/* Forest — sage green */
+:root[data-design-theme="forest"] {
+  --color-background:          hsl(153 18% 97%);
+  --color-foreground:          hsl(155 18% 8%);
+  --color-card:                hsl(0 0% 100%);
+  --color-card-foreground:     hsl(155 18% 8%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(155 18% 8%);
+  --color-secondary:           hsl(150 14% 93%);
+  --color-secondary-foreground:hsl(152 12% 22%);
+  --color-muted:               hsl(150 14% 93%);
+  --color-muted-foreground:    hsl(152 8% 46%);
+  --color-border:              hsl(150 10% 87%);
+  --color-input:               hsl(150 10% 87%);
+  --radius: 0.5rem;
+}
+:root[data-design-theme="forest"][data-theme="dark"] {
+  --color-background:          hsl(155 22% 7%);
+  --color-foreground:          hsl(145 10% 92%);
+  --color-card:                hsl(155 18% 11%);
+  --color-card-foreground:     hsl(145 10% 92%);
+  --color-popover:             hsl(155 18% 11%);
+  --color-popover-foreground:  hsl(145 10% 92%);
+  --color-primary-foreground:  hsl(155 22% 5%);
+  --color-secondary:           hsl(152 16% 16%);
+  --color-secondary-foreground:hsl(145 8% 82%);
+  --color-muted:               hsl(152 15% 14%);
+  --color-muted-foreground:    hsl(150 8% 57%);
+  --color-border:              hsl(152 12% 19%);
+  --color-input:               hsl(152 15% 14%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design-theme="forest"]:not([data-theme="light"]) {
+    --color-background:          hsl(155 22% 7%);
+    --color-foreground:          hsl(145 10% 92%);
+    --color-card:                hsl(155 18% 11%);
+    --color-card-foreground:     hsl(145 10% 92%);
+    --color-popover:             hsl(155 18% 11%);
+    --color-popover-foreground:  hsl(145 10% 92%);
+    --color-primary-foreground:  hsl(155 22% 5%);
+    --color-secondary:           hsl(152 16% 16%);
+    --color-secondary-foreground:hsl(145 8% 82%);
+    --color-muted:               hsl(152 15% 14%);
+    --color-muted-foreground:    hsl(150 8% 57%);
+    --color-border:              hsl(152 12% 19%);
+    --color-input:               hsl(152 15% 14%);
+  }
+}
+
+/* Rose — warm blush */
+:root[data-design-theme="rose"] {
+  --color-background:          hsl(348 35% 97%);
+  --color-foreground:          hsl(345 18% 9%);
+  --color-card:                hsl(0 0% 100%);
+  --color-card-foreground:     hsl(345 18% 9%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(345 18% 9%);
+  --color-secondary:           hsl(348 18% 93%);
+  --color-secondary-foreground:hsl(345 12% 22%);
+  --color-muted:               hsl(348 18% 93%);
+  --color-muted-foreground:    hsl(345 8% 47%);
+  --color-border:              hsl(348 14% 88%);
+  --color-input:               hsl(348 14% 88%);
+  --radius: 0.75rem;
+}
+:root[data-design-theme="rose"][data-theme="dark"] {
+  --color-background:          hsl(348 22% 8%);
+  --color-foreground:          hsl(10 10% 92%);
+  --color-card:                hsl(348 18% 12%);
+  --color-card-foreground:     hsl(10 10% 92%);
+  --color-popover:             hsl(348 18% 12%);
+  --color-popover-foreground:  hsl(10 10% 92%);
+  --color-primary-foreground:  hsl(348 22% 6%);
+  --color-secondary:           hsl(348 15% 17%);
+  --color-secondary-foreground:hsl(10 8% 82%);
+  --color-muted:               hsl(348 12% 15%);
+  --color-muted-foreground:    hsl(345 8% 56%);
+  --color-border:              hsl(348 12% 20%);
+  --color-input:               hsl(348 12% 15%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design-theme="rose"]:not([data-theme="light"]) {
+    --color-background:          hsl(348 22% 8%);
+    --color-foreground:          hsl(10 10% 92%);
+    --color-card:                hsl(348 18% 12%);
+    --color-card-foreground:     hsl(10 10% 92%);
+    --color-popover:             hsl(348 18% 12%);
+    --color-popover-foreground:  hsl(10 10% 92%);
+    --color-primary-foreground:  hsl(348 22% 6%);
+    --color-secondary:           hsl(348 15% 17%);
+    --color-secondary-foreground:hsl(10 8% 82%);
+    --color-muted:               hsl(348 12% 15%);
+    --color-muted-foreground:    hsl(345 8% 56%);
+    --color-border:              hsl(348 12% 20%);
+    --color-input:               hsl(348 12% 15%);
+  }
+}
+
+/* Obsidian — near-black, crisp */
+:root[data-design-theme="obsidian"] {
+  --color-background:          hsl(0 0% 98%);
+  --color-foreground:          hsl(0 0% 8%);
+  --color-card:                hsl(0 0% 100%);
+  --color-card-foreground:     hsl(0 0% 8%);
+  --color-popover:             hsl(0 0% 100%);
+  --color-popover-foreground:  hsl(0 0% 8%);
+  --color-secondary:           hsl(0 0% 94%);
+  --color-secondary-foreground:hsl(0 0% 20%);
+  --color-muted:               hsl(0 0% 94%);
+  --color-muted-foreground:    hsl(0 0% 46%);
+  --color-border:              hsl(0 0% 87%);
+  --color-input:               hsl(0 0% 87%);
+  --radius: 0.375rem;
+}
+:root[data-design-theme="obsidian"][data-theme="dark"] {
+  --color-background:          hsl(0 0% 5%);
+  --color-foreground:          hsl(0 0% 93%);
+  --color-card:                hsl(0 0% 9%);
+  --color-card-foreground:     hsl(0 0% 93%);
+  --color-popover:             hsl(0 0% 9%);
+  --color-popover-foreground:  hsl(0 0% 93%);
+  --color-primary-foreground:  hsl(0 0% 3%);
+  --color-secondary:           hsl(0 0% 14%);
+  --color-secondary-foreground:hsl(0 0% 82%);
+  --color-muted:               hsl(0 0% 11%);
+  --color-muted-foreground:    hsl(0 0% 55%);
+  --color-border:              hsl(0 0% 17%);
+  --color-input:               hsl(0 0% 11%);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design-theme="obsidian"]:not([data-theme="light"]) {
+    --color-background:          hsl(0 0% 5%);
+    --color-foreground:          hsl(0 0% 93%);
+    --color-card:                hsl(0 0% 9%);
+    --color-card-foreground:     hsl(0 0% 93%);
+    --color-popover:             hsl(0 0% 9%);
+    --color-popover-foreground:  hsl(0 0% 93%);
+    --color-primary-foreground:  hsl(0 0% 3%);
+    --color-secondary:           hsl(0 0% 14%);
+    --color-secondary-foreground:hsl(0 0% 82%);
+    --color-muted:               hsl(0 0% 11%);
+    --color-muted-foreground:    hsl(0 0% 55%);
+    --color-border:              hsl(0 0% 17%);
+    --color-input:               hsl(0 0% 11%);
+  }
+}
+
 @keyframes fade-in {
   from { opacity: 0; transform: translateY(5px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -137,6 +384,23 @@
   :root[data-theme="dark"] body { background-image: none; }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) body { background-image: none; }
+  }
+  :root[data-design-theme="slate"] body {
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(216 40% 97%) 0%, transparent 65%);
+  }
+  :root[data-design-theme="midnight"] body {
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(220 35% 97%) 0%, transparent 65%);
+  }
+  :root[data-design-theme="forest"] body {
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(150 25% 97%) 0%, transparent 65%);
+  }
+  :root[data-design-theme="rose"] body {
+    background-image: radial-gradient(ellipse 140% 50% at 50% 0%, hsl(348 45% 97%) 0%, transparent 65%);
+  }
+  :root[data-design-theme="obsidian"] body { background-image: none; }
+  :root[data-design-theme][data-theme="dark"] body { background-image: none; }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme]:not([data-theme="light"]) body { background-image: none; }
   }
 }
 
@@ -203,5 +467,77 @@
     content: "";
     position: absolute; inset: 0;
     background: radial-gradient(ellipse 70% 50% at 85% 15%, rgba(255,255,255,0.14) 0%, transparent 60%);
+  }
+
+  /* Design theme sidebar overrides */
+  :root[data-design-theme="slate"] .sidebar-panel {
+    background: hsl(216 28% 99%);
+    border-color: hsl(215 16% 88%);
+  }
+  :root[data-design-theme="slate"][data-theme="dark"] .sidebar-panel {
+    background: hsl(222 28% 10%);
+    border-color: hsl(220 18% 19%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme="slate"]:not([data-theme="light"]) .sidebar-panel {
+      background: hsl(222 28% 10%);
+      border-color: hsl(220 18% 19%);
+    }
+  }
+  :root[data-design-theme="midnight"] .sidebar-panel {
+    background: hsl(220 26% 99%);
+    border-color: hsl(220 14% 87%);
+  }
+  :root[data-design-theme="midnight"][data-theme="dark"] .sidebar-panel {
+    background: hsl(224 48% 8%);
+    border-color: hsl(220 32% 15%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme="midnight"]:not([data-theme="light"]) .sidebar-panel {
+      background: hsl(224 48% 8%);
+      border-color: hsl(220 32% 15%);
+    }
+  }
+  :root[data-design-theme="forest"] .sidebar-panel {
+    background: hsl(153 16% 99%);
+    border-color: hsl(150 10% 87%);
+  }
+  :root[data-design-theme="forest"][data-theme="dark"] .sidebar-panel {
+    background: hsl(155 20% 9%);
+    border-color: hsl(152 12% 17%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme="forest"]:not([data-theme="light"]) .sidebar-panel {
+      background: hsl(155 20% 9%);
+      border-color: hsl(152 12% 17%);
+    }
+  }
+  :root[data-design-theme="rose"] .sidebar-panel {
+    background: hsl(348 32% 99%);
+    border-color: hsl(348 14% 88%);
+  }
+  :root[data-design-theme="rose"][data-theme="dark"] .sidebar-panel {
+    background: hsl(348 20% 10%);
+    border-color: hsl(348 12% 18%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme="rose"]:not([data-theme="light"]) .sidebar-panel {
+      background: hsl(348 20% 10%);
+      border-color: hsl(348 12% 18%);
+    }
+  }
+  :root[data-design-theme="obsidian"] .sidebar-panel {
+    background: hsl(0 0% 100%);
+    border-color: hsl(0 0% 87%);
+  }
+  :root[data-design-theme="obsidian"][data-theme="dark"] .sidebar-panel {
+    background: hsl(0 0% 7%);
+    border-color: hsl(0 0% 15%);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-design-theme="obsidian"]:not([data-theme="light"]) .sidebar-panel {
+      background: hsl(0 0% 7%);
+      border-color: hsl(0 0% 15%);
+    }
   }
 }
