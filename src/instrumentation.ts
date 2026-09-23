@@ -94,6 +94,8 @@ export async function register() {
       "ALTER TABLE `webapp_users` ADD COLUMN `username` varchar(255) NULL",
       "ALTER TABLE `webapp_users` ADD UNIQUE KEY `webapp_users_username_unique` (`username`)",
       "ALTER TABLE `webapp_users` ADD COLUMN `disabled` boolean NOT NULL DEFAULT false",
+      "ALTER TABLE `webapp_push_subscriptions` ADD COLUMN `label` varchar(255)",
+      "ALTER TABLE `webapp_push_subscriptions` ADD COLUMN `enabled` boolean NOT NULL DEFAULT true",
     ];
     for (const sql of migrations) {
       try {

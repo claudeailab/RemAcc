@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
@@ -26,12 +26,11 @@ function initials(str: string) {
 
 export default function AdminSidebar({ user, features, platform }: Props) {
   const path = usePathname();
-  const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   const allNavItems: NavItem[] = [

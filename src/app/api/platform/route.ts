@@ -8,7 +8,7 @@ export async function GET() {
     title: info.title,
     icon: info.icon,
     primaryColor: info.primaryColor,
-    iconUrl: iconUrl(info.icon),
+    iconUrl: iconUrl(info.icon, encodeURIComponent(info.primaryColor)),
     iconUrlWhite: iconUrl(info.icon, "%23ffffff"),
   });
 }
