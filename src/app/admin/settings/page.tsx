@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, CheckCircle2, Search } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
 import { PLATFORM_PERMISSIONS } from "@/lib/permissions";
@@ -365,10 +364,8 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
 }
 
 function NotificationsTab() {
-  const [configured, setConfigured] = useState(false);
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
   const [subscribed, setSubscribed] = useState(false);
   const [subscribing, setSubscribing] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -386,28 +383,11 @@ function NotificationsTab() {
   useEffect(() => {
     setSupported("serviceWorker" in navigator && "PushManager" in window && "Notification" in window);
     fetch("/api/admin/settings/notifications").then(r => r.json()).then(d => {
-      setConfigured(d.configured);
       setPublicKey(d.publicKey);
       if (d.publicKey) checkSubscription(d.publicKey);
       setLoading(false);
     });
   }, [checkSubscription]);
-
-  async function generateKeys() {
-    setGenerating(true);
-    try {
-      const r = await fetch("/api/admin/settings/notifications", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ generateKeys: true }),
-      });
-      const d = await r.json();
-      if (!r.ok) { toast.error(d.error ?? "Failed"); return; }
-      setConfigured(true);
-      setPublicKey(d.publicKey);
-      toast.success("VAPID keys generated");
-    } finally { setGenerating(false); }
-  }
 
   async function toggleSubscription() {
     if (!publicKey) return;
@@ -425,7 +405,7 @@ function NotificationsTab() {
           await sub.unsubscribe();
         }
         setSubscribed(false);
-        toast.success("Unsubscribed from notifications");
+        toast.success("Notifications disabled for this device");
       } else {
         const permission = await Notification.requestPermission();
         if (permission !== "granted") { toast.error("Notification permission denied"); return; }
@@ -440,10 +420,10 @@ function NotificationsTab() {
           body: JSON.stringify({ endpoint: json.endpoint, keys: json.keys }),
         });
         setSubscribed(true);
-        toast.success("Subscribed to notifications on this device");
+        toast.success("Notifications enabled for this device");
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Subscription failed");
+      toast.error(err instanceof Error ? err.message : "Failed to update notifications");
     } finally { setSubscribing(false); }
   }
 
@@ -462,54 +442,40 @@ function NotificationsTab() {
   return (
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">
-        Send push notifications to users who have saved the platform as a PWA on their device.
+        Receive push notifications when the platform is saved as an app on your device.
       </p>
 
-      <div className="rounded-xl border p-4 bg-card space-y-4">
+      <div className="rounded-xl border p-4 bg-card">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium">VAPID Keys</p>
+            <p className="text-sm font-medium">Notifications on this device</p>
             <p className="text-xs text-muted-foreground mt-0.5">
-              {configured ? "Keys are configured. Regenerating will invalidate all existing subscriptions." : "Generate a key pair to enable push notifications."}
+              {!supported
+                ? "Push notifications are not supported in this browser."
+                : subscribed
+                ? "Enabled — this device will receive notifications."
+                : "Disabled — enable to receive notifications on this device."}
             </p>
-            {publicKey && (
-              <p className="text-xs font-mono text-muted-foreground mt-1 break-all">{publicKey.slice(0, 40)}…</p>
-            )}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            {configured && <Badge variant="outline" className="text-emerald-600 border-emerald-300 dark:text-emerald-400 dark:border-emerald-700 text-xs">Configured</Badge>}
-            <Button size="sm" variant="outline" onClick={generateKeys} disabled={generating}>
-              {generating ? <Loader2 className="h-4 w-4 animate-spin" /> : configured ? "Regenerate" : "Generate Keys"}
+          {supported && (
+            <Button
+              size="sm"
+              variant={subscribed ? "outline" : "default"}
+              onClick={toggleSubscription}
+              disabled={subscribing}
+            >
+              {subscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : subscribed ? "Disable" : "Enable"}
             </Button>
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="rounded-xl border p-4 bg-card space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">This Device</p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {!supported ? "Push notifications are not supported in this browser." : subscribed ? "This browser is subscribed and will receive notifications." : "Subscribe this browser to test notifications."}
-            </p>
-          </div>
-          <Button
-            size="sm"
-            variant={subscribed ? "outline" : "default"}
-            onClick={toggleSubscription}
-            disabled={!configured || !supported || subscribing}
-          >
-            {subscribing ? <Loader2 className="h-4 w-4 animate-spin" /> : subscribed ? "Unsubscribe" : "Subscribe"}
-          </Button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-3">
-        <Button onClick={sendTest} disabled={testing || !configured || !subscribed}>
+      <div>
+        <Button onClick={sendTest} disabled={testing || !subscribed} variant="outline" size="sm">
           {testing ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Sending…</> : "Send Test Notification"}
         </Button>
-        {!subscribed && configured && supported && (
-          <p className="text-xs text-muted-foreground">Subscribe this device first to send a test.</p>
+        {!subscribed && supported && (
+          <p className="text-xs text-muted-foreground mt-2">Enable notifications on this device first.</p>
         )}
       </div>
     </div>
