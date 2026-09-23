@@ -52,7 +52,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         href={item.href}
         onClick={onClick}
         className={cn(
-          "group flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm transition-all duration-150",
+          "group flex items-center gap-2.5 rounded-md px-3 py-1 text-sm transition-all duration-150",
           active ? "nav-active font-medium" : "text-foreground/80 hover:bg-secondary hover:text-foreground"
         )}
       >
@@ -93,7 +93,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
           {navLink({ href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true })}
           <div className="mt-3">
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col">
               {systemItems.map(item => navLink(item))}
             </div>
           </div>
@@ -184,7 +184,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             </div>
 
             {/* Nav */}
-            <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-0.5">
+            <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
               {allNavItems.map(item => navLink(item, () => setDrawerOpen(false)))}
             </nav>
 
