@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertCircle } from "lucide-react";
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_failed: "Authentication failed. Please try again.",
@@ -23,10 +23,15 @@ function LoginForm({ platformName }: { platformName: string }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorBanner, setErrorBanner] = useState<string | null>(null);
 
   useEffect(() => {
     const error = searchParams.get("error");
-    if (error) toast.error(ERROR_MESSAGES[error] ?? "Login failed");
+    if (error) {
+      const msg = ERROR_MESSAGES[error] ?? "Login failed";
+      setErrorBanner(msg);
+      toast.error(msg);
+    }
   }, [searchParams]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -54,6 +59,12 @@ function LoginForm({ platformName }: { platformName: string }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {errorBanner && (
+        <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/8 px-3 py-2.5 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{errorBanner}</span>
+        </div>
+      )}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor="username">Username</Label>
         <Input id="username" type="text" required value={username} onChange={e => setUsername(e.target.value)} autoComplete="username" />

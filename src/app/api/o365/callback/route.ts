@@ -66,7 +66,10 @@ export async function GET(req: NextRequest) {
     .where(eq(users.azureOid, oid))
     .limit(1);
 
-  if (!user) return fail("not_provisioned");
+  if (!user) {
+    console.error(`[azure-sso] no_access: oid=${oid} not found in users table`);
+    return fail("not_provisioned");
+  }
 
   let isAdmin = false;
   if (user.groupId) {
@@ -77,10 +80,17 @@ export async function GET(req: NextRequest) {
       .limit(1);
     if (group) {
       const perms = JSON.parse(group.permissions || "[]") as string[];
-      if (!perms.includes("access_dashboard") && !perms.includes("administrator")) return fail("no_access");
+      if (!perms.includes("access_dashboard") && !perms.includes("administrator")) {
+        console.error(`[azure-sso] no_access: user=${user.email} groupId=${user.groupId} perms=[${perms.join(",")}] — missing access_dashboard or administrator`);
+        return fail("no_access");
+      }
       isAdmin = perms.includes("administrator");
+    } else {
+      console.error(`[azure-sso] no_access: user=${user.email} groupId=${user.groupId} — group record not found`);
+      return fail("no_access");
     }
   } else {
+    console.error(`[azure-sso] no_access: user=${user.email} — no group assigned`);
     return fail("no_access");
   }
 
