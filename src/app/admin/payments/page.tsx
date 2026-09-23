@@ -92,7 +92,7 @@ function StripeTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="border-b">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle>Stripe</CardTitle>
           <div className="flex items-center gap-4 flex-wrap">
@@ -107,7 +107,7 @@ function StripeTab() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form onSubmit={handleSave} className={fieldGap}>
           <div className="flex flex-col gap-1.5">
             <Label>Publishable Key</Label>
@@ -186,7 +186,7 @@ function VivaWalletTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="border-b">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle>Viva Wallet</CardTitle>
           <div className="flex items-center gap-4 flex-wrap">
@@ -201,7 +201,7 @@ function VivaWalletTab() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form onSubmit={handleSave} className={fieldGap}>
           <div className="flex flex-col gap-1.5">
             <Label>Client ID</Label>
@@ -279,7 +279,7 @@ function PayPalTab() {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="border-b">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <CardTitle>PayPal</CardTitle>
           <div className="flex items-center gap-4 flex-wrap">
@@ -294,7 +294,7 @@ function PayPalTab() {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-6">
         <form onSubmit={handleSave} className={fieldGap}>
           <div className="flex flex-col gap-1.5">
             <Label>Client ID</Label>

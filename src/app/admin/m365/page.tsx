@@ -141,7 +141,7 @@ export default function M365Page() {
           </Dialog>
         </div>
         <Card>
-          <CardHeader>
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <CardTitle>Azure AD</CardTitle>
               <div className="flex items-center gap-2 shrink-0">
@@ -150,7 +150,7 @@ export default function M365Page() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSave} className={fieldGap}>
               <div className="flex flex-col gap-1.5">
                 <Label>Client ID</Label>

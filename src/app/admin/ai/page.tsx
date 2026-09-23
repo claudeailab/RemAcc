@@ -132,7 +132,7 @@ export default function AIPage() {
           </TabsList>
           <TabsContent value="anthropic">
             <Card>
-              <CardHeader>
+              <CardHeader className="border-b">
                 <div className="flex items-center justify-between">
                   <CardTitle>Anthropic</CardTitle>
                   <div className="flex items-center gap-2 shrink-0">
@@ -141,7 +141,7 @@ export default function AIPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className={fieldGap}>
+              <CardContent className={`pt-6 ${fieldGap}`}>
                 <div className="flex flex-col gap-1.5">
                   <Label>API Key</Label>
                   <SecretInput value={anthropicKey} onChange={setAnthropicKey} placeholder="sk-ant-..." isSet={anthropicKeySet} />
@@ -170,7 +170,7 @@ export default function AIPage() {
           </TabsContent>
           <TabsContent value="openai">
             <Card>
-              <CardHeader>
+              <CardHeader className="border-b">
                 <div className="flex items-center justify-between">
                   <CardTitle>OpenAI</CardTitle>
                   <div className="flex items-center gap-2 shrink-0">
@@ -179,7 +179,7 @@ export default function AIPage() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent className={fieldGap}>
+              <CardContent className={`pt-6 ${fieldGap}`}>
                 <div className="flex flex-col gap-1.5">
                   <Label>API Key</Label>
                   <SecretInput value={openaiKey} onChange={setOpenaiKey} placeholder="sk-..." isSet={openaiKeySet} />

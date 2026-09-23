@@ -64,7 +64,7 @@ export default function EmailPage() {
       <div className={pageInner}>
         <h1 className={pageTitle}>Email Settings</h1>
         <Card className="mt-6">
-          <CardHeader>
+          <CardHeader className="border-b">
             <div className="flex items-center justify-between">
               <CardTitle>SMTP Configuration</CardTitle>
               <div className="flex items-center gap-2 shrink-0">
@@ -73,7 +73,7 @@ export default function EmailPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <form onSubmit={handleSave} className={fieldGap}>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="flex flex-col gap-1.5">
