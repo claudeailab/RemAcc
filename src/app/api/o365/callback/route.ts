@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSetting } from "@/lib/encryption";
+import { getBaseUrl } from "@/lib/base-url";
 import { db } from "@/lib/db";
 import { users, permission_groups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-
-function getOrigin(req: NextRequest) {
-  const proto = req.headers.get("x-forwarded-proto") ?? "https";
-  const host = req.headers.get("host") ?? "localhost";
-  return `${proto}://${host}`;
-}
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
   try {
@@ -25,9 +20,10 @@ export async function GET(req: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const storedState = req.cookies.get("azure-oauth-state")?.value;
+  const base = getBaseUrl(req);
 
   const fail = (e: string) => {
-    const res = NextResponse.redirect(new URL(`/login?error=${e}`, req.url));
+    const res = NextResponse.redirect(`${base}/login?error=${e}`);
     res.cookies.delete("azure-oauth-state");
     return res;
   };
@@ -39,7 +35,7 @@ export async function GET(req: NextRequest) {
   const tenantId = await getSetting("m365_tenantId");
   if (!clientId || !clientSecret || !tenantId) return fail("m365_not_configured");
 
-  const redirectUri = `${getOrigin(req)}/api/o365/callback`;
+  const redirectUri = `${base}/api/o365/callback`;
 
   const tokenRes = await fetch(
     `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
@@ -95,7 +91,7 @@ export async function GET(req: NextRequest) {
   const redirectPath = isAdmin ? "/admin" : "/dashboard";
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
 
-  const res = NextResponse.redirect(new URL(redirectPath, req.url));
+  const res = NextResponse.redirect(`${base}${redirectPath}`);
   res.cookies.set("webapp-session", token, {
     httpOnly: true,
     secure: isSecure,
