@@ -614,7 +614,7 @@ function IconPickerDialog({ value, onSelect, onClose }: {
                     <img
                       src={iconUrl(id)}
                       alt={id}
-                      className="h-6 w-6"
+                      className="h-6 w-6 dark:brightness-0 dark:invert"
                       onError={e => { (e.target as HTMLImageElement).closest("button")!.style.display = "none"; }}
                     />
                   </button>
@@ -745,7 +745,7 @@ function VisualAppearanceSection() {
         <div className="flex items-center gap-3">
           <div className="h-14 w-14 rounded-xl border-2 border-border bg-muted/30 flex items-center justify-center shrink-0">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={iconUrl(icon)} alt="" className="h-9 w-9" />
+            <img src={iconUrl(icon, encodeURIComponent(primaryColor))} alt="" className="h-9 w-9" />
           </div>
           <div>
             <p className="text-sm font-medium font-mono">{icon}</p>
