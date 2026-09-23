@@ -61,7 +61,7 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
 
   if (action === "login" && resource === "auth") return "Logged in";
 
-  if (action === "update" && resource === "platform") return "Updated platform settings";
+  if (action === "update" && resource === "platform") return d ? `Updated platform settings: ${d}` : "Updated platform settings";
 
   if (action === "create" && resource === "user") {
     if (d.startsWith("azure_add")) {
@@ -106,8 +106,8 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
   if (resource === "settings.email") return "Updated email settings";
   if (resource === "settings.m365") return "Updated Microsoft 365 settings";
   if (resource === "settings.payments") return "Updated payment settings";
-  if (resource === "settings.paypal") return "Updated PayPal settings";
-  if (resource === "settings.vivawallet") return "Updated Viva Wallet settings";
+  if (resource === "settings.paypal") return d ? `Updated PayPal settings: ${d}` : "Updated PayPal settings";
+  if (resource === "settings.vivawallet") return d ? `Updated Viva Wallet settings: ${d}` : "Updated Viva Wallet settings";
   if (resource.startsWith("settings.ai.")) {
     const provider = resource.slice("settings.ai.".length);
     return `Updated ${provider.charAt(0).toUpperCase() + provider.slice(1)} AI settings`;

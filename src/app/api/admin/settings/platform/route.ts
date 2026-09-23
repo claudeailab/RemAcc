@@ -21,6 +21,9 @@ export async function POST(req: NextRequest) {
   revalidatePath("/admin", "layout");
   revalidatePath("/", "layout");
   const ip = req.headers.get("x-forwarded-for") ?? "unknown";
-  await logAudit({ action: "update", resource: "platform", ip });
+  const changes = Object.entries(parsed.data)
+    .map(([k, v]) => k === "primaryColor" ? `primaryColor=${v}` : `${k}="${v}"`)
+    .join("; ");
+  await logAudit({ action: "update", resource: "platform", detail: changes || "no changes", ip });
   return NextResponse.json({ ok: true });
 }

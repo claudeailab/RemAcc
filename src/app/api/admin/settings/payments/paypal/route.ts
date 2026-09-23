@@ -40,6 +40,11 @@ export async function POST(req: NextRequest) {
   if (clientSecret) await setSetting("paypal_clientSecret", clientSecret);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  await logAudit({ userEmail: admin.email, action: "update", resource: "settings.paypal", ip });
+  const changes: string[] = [
+    `enabled=${enabled}`, `liveMode=${liveMode}`,
+    ...(clientId !== undefined ? [`clientId="${clientId}"`] : []),
+    ...(clientSecret ? ["clientSecret=set"] : []),
+  ];
+  await logAudit({ userEmail: admin.email, action: "update", resource: "settings.paypal", detail: changes.join("; "), ip });
   return NextResponse.json({ ok: true });
 }

@@ -44,6 +44,12 @@ export async function POST(req: NextRequest) {
   if (merchantId !== undefined) await setSetting("vivawallet_merchantId", merchantId);
 
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  await logAudit({ userEmail: admin.email, action: "update", resource: "settings.vivawallet", ip });
+  const changes: string[] = [
+    `enabled=${enabled}`, `liveMode=${liveMode}`,
+    ...(clientId !== undefined ? [`clientId="${clientId}"`] : []),
+    ...(clientSecret ? ["clientSecret=set"] : []),
+    ...(merchantId !== undefined ? [`merchantId="${merchantId}"`] : []),
+  ];
+  await logAudit({ userEmail: admin.email, action: "update", resource: "settings.vivawallet", detail: changes.join("; "), ip });
   return NextResponse.json({ ok: true });
 }
