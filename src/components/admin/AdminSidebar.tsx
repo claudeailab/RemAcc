@@ -1,15 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut } from "lucide-react";
+import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
 import type { PlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
 import version from "../../../version.json";
 
-interface NavItem { href: string; label: string; icon: React.ElementType }
+interface NavItem { href: string; label: string; icon: React.ElementType; exact?: boolean }
 interface Props {
   user: { email: string; displayName?: string | null };
   features: Features;
@@ -24,41 +26,10 @@ function initials(str: string) {
 
 export default function AdminSidebar({ user, features, platform }: Props) {
   const path = usePathname();
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const navLink = (href: string, label: string, Icon: React.ElementType, exact = false) => {
-    const active = exact ? path === href : path.startsWith(href);
-    return (
-      <Link
-        key={href}
-        href={href}
-        className={cn(
-          "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all duration-150",
-          active
-            ? "nav-active font-medium"
-            : "text-foreground/80 hover:bg-secondary hover:text-foreground"
-        )}
-      >
-        <Icon className={cn("h-4 w-4 shrink-0", active ? "nav-active-icon" : "opacity-50 group-hover:opacity-80")} />
-        {label}
-      </Link>
-    );
-  };
-
-  const navGroup = (title: string, items: NavItem[]) => {
-    if (items.length === 0) return null;
-    return (
-      <div className="mt-5">
-        <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
-          {title}
-        </p>
-        <div className="flex flex-col gap-0.5">
-          {items.map(({ href, label, icon: Icon }) => navLink(href, label, Icon))}
-        </div>
-      </div>
-    );
-  };
-
-  const systemItems: NavItem[] = [
+  const allNavItems: NavItem[] = [
+    { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
     ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
     ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
@@ -68,19 +39,30 @@ export default function AdminSidebar({ user, features, platform }: Props) {
     ...(features.ai ? [{ href: "/admin/ai", label: "Artificial Intelligence", icon: Bot }] : []),
   ];
 
-  const mobileItems = [
-    { href: "/admin", label: "Home", icon: LayoutDashboard, exact: true },
-    ...(features.users ? [{ href: "/admin/users", label: "Users", icon: Users }] : []),
-    ...(features.payments ? [{ href: "/admin/payments", label: "Payments", icon: CreditCard }] : []),
-    ...(features.subscriptions ? [{ href: "/admin/subscriptions", label: "Plans", icon: CreditCard }] : []),
-    ...(features.ai ? [{ href: "/admin/ai", label: "AI", icon: Bot }] : []),
-  ];
+  const navLink = (item: NavItem, onClick?: () => void) => {
+    const active = item.exact ? path === item.href : path.startsWith(item.href);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        onClick={onClick}
+        className={cn(
+          "group flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-all duration-150",
+          active ? "nav-active font-medium" : "text-foreground/80 hover:bg-secondary hover:text-foreground"
+        )}
+      >
+        <item.icon className={cn("h-4 w-4 shrink-0", active ? "nav-active-icon" : "opacity-50 group-hover:opacity-80")} />
+        {item.label}
+      </Link>
+    );
+  };
+
+  const systemItems: NavItem[] = allNavItems.filter(i => i.href !== "/admin");
 
   return (
     <>
-      {/* Desktop sidebar */}
+      {/* ── Desktop sidebar ── */}
       <aside className="sidebar-panel hidden md:flex flex-col fixed inset-y-0 left-0 w-56 z-40 border-r">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 px-4 py-4 border-b">
           <div
             className="flex h-10 w-10 items-center justify-center rounded-lg shrink-0 relative"
@@ -103,11 +85,15 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         </div>
 
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
-          {navLink("/admin", "Dashboard", LayoutDashboard, true)}
-          {navGroup("System", systemItems)}
+          {navLink({ href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true })}
+          <div className="mt-5">
+            <p className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
+            <div className="flex flex-col gap-0.5">
+              {systemItems.map(item => navLink(item))}
+            </div>
+          </div>
         </nav>
 
-        {/* User */}
         <div className="p-3 border-t">
           <div className="flex items-center gap-2.5 px-2 py-2 rounded-md hover:bg-secondary transition-colors cursor-default">
             <div
@@ -121,25 +107,98 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         </div>
       </aside>
 
-      {/* Mobile bottom bar */}
-      <nav className="sidebar-panel md:hidden fixed bottom-0 inset-x-0 border-t z-40 flex">
-        {mobileItems.map(({ href, label, icon: Icon, exact }) => {
-          const active = exact ? path === href : path.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-1 py-2 text-xs transition-colors",
-                active ? "text-primary" : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              <span className="truncate max-w-[4rem]">{label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* ── Mobile header ── */}
+      <header className="sidebar-panel md:hidden fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4 border-b">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div
+            className="flex h-8 w-8 items-center justify-center rounded-lg shrink-0 relative"
+            style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}
+              alt=""
+              className="h-4 w-4"
+              onError={e => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("hidden"); }}
+            />
+            <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
+          </div>
+          <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
+        </div>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className="h-9 w-9 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-foreground/70"
+          aria-label="Open menu"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
+      </header>
+
+      {/* ── Mobile slide-in drawer ── */}
+      <DialogPrimitive.Root open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className="md:hidden fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 duration-200" />
+          <DialogPrimitive.Content
+            aria-describedby={undefined}
+            className="md:hidden sidebar-panel fixed inset-y-0 left-0 z-50 w-72 flex flex-col border-r shadow-xl data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left duration-300"
+          >
+            <DialogPrimitive.Title className="sr-only">Navigation menu</DialogPrimitive.Title>
+
+            {/* Drawer header */}
+            <div className="flex items-center justify-between px-4 py-4 border-b shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div
+                  className="flex h-9 w-9 items-center justify-center rounded-lg shrink-0 relative"
+                  style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={iconUrl(platform.icon, encodeURIComponent(platform.primaryColor))}
+                    alt=""
+                    className="h-4 w-4"
+                    onError={e => { (e.target as HTMLImageElement).style.display = "none"; (e.target as HTMLImageElement).nextElementSibling?.removeAttribute("hidden"); }}
+                  />
+                  <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-semibold text-sm tracking-tight text-foreground truncate">{platform.name}</span>
+                  <span className="text-[11px] text-foreground/50 font-mono font-medium">v{version.version}</span>
+                </div>
+              </div>
+              <DialogPrimitive.Close className="h-8 w-8 flex items-center justify-center rounded-md hover:bg-secondary transition-colors text-foreground/60 shrink-0">
+                <X className="h-4 w-4" />
+              </DialogPrimitive.Close>
+            </div>
+
+            {/* Nav */}
+            <nav className="flex-1 overflow-y-auto p-3 flex flex-col gap-0.5">
+              {allNavItems.map(item => navLink(item, () => setDrawerOpen(false)))}
+            </nav>
+
+            {/* User + logout */}
+            <div className="p-3 border-t shrink-0 space-y-1">
+              <div className="flex items-center gap-2.5 px-2 py-2 rounded-md">
+                <div
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-primary text-[10px] font-bold shrink-0"
+                  style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
+                >
+                  {initials(user.displayName ?? user.email)}
+                </div>
+                <span className="text-xs text-foreground/70 truncate">{user.displayName ?? user.email}</span>
+              </div>
+              <form action="/api/auth/logout" method="POST">
+                <button
+                  type="submit"
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-sm text-foreground/70 hover:bg-secondary hover:text-foreground transition-colors"
+                >
+                  <LogOut className="h-4 w-4 opacity-50" />
+                  Log out
+                </button>
+              </form>
+            </div>
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
     </>
   );
 }
