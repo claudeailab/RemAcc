@@ -37,10 +37,8 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
     const who = id ? ` (id ${id})` : "";
     const disabledM = d.match(/disabled: (\w+)→(\w+)/);
     if (disabledM) return disabledM[2] === "true" ? `Disabled user${who}` : `Re-enabled user${who}`;
-    const roleM = d.match(/role: (\w+)→(\w+)/);
-    if (roleM) return `Changed user${who} role: ${roleM[1]} → ${roleM[2]}`;
-    const groupM = d.match(/groups: (.+)/);
-    if (groupM) return `Updated user${who} groups: ${groupM[1]}`;
+    const changes = d.replace(/^id=\d+(; )?/, "").trim();
+    if (changes) return `Updated user${who}: ${changes}`;
     return `Updated user${who}`;
   }
 
