@@ -462,11 +462,11 @@ function PlatformTab() {
     <div className="space-y-6">
       <p className="text-sm text-muted-foreground">Set the name and title shown throughout the platform.</p>
       <div className="flex flex-col gap-1.5">
-        <Label>Platform Name</Label>
+        <Label>Site Title</Label>
         <Input value={name} onChange={e => setName(e.target.value)} placeholder="Platform" maxLength={80} />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label>Platform Title <span className="text-muted-foreground font-normal text-xs">(optional subtitle)</span></Label>
+        <Label>Tagline <span className="text-muted-foreground font-normal text-xs">(optional subtitle)</span></Label>
         <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Customer Portal" maxLength={160} />
       </div>
       <Button onClick={handleSave} disabled={saving || !dirty}>
@@ -701,7 +701,7 @@ export default function SettingsPage() {
         <h1 className={pageTitle}>Settings</h1>
         <Tabs defaultValue="platform" className="mt-6">
           <TabsList className="h-auto flex-wrap">
-            <TabsTrigger value="platform">Platform</TabsTrigger>
+            <TabsTrigger value="platform">Name</TabsTrigger>
             <TabsTrigger value="visual">Visual</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
