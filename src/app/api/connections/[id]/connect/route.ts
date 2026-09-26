@@ -34,7 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  const defaultPort = conn.protocol === "rdp" ? 3389 : 5900;
+  const defaultPort = conn.protocol === "rdp" ? 3389 : conn.protocol === "ssh" ? 22 : 5900;
   return NextResponse.json({
     id: conn.id,
     name: conn.name,

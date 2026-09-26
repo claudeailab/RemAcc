@@ -15,6 +15,7 @@ interface ConnectDetails { id: number; name: string; host: string; port: number;
 const PROTO_BADGE: Record<string, string> = {
   rdp: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   vnc: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
 function CopyButton({ value }: { value: string }) {
@@ -254,6 +255,18 @@ export default function DashboardPage() {
                   <Download className="h-4 w-4 mr-2" />
                   Download .rdp file
                 </Button>
+              )}
+
+              {connectDetails.protocol === "ssh" && connectDetails.credential && (
+                <div className="rounded-lg border p-3">
+                  <p className="text-xs text-muted-foreground mb-1.5">SSH command</p>
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs font-mono flex-1 truncate text-foreground">
+                      ssh {connectDetails.credential.username}@{connectDetails.host} -p {connectDetails.port}
+                    </code>
+                    <CopyButton value={`ssh ${connectDetails.credential.username}@${connectDetails.host} -p ${connectDetails.port}`} />
+                  </div>
+                </div>
               )}
 
               {!connectDetails.credential && (

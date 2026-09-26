@@ -19,6 +19,7 @@ interface Credential { id: number; name: string; username: string }
 const PROTO_BADGE: Record<string, string> = {
   rdp: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   vnc: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
+  ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
 export default function ConnectionsPage() {
@@ -172,6 +173,7 @@ export default function ConnectionsPage() {
                   <SelectContent>
                     <SelectItem value="rdp">RDP</SelectItem>
                     <SelectItem value="vnc">VNC</SelectItem>
+                    <SelectItem value="ssh">SSH</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

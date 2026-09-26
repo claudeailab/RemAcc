@@ -66,7 +66,12 @@ export default function AdminSidebar({ user, features, platform }: Props) {
     );
   };
 
-  const systemItems: NavItem[] = allNavItems.filter(i => i.href !== "/admin");
+  const managementItems: NavItem[] = [
+    { href: "/admin/connections", label: "Connections", icon: Monitor },
+    { href: "/admin/folders", label: "Folders", icon: Folder },
+    { href: "/admin/credentials", label: "Credentials", icon: KeyRound },
+  ];
+  const systemItems: NavItem[] = allNavItems.filter(i => i.href !== "/admin" && !managementItems.some(m => m.href === i.href));
 
   return (
     <>
@@ -95,6 +100,12 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
         <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
           {navLink({ href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true })}
+          <div className="mt-3">
+            <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Management</p>
+            <div className="flex flex-col">
+              {managementItems.map(item => navLink(item))}
+            </div>
+          </div>
           <div className="mt-3">
             <p className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
             <div className="flex flex-col">
@@ -189,7 +200,11 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
             {/* Nav */}
             <nav className="flex-1 overflow-y-auto p-3 flex flex-col">
-              {allNavItems.map(item => navLink(item, () => setDrawerOpen(false), true))}
+              {navLink({ href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true }, () => setDrawerOpen(false), true)}
+              <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Management</p>
+              {managementItems.map(item => navLink(item, () => setDrawerOpen(false), true))}
+              <p className="px-3 pt-3 pb-1 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">System</p>
+              {systemItems.map(item => navLink(item, () => setDrawerOpen(false), true))}
             </nav>
 
             {/* User + logout */}
