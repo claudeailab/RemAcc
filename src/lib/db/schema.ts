@@ -82,3 +82,36 @@ export const plans = mysqlTable("webapp_plans", {
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+export const credentials = mysqlTable("webapp_credentials", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  username: varchar("username", { length: 255 }).notNull(),
+  password: text("password").notNull(),
+  domain: varchar("domain", { length: 255 }),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+export const folders = mysqlTable("webapp_folders", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  parentId: int("parent_id"),
+  credentialId: int("credential_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
+export const connections = mysqlTable("webapp_connections", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  host: varchar("host", { length: 255 }).notNull(),
+  port: int("port"),
+  protocol: varchar("protocol", { length: 10 }).notNull().default("rdp"),
+  folderId: int("folder_id"),
+  credentialId: int("credential_id"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});

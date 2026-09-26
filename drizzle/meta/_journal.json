@@ -15,6 +15,13 @@
       "when": 1753315200000,
       "tag": "0001_push_subscription_label_enabled",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1759046400000,
+      "tag": "0002_remacc_connections",
+      "breakpoints": true
     }
   ]
 }
