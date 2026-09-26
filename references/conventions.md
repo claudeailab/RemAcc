@@ -3,13 +3,13 @@
 ## CI / GitHub Actions
 
 - `enforce-main.yml` — force-pushes any non-main branch to `main`, then triggers `build.yml` via `workflow_dispatch`
-- `build.yml` — multi-arch Docker build (amd64 + arm64), push to `ghcr.io/claudeailab/wetman`
+- `build.yml` — multi-arch Docker build (amd64 + arm64), push to `ghcr.io/claudeailab/remacc`
 - GHCR login uses `secrets.CR_PAT`, never `secrets.GITHUB_TOKEN`
-- Version tag format: `ghcr.io/claudeailab/wetman:v{version}` + `:latest`
+- Version tag format: `ghcr.io/claudeailab/remacc:v{version}` + `:latest`
 
 ## Docker Image
 
-- Registry: `ghcr.io/claudeailab/wetman`
+- Registry: `ghcr.io/claudeailab/remacc`
 - Base: `node:22-alpine`, standalone Next.js output
 - Multi-arch manifest via `docker buildx imagetools create`
 

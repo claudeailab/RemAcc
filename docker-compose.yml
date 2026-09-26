@@ -1,7 +1,7 @@
 services:
 
   app:
-    image: ghcr.io/claudeailab/wetman
+    image: ghcr.io/claudeailab/remacc
     container_name: app
     hostname: app
     restart: unless-stopped

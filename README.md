@@ -68,7 +68,7 @@ Add the service to your `docker-compose.yml` and define the variables in a `.env
 ```yaml
 services:
   webapp:
-    image: ghcr.io/claudeailab/wetman
+    image: ghcr.io/claudeailab/remacc
     container_name: webapp
     hostname: webapp
     restart: unless-stopped
