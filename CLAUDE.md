@@ -22,7 +22,7 @@
 
 ## ENV Prefix
 
-`WETMAN_` — all secrets here, never `NEXT_PUBLIC_*`
+`REMACC_` — all secrets here, never `NEXT_PUBLIC_*`
 
 ## CCR Proxy Restrictions (Claude Code Remote)
 

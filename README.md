@@ -76,48 +76,48 @@ services:
     environment:
       TZ: ${TZ}
 
-      WETMAN_JWT_SECRET: ${WETMAN_JWT_SECRET}
-      WETMAN_ENCRYPTION_KEY: ${WETMAN_ENCRYPTION_KEY}
-      WETMAN_ADMIN_JWT_SECRET: ${WETMAN_ADMIN_JWT_SECRET}
+      REMACC_JWT_SECRET: ${REMACC_JWT_SECRET}
+      REMACC_ENCRYPTION_KEY: ${REMACC_ENCRYPTION_KEY}
+      REMACC_ADMIN_JWT_SECRET: ${REMACC_ADMIN_JWT_SECRET}
 
-      WETMAN_ADMIN_USERNAME: ${WETMAN_ADMIN_USERNAME}
-      WETMAN_ADMIN_PASSWORD: ${WETMAN_ADMIN_PASSWORD}
+      REMACC_ADMIN_USERNAME: ${REMACC_ADMIN_USERNAME}
+      REMACC_ADMIN_PASSWORD: ${REMACC_ADMIN_PASSWORD}
 
-      WETMAN_DB_HOST: ${WETMAN_DB_HOST}
-      WETMAN_DB_PORT: ${WETMAN_DB_PORT}
-      WETMAN_DB_USER: ${WETMAN_DB_USER}
-      WETMAN_DB_NAME: ${WETMAN_DB_NAME}
-      WETMAN_DB_PASSWORD: ${WETMAN_DB_PASSWORD}
+      REMACC_DB_HOST: ${REMACC_DB_HOST}
+      REMACC_DB_PORT: ${REMACC_DB_PORT}
+      REMACC_DB_USER: ${REMACC_DB_USER}
+      REMACC_DB_NAME: ${REMACC_DB_NAME}
+      REMACC_DB_PASSWORD: ${REMACC_DB_PASSWORD}
 
-      WETMAN_SMTP_ENABLED: ${WETMAN_SMTP_ENABLED}
-      WETMAN_SMTP_SSL: ${WETMAN_SMTP_SSL}
-      WETMAN_SMTP_HOST: ${WETMAN_SMTP_HOST}
-      WETMAN_SMTP_PORT: ${WETMAN_SMTP_PORT}
-      WETMAN_SMTP_USER: ${WETMAN_SMTP_USER}
-      WETMAN_SMTP_PASSWORD: ${WETMAN_SMTP_PASSWORD}
-      WETMAN_SMTP_FROM_NAME: ${WETMAN_SMTP_FROM_NAME}
-      WETMAN_SMTP_FROM_EMAIL: ${WETMAN_SMTP_FROM_EMAIL}
+      REMACC_SMTP_ENABLED: ${REMACC_SMTP_ENABLED}
+      REMACC_SMTP_SSL: ${REMACC_SMTP_SSL}
+      REMACC_SMTP_HOST: ${REMACC_SMTP_HOST}
+      REMACC_SMTP_PORT: ${REMACC_SMTP_PORT}
+      REMACC_SMTP_USER: ${REMACC_SMTP_USER}
+      REMACC_SMTP_PASSWORD: ${REMACC_SMTP_PASSWORD}
+      REMACC_SMTP_FROM_NAME: ${REMACC_SMTP_FROM_NAME}
+      REMACC_SMTP_FROM_EMAIL: ${REMACC_SMTP_FROM_EMAIL}
 
-      WETMAN_M365_ENABLED: ${WETMAN_M365_ENABLED}
-      WETMAN_M365_CLIENT_ID: ${WETMAN_M365_CLIENT_ID}
-      WETMAN_M365_TENANT_ID: ${WETMAN_M365_TENANT_ID}
-      WETMAN_M365_CLIENT_SECRET: ${WETMAN_M365_CLIENT_SECRET}
-      WETMAN_M365_EXPIRY_DATE: ${WETMAN_M365_EXPIRY_DATE}
-      WETMAN_M365_REMINDER_DAYS: ${WETMAN_M365_REMINDER_DAYS}
+      REMACC_M365_ENABLED: ${REMACC_M365_ENABLED}
+      REMACC_M365_CLIENT_ID: ${REMACC_M365_CLIENT_ID}
+      REMACC_M365_TENANT_ID: ${REMACC_M365_TENANT_ID}
+      REMACC_M365_CLIENT_SECRET: ${REMACC_M365_CLIENT_SECRET}
+      REMACC_M365_EXPIRY_DATE: ${REMACC_M365_EXPIRY_DATE}
+      REMACC_M365_REMINDER_DAYS: ${REMACC_M365_REMINDER_DAYS}
 
-      WETMAN_STRIPE_ENABLED: ${WETMAN_STRIPE_ENABLED}
-      WETMAN_STRIPE_LIVE_MODE: ${WETMAN_STRIPE_LIVE_MODE}
-      WETMAN_STRIPE_PUBLISHABLE_KEY: ${WETMAN_STRIPE_PUBLISHABLE_KEY}
-      WETMAN_STRIPE_SECRET_KEY: ${WETMAN_STRIPE_SECRET_KEY}
-      WETMAN_STRIPE_WEBHOOK_SECRET: ${WETMAN_STRIPE_WEBHOOK_SECRET}
+      REMACC_STRIPE_ENABLED: ${REMACC_STRIPE_ENABLED}
+      REMACC_STRIPE_LIVE_MODE: ${REMACC_STRIPE_LIVE_MODE}
+      REMACC_STRIPE_PUBLISHABLE_KEY: ${REMACC_STRIPE_PUBLISHABLE_KEY}
+      REMACC_STRIPE_SECRET_KEY: ${REMACC_STRIPE_SECRET_KEY}
+      REMACC_STRIPE_WEBHOOK_SECRET: ${REMACC_STRIPE_WEBHOOK_SECRET}
 
-      WETMAN_ANTHROPIC_ENABLED: ${WETMAN_ANTHROPIC_ENABLED}
-      WETMAN_ANTHROPIC_MODEL: ${WETMAN_ANTHROPIC_MODEL}
-      WETMAN_ANTHROPIC_API_KEY: ${WETMAN_ANTHROPIC_API_KEY}
+      REMACC_ANTHROPIC_ENABLED: ${REMACC_ANTHROPIC_ENABLED}
+      REMACC_ANTHROPIC_MODEL: ${REMACC_ANTHROPIC_MODEL}
+      REMACC_ANTHROPIC_API_KEY: ${REMACC_ANTHROPIC_API_KEY}
 
-      WETMAN_OPENAI_ENABLED: ${WETMAN_OPENAI_ENABLED}
-      WETMAN_OPENAI_MODEL: ${WETMAN_OPENAI_MODEL}
-      WETMAN_OPENAI_API_KEY: ${WETMAN_OPENAI_API_KEY}
+      REMACC_OPENAI_ENABLED: ${REMACC_OPENAI_ENABLED}
+      REMACC_OPENAI_MODEL: ${REMACC_OPENAI_MODEL}
+      REMACC_OPENAI_API_KEY: ${REMACC_OPENAI_API_KEY}
     ports:
       - 8099:8099
     volumes:
@@ -157,47 +157,47 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | Variable | Description |
 |---|---|
 | `TZ` | Timezone (e.g. `UTC`) |
-| `WETMAN_JWT_SECRET` | Session signing secret |
-| `WETMAN_ADMIN_JWT_SECRET` | Admin JWT signing secret |
-| `WETMAN_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
-| `WETMAN_ADMIN_USERNAME` | Seeds first admin user on first boot (used as login username) |
-| `WETMAN_ADMIN_PASSWORD` | Seeds first admin password on first boot |
-| `WETMAN_DB_HOST` | MySQL host |
-| `WETMAN_DB_PORT` | MySQL port (default: `3306`) |
-| `WETMAN_DB_USER` | MySQL user |
-| `WETMAN_DB_PASSWORD` | MySQL password |
-| `WETMAN_DB_NAME` | MySQL database name |
-| `WETMAN_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
-| `WETMAN_ANTHROPIC_API_KEY` | Anthropic API key |
-| `WETMAN_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
-| `WETMAN_OPENAI_ENABLED` | Enable OpenAI (`true`/`false`, default `true`) |
-| `WETMAN_OPENAI_API_KEY` | OpenAI API key |
-| `WETMAN_OPENAI_MODEL` | OpenAI model (default: `gpt-4o`) |
-| `WETMAN_SMTP_ENABLED` | Enable SMTP email (`true`/`false`, default `true`) |
-| `WETMAN_SMTP_HOST` | SMTP hostname |
-| `WETMAN_SMTP_PORT` | SMTP port |
-| `WETMAN_SMTP_SSL` | SMTP TLS (`true`/`false`) |
-| `WETMAN_SMTP_USER` | SMTP username |
-| `WETMAN_SMTP_PASSWORD` | SMTP password |
-| `WETMAN_SMTP_FROM_NAME` | Sender display name |
-| `WETMAN_SMTP_FROM_EMAIL` | Sender email address |
-| `WETMAN_M365_ENABLED` | Enable Microsoft 365 (`true`/`false`, default `true`) |
-| `WETMAN_M365_CLIENT_ID` | Azure app client ID |
-| `WETMAN_M365_CLIENT_SECRET` | Azure app client secret |
-| `WETMAN_M365_TENANT_ID` | Azure tenant ID |
-| `WETMAN_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
-| `WETMAN_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
-| `WETMAN_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
-| `WETMAN_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `WETMAN_STRIPE_SECRET_KEY` | Stripe secret key |
-| `WETMAN_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
-| `WETMAN_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
-| `WETMAN_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
-| `WETMAN_PAYPAL_CLIENT_ID` | PayPal client ID |
-| `WETMAN_PAYPAL_CLIENT_SECRET` | PayPal client secret |
-| `WETMAN_PAYPAL_LIVE_MODE` | PayPal live mode (`true`/`false`) |
-| `WETMAN_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
-| `WETMAN_VIVA_CLIENT_ID` | Viva Wallet client ID |
-| `WETMAN_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
-| `WETMAN_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
-| `WETMAN_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |
+| `REMACC_JWT_SECRET` | Session signing secret |
+| `REMACC_ADMIN_JWT_SECRET` | Admin JWT signing secret |
+| `REMACC_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
+| `REMACC_ADMIN_USERNAME` | Seeds first admin user on first boot (used as login username) |
+| `REMACC_ADMIN_PASSWORD` | Seeds first admin password on first boot |
+| `REMACC_DB_HOST` | MySQL host |
+| `REMACC_DB_PORT` | MySQL port (default: `3306`) |
+| `REMACC_DB_USER` | MySQL user |
+| `REMACC_DB_PASSWORD` | MySQL password |
+| `REMACC_DB_NAME` | MySQL database name |
+| `REMACC_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
+| `REMACC_ANTHROPIC_API_KEY` | Anthropic API key |
+| `REMACC_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
+| `REMACC_OPENAI_ENABLED` | Enable OpenAI (`true`/`false`, default `true`) |
+| `REMACC_OPENAI_API_KEY` | OpenAI API key |
+| `REMACC_OPENAI_MODEL` | OpenAI model (default: `gpt-4o`) |
+| `REMACC_SMTP_ENABLED` | Enable SMTP email (`true`/`false`, default `true`) |
+| `REMACC_SMTP_HOST` | SMTP hostname |
+| `REMACC_SMTP_PORT` | SMTP port |
+| `REMACC_SMTP_SSL` | SMTP TLS (`true`/`false`) |
+| `REMACC_SMTP_USER` | SMTP username |
+| `REMACC_SMTP_PASSWORD` | SMTP password |
+| `REMACC_SMTP_FROM_NAME` | Sender display name |
+| `REMACC_SMTP_FROM_EMAIL` | Sender email address |
+| `REMACC_M365_ENABLED` | Enable Microsoft 365 (`true`/`false`, default `true`) |
+| `REMACC_M365_CLIENT_ID` | Azure app client ID |
+| `REMACC_M365_CLIENT_SECRET` | Azure app client secret |
+| `REMACC_M365_TENANT_ID` | Azure tenant ID |
+| `REMACC_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
+| `REMACC_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
+| `REMACC_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
+| `REMACC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `REMACC_STRIPE_SECRET_KEY` | Stripe secret key |
+| `REMACC_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `REMACC_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
+| `REMACC_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
+| `REMACC_PAYPAL_CLIENT_ID` | PayPal client ID |
+| `REMACC_PAYPAL_CLIENT_SECRET` | PayPal client secret |
+| `REMACC_PAYPAL_LIVE_MODE` | PayPal live mode (`true`/`false`) |
+| `REMACC_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
+| `REMACC_VIVA_CLIENT_ID` | Viva Wallet client ID |
+| `REMACC_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
+| `REMACC_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
+| `REMACC_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |

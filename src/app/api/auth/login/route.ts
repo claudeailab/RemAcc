@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
   const { username, password } = parsed.data;
 
   // Auto-seed first admin with Administrators group
-  const adminUsername = process.env.WETMAN_ADMIN_USERNAME;
-  const adminPassword = process.env.WETMAN_ADMIN_PASSWORD;
+  const adminUsername = process.env.REMACC_ADMIN_USERNAME;
+  const adminPassword = process.env.REMACC_ADMIN_PASSWORD;
   if (adminUsername && adminPassword) {
     const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.username, adminUsername)).limit(1);
     if (!existing) {

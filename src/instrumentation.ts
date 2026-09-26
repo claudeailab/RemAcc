@@ -110,27 +110,27 @@ export async function register() {
       } catch { /* column already dropped or doesn't exist */ }
     }
 
-    // Seed feature catalog from WETMAN_FEATURE_CATALOG (once, if table is empty)
-    if (process.env.WETMAN_FEATURE_CATALOG) {
+    // Seed feature catalog from REMACC_FEATURE_CATALOG (once, if table is empty)
+    if (process.env.REMACC_FEATURE_CATALOG) {
       const { feature_catalog } = await import("./lib/db/schema");
       const { sql: dsql } = await import("drizzle-orm");
       const [{ n }] = await db.select({ n: dsql<number>`COUNT(*)` }).from(feature_catalog);
       if (!Number(n)) {
-        const names = process.env.WETMAN_FEATURE_CATALOG.split(",").map((s: string) => s.trim()).filter(Boolean);
+        const names = process.env.REMACC_FEATURE_CATALOG.split(",").map((s: string) => s.trim()).filter(Boolean);
         if (names.length) await db.insert(feature_catalog).values(names.map(name => ({ name })));
-        console.log(`Seeded ${names.length} features from WETMAN_FEATURE_CATALOG`);
+        console.log(`Seeded ${names.length} features from REMACC_FEATURE_CATALOG`);
       }
     }
 
-    // Seed plans from WETMAN_PLANS (once, if plans table is empty)
-    if (process.env.WETMAN_PLANS) {
+    // Seed plans from REMACC_PLANS (once, if plans table is empty)
+    if (process.env.REMACC_PLANS) {
       try {
         const { plans: plansTable } = await import("./lib/db/schema");
         const { sql: dsql } = await import("drizzle-orm");
         const [{ n }] = await db.select({ n: dsql<number>`COUNT(*)` }).from(plansTable);
         if (!Number(n)) {
           type SeedPlan = { name: string; monthlyPrice?: number; yearlyPrice?: number; features?: string[] };
-          const seedPlans: SeedPlan[] = JSON.parse(process.env.WETMAN_PLANS);
+          const seedPlans: SeedPlan[] = JSON.parse(process.env.REMACC_PLANS);
           for (const p of seedPlans) {
             await db.insert(plansTable).values({
               name: p.name,
@@ -139,7 +139,7 @@ export async function register() {
               features: JSON.stringify(Array.isArray(p.features) ? p.features : []),
             });
           }
-          console.log(`Seeded ${seedPlans.length} plans from WETMAN_PLANS`);
+          console.log(`Seeded ${seedPlans.length} plans from REMACC_PLANS`);
         }
       } catch { /* invalid JSON */ }
     }
@@ -155,7 +155,7 @@ export async function register() {
     },
   });
 
-  if (process.env.WETMAN_SMTP_ENABLED === "true") {
+  if (process.env.REMACC_SMTP_ENABLED === "true") {
     checks.push({
       name: "SMTP",
       check: async () => {
@@ -169,7 +169,7 @@ export async function register() {
     });
   }
 
-  if (process.env.WETMAN_ANTHROPIC_ENABLED === "true") {
+  if (process.env.REMACC_ANTHROPIC_ENABLED === "true") {
     checks.push({
       name: "Anthropic",
       check: async () => {
@@ -180,7 +180,7 @@ export async function register() {
     });
   }
 
-  if (process.env.WETMAN_OPENAI_ENABLED === "true") {
+  if (process.env.REMACC_OPENAI_ENABLED === "true") {
     checks.push({
       name: "OpenAI",
       check: async () => {
@@ -191,7 +191,7 @@ export async function register() {
     });
   }
 
-  if (process.env.WETMAN_STRIPE_ENABLED === "true") {
+  if (process.env.REMACC_STRIPE_ENABLED === "true") {
     checks.push({
       name: "Stripe",
       check: async () => {
@@ -202,7 +202,7 @@ export async function register() {
     });
   }
 
-  if (process.env.WETMAN_M365_ENABLED === "true") {
+  if (process.env.REMACC_M365_ENABLED === "true") {
     checks.push({
       name: "M365",
       check: async () => {
