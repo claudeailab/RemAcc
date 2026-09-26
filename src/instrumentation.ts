@@ -89,6 +89,39 @@ export async function register() {
         \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      `CREATE TABLE IF NOT EXISTS \`webapp_credentials\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`name\` varchar(255) NOT NULL,
+        \`username\` varchar(255) NOT NULL,
+        \`password\` text NOT NULL,
+        \`domain\` varchar(255),
+        \`notes\` text,
+        \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      `CREATE TABLE IF NOT EXISTS \`webapp_folders\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`name\` varchar(255) NOT NULL,
+        \`parent_id\` int,
+        \`credential_id\` int,
+        \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      `CREATE TABLE IF NOT EXISTS \`webapp_connections\` (
+        \`id\` int NOT NULL AUTO_INCREMENT,
+        \`name\` varchar(255) NOT NULL,
+        \`host\` varchar(255) NOT NULL,
+        \`port\` int,
+        \`protocol\` varchar(10) NOT NULL DEFAULT 'rdp',
+        \`folder_id\` int,
+        \`credential_id\` int,
+        \`notes\` text,
+        \`created_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP,
+        \`updated_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`id\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
     ];
     for (const sql of stmts) {
       await db.execute(sql as unknown as Parameters<typeof db.execute>[0]);
