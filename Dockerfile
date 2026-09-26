@@ -19,10 +19,10 @@ RUN --mount=type=cache,target=/root/.npm \
     rm -rf /tmp/bcrypt-pkg
 
 USER appuser
-EXPOSE 8099
-ENV PORT=8099 HOSTNAME=0.0.0.0
+EXPOSE 8020
+ENV PORT=8020 HOSTNAME=0.0.0.0
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8099/api/health || exit 1
+  CMD wget -qO- http://127.0.0.1:8020/api/health || exit 1
 
 CMD ["node", "server.js"]

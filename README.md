@@ -119,7 +119,7 @@ services:
       REMACC_OPENAI_MODEL: ${REMACC_OPENAI_MODEL}
       REMACC_OPENAI_API_KEY: ${REMACC_OPENAI_API_KEY}
     ports:
-      - 8099:8099
+      - 8020:8020
     volumes:
       - ./config/webapp/data:/data
     networks:
@@ -133,7 +133,7 @@ services:
         - wget
         - -qO
         - /dev/null
-        - http://127.0.0.1:8099/api/health
+        - http://127.0.0.1:8020/api/health
       interval: 30s
       timeout: 5s
       retries: 3

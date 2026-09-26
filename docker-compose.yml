@@ -24,11 +24,11 @@ services:
       REMACC_OPENAI_ENABLED: ${REMACC_OPENAI_ENABLED}
       REMACC_STRIPE_ENABLED: ${REMACC_STRIPE_ENABLED}
     ports:
-      - ${PORT:-8099}:8099
+      - ${PORT:-8020}:8020
     volumes:
       - ./config/app/data:/data
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8099/api/health"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8020/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
