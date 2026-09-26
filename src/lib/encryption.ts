@@ -1,6 +1,6 @@
 import crypto from "crypto";
 
-const KEY = crypto.createHash("sha256").update(process.env.WEBAPP_ENCRYPTION_KEY ?? "").digest();
+const KEY = crypto.createHash("sha256").update(process.env.WETMAN_ENCRYPTION_KEY ?? "").digest();
 const ALGO = "aes-256-gcm";
 
 // Env var overrides for settings — when set, they take precedence over the DB.
@@ -9,45 +9,45 @@ const ALGO = "aes-256-gcm";
 export function getEnvOverride(key: string): string | undefined {
   switch (key) {
     // AI
-    case "anthropic_enabled":       return process.env.WEBAPP_ANTHROPIC_ENABLED;
-    case "anthropic_apiKey":        return process.env.WEBAPP_ANTHROPIC_API_KEY;
-    case "anthropic_model":         return process.env.WEBAPP_ANTHROPIC_MODEL;
-    case "openai_enabled":          return process.env.WEBAPP_OPENAI_ENABLED;
-    case "openai_apiKey":           return process.env.WEBAPP_OPENAI_API_KEY;
-    case "openai_model":            return process.env.WEBAPP_OPENAI_MODEL;
+    case "anthropic_enabled":       return process.env.WETMAN_ANTHROPIC_ENABLED;
+    case "anthropic_apiKey":        return process.env.WETMAN_ANTHROPIC_API_KEY;
+    case "anthropic_model":         return process.env.WETMAN_ANTHROPIC_MODEL;
+    case "openai_enabled":          return process.env.WETMAN_OPENAI_ENABLED;
+    case "openai_apiKey":           return process.env.WETMAN_OPENAI_API_KEY;
+    case "openai_model":            return process.env.WETMAN_OPENAI_MODEL;
     // Email / SMTP
-    case "smtp_enabled":            return process.env.WEBAPP_SMTP_ENABLED;
-    case "smtp_host":               return process.env.WEBAPP_SMTP_HOST;
-    case "smtp_port":               return process.env.WEBAPP_SMTP_PORT;
-    case "smtp_ssl":                return process.env.WEBAPP_SMTP_SSL;
-    case "smtp_user":               return process.env.WEBAPP_SMTP_USER;
-    case "smtp_password":           return process.env.WEBAPP_SMTP_PASSWORD;
-    case "smtp_fromName":           return process.env.WEBAPP_SMTP_FROM_NAME;
-    case "smtp_fromEmail":          return process.env.WEBAPP_SMTP_FROM_EMAIL;
+    case "smtp_enabled":            return process.env.WETMAN_SMTP_ENABLED;
+    case "smtp_host":               return process.env.WETMAN_SMTP_HOST;
+    case "smtp_port":               return process.env.WETMAN_SMTP_PORT;
+    case "smtp_ssl":                return process.env.WETMAN_SMTP_SSL;
+    case "smtp_user":               return process.env.WETMAN_SMTP_USER;
+    case "smtp_password":           return process.env.WETMAN_SMTP_PASSWORD;
+    case "smtp_fromName":           return process.env.WETMAN_SMTP_FROM_NAME;
+    case "smtp_fromEmail":          return process.env.WETMAN_SMTP_FROM_EMAIL;
     // Microsoft 365
-    case "m365_enabled":            return process.env.WEBAPP_M365_ENABLED;
-    case "m365_clientId":           return process.env.WEBAPP_M365_CLIENT_ID;
-    case "m365_clientSecret":       return process.env.WEBAPP_M365_CLIENT_SECRET;
-    case "m365_tenantId":           return process.env.WEBAPP_M365_TENANT_ID;
-    case "m365_expiryDate":         return process.env.WEBAPP_M365_EXPIRY_DATE;
-    case "m365_reminderDays":       return process.env.WEBAPP_M365_REMINDER_DAYS;
+    case "m365_enabled":            return process.env.WETMAN_M365_ENABLED;
+    case "m365_clientId":           return process.env.WETMAN_M365_CLIENT_ID;
+    case "m365_clientSecret":       return process.env.WETMAN_M365_CLIENT_SECRET;
+    case "m365_tenantId":           return process.env.WETMAN_M365_TENANT_ID;
+    case "m365_expiryDate":         return process.env.WETMAN_M365_EXPIRY_DATE;
+    case "m365_reminderDays":       return process.env.WETMAN_M365_REMINDER_DAYS;
     // Stripe
-    case "stripe_enabled":          return process.env.WEBAPP_STRIPE_ENABLED;
-    case "stripe_liveMode":         return process.env.WEBAPP_STRIPE_LIVE_MODE;
-    case "stripe_publishableKey":   return process.env.WEBAPP_STRIPE_PUBLISHABLE_KEY;
-    case "stripe_secretKey":        return process.env.WEBAPP_STRIPE_SECRET_KEY;
-    case "stripe_webhookSecret":    return process.env.WEBAPP_STRIPE_WEBHOOK_SECRET;
+    case "stripe_enabled":          return process.env.WETMAN_STRIPE_ENABLED;
+    case "stripe_liveMode":         return process.env.WETMAN_STRIPE_LIVE_MODE;
+    case "stripe_publishableKey":   return process.env.WETMAN_STRIPE_PUBLISHABLE_KEY;
+    case "stripe_secretKey":        return process.env.WETMAN_STRIPE_SECRET_KEY;
+    case "stripe_webhookSecret":    return process.env.WETMAN_STRIPE_WEBHOOK_SECRET;
     // PayPal
-    case "paypal_enabled":          return process.env.WEBAPP_PAYPAL_ENABLED;
-    case "paypal_liveMode":         return process.env.WEBAPP_PAYPAL_LIVE_MODE;
-    case "paypal_clientId":         return process.env.WEBAPP_PAYPAL_CLIENT_ID;
-    case "paypal_clientSecret":     return process.env.WEBAPP_PAYPAL_CLIENT_SECRET;
+    case "paypal_enabled":          return process.env.WETMAN_PAYPAL_ENABLED;
+    case "paypal_liveMode":         return process.env.WETMAN_PAYPAL_LIVE_MODE;
+    case "paypal_clientId":         return process.env.WETMAN_PAYPAL_CLIENT_ID;
+    case "paypal_clientSecret":     return process.env.WETMAN_PAYPAL_CLIENT_SECRET;
     // Viva Wallet
-    case "vivawallet_enabled":      return process.env.WEBAPP_VIVA_ENABLED;
-    case "vivawallet_liveMode":     return process.env.WEBAPP_VIVA_LIVE_MODE;
-    case "vivawallet_clientId":     return process.env.WEBAPP_VIVA_CLIENT_ID;
-    case "vivawallet_clientSecret": return process.env.WEBAPP_VIVA_CLIENT_SECRET;
-    case "vivawallet_merchantId":   return process.env.WEBAPP_VIVA_MERCHANT_ID;
+    case "vivawallet_enabled":      return process.env.WETMAN_VIVA_ENABLED;
+    case "vivawallet_liveMode":     return process.env.WETMAN_VIVA_LIVE_MODE;
+    case "vivawallet_clientId":     return process.env.WETMAN_VIVA_CLIENT_ID;
+    case "vivawallet_clientSecret": return process.env.WETMAN_VIVA_CLIENT_SECRET;
+    case "vivawallet_merchantId":   return process.env.WETMAN_VIVA_MERCHANT_ID;
     default:                        return undefined;
   }
 }

@@ -68,7 +68,7 @@ Add the service to your `docker-compose.yml` and define the variables in a `.env
 ```yaml
 services:
   webapp:
-    image: ghcr.io/claudeailab/webapp
+    image: ghcr.io/claudeailab/wetman
     container_name: webapp
     hostname: webapp
     restart: unless-stopped
@@ -76,50 +76,50 @@ services:
     environment:
       TZ: ${TZ}
 
-      WEBAPP_JWT_SECRET: ${WEBAPP_JWT_SECRET}
-      WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
-      WEBAPP_ADMIN_JWT_SECRET: ${WEBAPP_ADMIN_JWT_SECRET}
+      WETMAN_JWT_SECRET: ${WETMAN_JWT_SECRET}
+      WETMAN_ENCRYPTION_KEY: ${WETMAN_ENCRYPTION_KEY}
+      WETMAN_ADMIN_JWT_SECRET: ${WETMAN_ADMIN_JWT_SECRET}
 
-      WEBAPP_ADMIN_USERNAME: ${WEBAPP_ADMIN_USERNAME}
-      WEBAPP_ADMIN_PASSWORD: ${WEBAPP_ADMIN_PASSWORD}
+      WETMAN_ADMIN_USERNAME: ${WETMAN_ADMIN_USERNAME}
+      WETMAN_ADMIN_PASSWORD: ${WETMAN_ADMIN_PASSWORD}
 
-      WEBAPP_DB_HOST: ${WEBAPP_DB_HOST}
-      WEBAPP_DB_PORT: ${WEBAPP_DB_PORT}
-      WEBAPP_DB_USER: ${WEBAPP_DB_USER}
-      WEBAPP_DB_NAME: ${WEBAPP_DB_NAME}
-      WEBAPP_DB_PASSWORD: ${WEBAPP_DB_PASSWORD}
+      WETMAN_DB_HOST: ${WETMAN_DB_HOST}
+      WETMAN_DB_PORT: ${WETMAN_DB_PORT}
+      WETMAN_DB_USER: ${WETMAN_DB_USER}
+      WETMAN_DB_NAME: ${WETMAN_DB_NAME}
+      WETMAN_DB_PASSWORD: ${WETMAN_DB_PASSWORD}
 
-      WEBAPP_SMTP_ENABLED: ${WEBAPP_SMTP_ENABLED}
-      WEBAPP_SMTP_SSL: ${WEBAPP_SMTP_SSL}
-      WEBAPP_SMTP_HOST: ${WEBAPP_SMTP_HOST}
-      WEBAPP_SMTP_PORT: ${WEBAPP_SMTP_PORT}
-      WEBAPP_SMTP_USER: ${WEBAPP_SMTP_USER}
-      WEBAPP_SMTP_PASSWORD: ${WEBAPP_SMTP_PASSWORD}
-      WEBAPP_SMTP_FROM_NAME: ${WEBAPP_SMTP_FROM_NAME}
-      WEBAPP_SMTP_FROM_EMAIL: ${WEBAPP_SMTP_FROM_EMAIL}
+      WETMAN_SMTP_ENABLED: ${WETMAN_SMTP_ENABLED}
+      WETMAN_SMTP_SSL: ${WETMAN_SMTP_SSL}
+      WETMAN_SMTP_HOST: ${WETMAN_SMTP_HOST}
+      WETMAN_SMTP_PORT: ${WETMAN_SMTP_PORT}
+      WETMAN_SMTP_USER: ${WETMAN_SMTP_USER}
+      WETMAN_SMTP_PASSWORD: ${WETMAN_SMTP_PASSWORD}
+      WETMAN_SMTP_FROM_NAME: ${WETMAN_SMTP_FROM_NAME}
+      WETMAN_SMTP_FROM_EMAIL: ${WETMAN_SMTP_FROM_EMAIL}
 
-      WEBAPP_M365_ENABLED: ${WEBAPP_M365_ENABLED}
-      WEBAPP_M365_CLIENT_ID: ${WEBAPP_M365_CLIENT_ID}
-      WEBAPP_M365_TENANT_ID: ${WEBAPP_M365_TENANT_ID}
-      WEBAPP_M365_CLIENT_SECRET: ${WEBAPP_M365_CLIENT_SECRET}
-      WEBAPP_M365_EXPIRY_DATE: ${WEBAPP_M365_EXPIRY_DATE}
-      WEBAPP_M365_REMINDER_DAYS: ${WEBAPP_M365_REMINDER_DAYS}
+      WETMAN_M365_ENABLED: ${WETMAN_M365_ENABLED}
+      WETMAN_M365_CLIENT_ID: ${WETMAN_M365_CLIENT_ID}
+      WETMAN_M365_TENANT_ID: ${WETMAN_M365_TENANT_ID}
+      WETMAN_M365_CLIENT_SECRET: ${WETMAN_M365_CLIENT_SECRET}
+      WETMAN_M365_EXPIRY_DATE: ${WETMAN_M365_EXPIRY_DATE}
+      WETMAN_M365_REMINDER_DAYS: ${WETMAN_M365_REMINDER_DAYS}
 
-      WEBAPP_STRIPE_ENABLED: ${WEBAPP_STRIPE_ENABLED}
-      WEBAPP_STRIPE_LIVE_MODE: ${WEBAPP_STRIPE_LIVE_MODE}
-      WEBAPP_STRIPE_PUBLISHABLE_KEY: ${WEBAPP_STRIPE_PUBLISHABLE_KEY}
-      WEBAPP_STRIPE_SECRET_KEY: ${WEBAPP_STRIPE_SECRET_KEY}
-      WEBAPP_STRIPE_WEBHOOK_SECRET: ${WEBAPP_STRIPE_WEBHOOK_SECRET}
+      WETMAN_STRIPE_ENABLED: ${WETMAN_STRIPE_ENABLED}
+      WETMAN_STRIPE_LIVE_MODE: ${WETMAN_STRIPE_LIVE_MODE}
+      WETMAN_STRIPE_PUBLISHABLE_KEY: ${WETMAN_STRIPE_PUBLISHABLE_KEY}
+      WETMAN_STRIPE_SECRET_KEY: ${WETMAN_STRIPE_SECRET_KEY}
+      WETMAN_STRIPE_WEBHOOK_SECRET: ${WETMAN_STRIPE_WEBHOOK_SECRET}
 
-      WEBAPP_ANTHROPIC_ENABLED: ${WEBAPP_ANTHROPIC_ENABLED}
-      WEBAPP_ANTHROPIC_MODEL: ${WEBAPP_ANTHROPIC_MODEL}
-      WEBAPP_ANTHROPIC_API_KEY: ${WEBAPP_ANTHROPIC_API_KEY}
+      WETMAN_ANTHROPIC_ENABLED: ${WETMAN_ANTHROPIC_ENABLED}
+      WETMAN_ANTHROPIC_MODEL: ${WETMAN_ANTHROPIC_MODEL}
+      WETMAN_ANTHROPIC_API_KEY: ${WETMAN_ANTHROPIC_API_KEY}
 
-      WEBAPP_OPENAI_ENABLED: ${WEBAPP_OPENAI_ENABLED}
-      WEBAPP_OPENAI_MODEL: ${WEBAPP_OPENAI_MODEL}
-      WEBAPP_OPENAI_API_KEY: ${WEBAPP_OPENAI_API_KEY}
+      WETMAN_OPENAI_ENABLED: ${WETMAN_OPENAI_ENABLED}
+      WETMAN_OPENAI_MODEL: ${WETMAN_OPENAI_MODEL}
+      WETMAN_OPENAI_API_KEY: ${WETMAN_OPENAI_API_KEY}
     ports:
-      - 8095:8095
+      - 8099:8099
     volumes:
       - ./config/webapp/data:/data
     networks:
@@ -133,7 +133,7 @@ services:
         - wget
         - -qO
         - /dev/null
-        - http://127.0.0.1:8095/api/health
+        - http://127.0.0.1:8099/api/health
       interval: 30s
       timeout: 5s
       retries: 3
@@ -157,47 +157,47 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | Variable | Description |
 |---|---|
 | `TZ` | Timezone (e.g. `UTC`) |
-| `WEBAPP_JWT_SECRET` | Session signing secret |
-| `WEBAPP_ADMIN_JWT_SECRET` | Admin JWT signing secret |
-| `WEBAPP_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
-| `WEBAPP_ADMIN_USERNAME` | Seeds first admin user on first boot (used as login username) |
-| `WEBAPP_ADMIN_PASSWORD` | Seeds first admin password on first boot |
-| `WEBAPP_DB_HOST` | MySQL host |
-| `WEBAPP_DB_PORT` | MySQL port (default: `3306`) |
-| `WEBAPP_DB_USER` | MySQL user |
-| `WEBAPP_DB_PASSWORD` | MySQL password |
-| `WEBAPP_DB_NAME` | MySQL database name |
-| `WEBAPP_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
-| `WEBAPP_ANTHROPIC_API_KEY` | Anthropic API key |
-| `WEBAPP_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
-| `WEBAPP_OPENAI_ENABLED` | Enable OpenAI (`true`/`false`, default `true`) |
-| `WEBAPP_OPENAI_API_KEY` | OpenAI API key |
-| `WEBAPP_OPENAI_MODEL` | OpenAI model (default: `gpt-4o`) |
-| `WEBAPP_SMTP_ENABLED` | Enable SMTP email (`true`/`false`, default `true`) |
-| `WEBAPP_SMTP_HOST` | SMTP hostname |
-| `WEBAPP_SMTP_PORT` | SMTP port |
-| `WEBAPP_SMTP_SSL` | SMTP TLS (`true`/`false`) |
-| `WEBAPP_SMTP_USER` | SMTP username |
-| `WEBAPP_SMTP_PASSWORD` | SMTP password |
-| `WEBAPP_SMTP_FROM_NAME` | Sender display name |
-| `WEBAPP_SMTP_FROM_EMAIL` | Sender email address |
-| `WEBAPP_M365_ENABLED` | Enable Microsoft 365 (`true`/`false`, default `true`) |
-| `WEBAPP_M365_CLIENT_ID` | Azure app client ID |
-| `WEBAPP_M365_CLIENT_SECRET` | Azure app client secret |
-| `WEBAPP_M365_TENANT_ID` | Azure tenant ID |
-| `WEBAPP_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
-| `WEBAPP_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
-| `WEBAPP_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
-| `WEBAPP_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
-| `WEBAPP_STRIPE_SECRET_KEY` | Stripe secret key |
-| `WEBAPP_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
-| `WEBAPP_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
-| `WEBAPP_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
-| `WEBAPP_PAYPAL_CLIENT_ID` | PayPal client ID |
-| `WEBAPP_PAYPAL_CLIENT_SECRET` | PayPal client secret |
-| `WEBAPP_PAYPAL_LIVE_MODE` | PayPal live mode (`true`/`false`) |
-| `WEBAPP_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
-| `WEBAPP_VIVA_CLIENT_ID` | Viva Wallet client ID |
-| `WEBAPP_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
-| `WEBAPP_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
-| `WEBAPP_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |
+| `WETMAN_JWT_SECRET` | Session signing secret |
+| `WETMAN_ADMIN_JWT_SECRET` | Admin JWT signing secret |
+| `WETMAN_ENCRYPTION_KEY` | 64-char hex key for AES-256-GCM settings encryption |
+| `WETMAN_ADMIN_USERNAME` | Seeds first admin user on first boot (used as login username) |
+| `WETMAN_ADMIN_PASSWORD` | Seeds first admin password on first boot |
+| `WETMAN_DB_HOST` | MySQL host |
+| `WETMAN_DB_PORT` | MySQL port (default: `3306`) |
+| `WETMAN_DB_USER` | MySQL user |
+| `WETMAN_DB_PASSWORD` | MySQL password |
+| `WETMAN_DB_NAME` | MySQL database name |
+| `WETMAN_ANTHROPIC_ENABLED` | Enable Anthropic (`true`/`false`, default `true`) |
+| `WETMAN_ANTHROPIC_API_KEY` | Anthropic API key |
+| `WETMAN_ANTHROPIC_MODEL` | Anthropic model (default: `claude-sonnet-4-6`) |
+| `WETMAN_OPENAI_ENABLED` | Enable OpenAI (`true`/`false`, default `true`) |
+| `WETMAN_OPENAI_API_KEY` | OpenAI API key |
+| `WETMAN_OPENAI_MODEL` | OpenAI model (default: `gpt-4o`) |
+| `WETMAN_SMTP_ENABLED` | Enable SMTP email (`true`/`false`, default `true`) |
+| `WETMAN_SMTP_HOST` | SMTP hostname |
+| `WETMAN_SMTP_PORT` | SMTP port |
+| `WETMAN_SMTP_SSL` | SMTP TLS (`true`/`false`) |
+| `WETMAN_SMTP_USER` | SMTP username |
+| `WETMAN_SMTP_PASSWORD` | SMTP password |
+| `WETMAN_SMTP_FROM_NAME` | Sender display name |
+| `WETMAN_SMTP_FROM_EMAIL` | Sender email address |
+| `WETMAN_M365_ENABLED` | Enable Microsoft 365 (`true`/`false`, default `true`) |
+| `WETMAN_M365_CLIENT_ID` | Azure app client ID |
+| `WETMAN_M365_CLIENT_SECRET` | Azure app client secret |
+| `WETMAN_M365_TENANT_ID` | Azure tenant ID |
+| `WETMAN_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
+| `WETMAN_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
+| `WETMAN_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
+| `WETMAN_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
+| `WETMAN_STRIPE_SECRET_KEY` | Stripe secret key |
+| `WETMAN_STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret |
+| `WETMAN_STRIPE_LIVE_MODE` | Stripe live mode (`true`/`false`) |
+| `WETMAN_PAYPAL_ENABLED` | Enable PayPal (`true`/`false`) |
+| `WETMAN_PAYPAL_CLIENT_ID` | PayPal client ID |
+| `WETMAN_PAYPAL_CLIENT_SECRET` | PayPal client secret |
+| `WETMAN_PAYPAL_LIVE_MODE` | PayPal live mode (`true`/`false`) |
+| `WETMAN_VIVA_ENABLED` | Enable Viva Wallet (`true`/`false`) |
+| `WETMAN_VIVA_CLIENT_ID` | Viva Wallet client ID |
+| `WETMAN_VIVA_CLIENT_SECRET` | Viva Wallet client secret |
+| `WETMAN_VIVA_MERCHANT_ID` | Viva Wallet merchant ID |
+| `WETMAN_VIVA_LIVE_MODE` | Viva Wallet live mode (`true`/`false`) |

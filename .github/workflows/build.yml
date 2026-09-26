@@ -69,7 +69,7 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          outputs: type=image,name=ghcr.io/claudeailab/webapp,push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=ghcr.io/claudeailab/wetman,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
 
@@ -121,6 +121,6 @@ jobs:
         working-directory: /tmp/digests
         run: |
           docker buildx imagetools create \
-            -t ghcr.io/claudeailab/webapp:latest \
-            -t "ghcr.io/claudeailab/webapp:v${{ steps.version.outputs.version }}" \
-            $(printf 'ghcr.io/claudeailab/webapp@sha256:%s ' *)
+            -t ghcr.io/claudeailab/wetman:latest \
+            -t "ghcr.io/claudeailab/wetman:v${{ steps.version.outputs.version }}" \
+            $(printf 'ghcr.io/claudeailab/wetman@sha256:%s ' *)

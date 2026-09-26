@@ -1,34 +1,34 @@
 services:
 
   app:
-    image: ghcr.io/claudeailab/webapp
+    image: ghcr.io/claudeailab/wetman
     container_name: app
     hostname: app
     restart: unless-stopped
     user: "0"
     environment:
       TZ: ${TZ}
-      WEBAPP_JWT_SECRET: ${WEBAPP_JWT_SECRET}
-      WEBAPP_ENCRYPTION_KEY: ${WEBAPP_ENCRYPTION_KEY}
-      WEBAPP_ADMIN_JWT_SECRET: ${WEBAPP_ADMIN_JWT_SECRET}
-      WEBAPP_ADMIN_EMAIL: ${WEBAPP_ADMIN_EMAIL}
-      WEBAPP_ADMIN_PASSWORD: ${WEBAPP_ADMIN_PASSWORD}
-      WEBAPP_DB_HOST: ${WEBAPP_DB_HOST}
-      WEBAPP_DB_PORT: ${WEBAPP_DB_PORT}
-      WEBAPP_DB_USER: ${WEBAPP_DB_USER}
-      WEBAPP_DB_PASSWORD: ${WEBAPP_DB_PASSWORD}
-      WEBAPP_DB_NAME: ${WEBAPP_DB_NAME}
-      WEBAPP_M365_ENABLED: ${WEBAPP_M365_ENABLED}
-      WEBAPP_SMTP_ENABLED: ${WEBAPP_SMTP_ENABLED}
-      WEBAPP_ANTHROPIC_ENABLED: ${WEBAPP_ANTHROPIC_ENABLED}
-      WEBAPP_OPENAI_ENABLED: ${WEBAPP_OPENAI_ENABLED}
-      WEBAPP_STRIPE_ENABLED: ${WEBAPP_STRIPE_ENABLED}
+      WETMAN_JWT_SECRET: ${WETMAN_JWT_SECRET}
+      WETMAN_ENCRYPTION_KEY: ${WETMAN_ENCRYPTION_KEY}
+      WETMAN_ADMIN_JWT_SECRET: ${WETMAN_ADMIN_JWT_SECRET}
+      WETMAN_ADMIN_EMAIL: ${WETMAN_ADMIN_EMAIL}
+      WETMAN_ADMIN_PASSWORD: ${WETMAN_ADMIN_PASSWORD}
+      WETMAN_DB_HOST: ${WETMAN_DB_HOST}
+      WETMAN_DB_PORT: ${WETMAN_DB_PORT}
+      WETMAN_DB_USER: ${WETMAN_DB_USER}
+      WETMAN_DB_PASSWORD: ${WETMAN_DB_PASSWORD}
+      WETMAN_DB_NAME: ${WETMAN_DB_NAME}
+      WETMAN_M365_ENABLED: ${WETMAN_M365_ENABLED}
+      WETMAN_SMTP_ENABLED: ${WETMAN_SMTP_ENABLED}
+      WETMAN_ANTHROPIC_ENABLED: ${WETMAN_ANTHROPIC_ENABLED}
+      WETMAN_OPENAI_ENABLED: ${WETMAN_OPENAI_ENABLED}
+      WETMAN_STRIPE_ENABLED: ${WETMAN_STRIPE_ENABLED}
     ports:
-      - ${PORT:-8095}:8095
+      - ${PORT:-8099}:8099
     volumes:
       - ./config/app/data:/data
     healthcheck:
-      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8095/api/health"]
+      test: ["CMD", "wget", "-qO", "/dev/null", "http://localhost:8099/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
