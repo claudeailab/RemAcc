@@ -36,7 +36,8 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
   useEffect(() => {
     if (!containerRef.current) return;
     let cancelled = false;
-    let term: { write: (d: unknown) => void; onData: (cb: (d: string) => void) => void; onResize: (cb: (s: { cols: number; rows: number }) => void) => void; dispose: () => void; loadAddon: (a: unknown) => void; open: (el: HTMLElement) => void } | null = null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let term: any = null;
     let ws: WebSocket | null = null;
     const obs = new ResizeObserver(() => fitRef.current?.fit());
 
