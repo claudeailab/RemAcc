@@ -225,6 +225,17 @@ async function main() {
 
   startGuacd();
 
+  // Verify critical directories exist
+  const fs = require('fs');
+  const staticDir = require('path').join(__dirname, '.next', 'static');
+  const publicDir = require('path').join(__dirname, 'public');
+  log(`Checking .next/static: ${fs.existsSync(staticDir) ? 'EXISTS' : 'MISSING'}`);
+  if (fs.existsSync(staticDir)) {
+    const chunks = require('path').join(staticDir, 'chunks');
+    log(`  chunks/: ${fs.existsSync(chunks) ? 'EXISTS ('+fs.readdirSync(chunks).length+' files)' : 'MISSING'}`);
+  }
+  log(`Checking public/: ${fs.existsSync(publicDir) ? 'EXISTS ('+fs.readdirSync(publicDir).length+' files)' : 'MISSING'}`);
+
   log('Loading Next.js server...');
   let NextServer, conf;
   try {
