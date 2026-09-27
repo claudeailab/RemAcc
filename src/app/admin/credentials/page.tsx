@@ -5,7 +5,6 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Loader2, Plus, Pencil, Trash2, KeyRound, Eye, EyeOff } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
@@ -132,14 +131,6 @@ export default function CredentialsPage() {
                     {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Domain <span className={muted}>(optional)</span></Label>
-                <Input placeholder="MYDOMAIN" value={form.domain} onChange={e => setForm(f => ({ ...f, domain: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Notes <span className={muted}>(optional)</span></Label>
-                <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>

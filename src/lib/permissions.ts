@@ -1,6 +1,7 @@
 export const PLATFORM_PERMISSIONS = [
   { key: "administrator", label: "Administrator (Admin Panel Access)" },
   { key: "access_dashboard", label: "Access Dashboard" },
+  { key: "view_remote_connections", label: "View Remote Connections" },
   { key: "manage_subscription", label: "Manage Subscription" },
   { key: "view_billing", label: "View Billing" },
   { key: "edit_profile", label: "Edit Profile" },

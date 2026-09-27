@@ -5,10 +5,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
 import { Loader2, Plus, Pencil, Trash2, Monitor } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
@@ -162,8 +160,8 @@ export default function ConnectionsPage() {
                   <Input placeholder="192.168.1.10" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label>Port <span className={muted}>(opt)</span></Label>
-                  <Input placeholder="3389" type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+                  <Label>Port <span className={muted}>(optional)</span></Label>
+                  <Input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
                 </div>
               </div>
               <div className="flex flex-col gap-1.5">
@@ -196,10 +194,6 @@ export default function ConnectionsPage() {
                     {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name} ({c.username})</SelectItem>)}
                   </SelectContent>
                 </Select>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Notes <span className={muted}>(optional)</span></Label>
-                <Textarea rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
               </div>
             </div>
             <DialogFooter>
