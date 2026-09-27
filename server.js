@@ -3,25 +3,32 @@ process.env.NODE_ENV = 'production';
 const http = require('http');
 const net = require('net');
 const { spawn } = require('child_process');
-const { WebSocketServer } = require('ws');
-const { Client: SSHClient } = require('ssh2');
 
 const hostname = process.env.HOSTNAME ?? '0.0.0.0';
 const port = parseInt(process.env.PORT ?? '8020', 10);
+
+function log(msg) { console.log(`[${new Date().toISOString()}] ${msg}`); }
+function err(msg) { console.error(`[${new Date().toISOString()}] ${msg}`); }
+
+process.on('uncaughtException', e => { err(`UNCAUGHT: ${e.stack ?? e}`); process.exit(1); });
+process.on('unhandledRejection', (r) => { err(`UNHANDLED REJECTION: ${r?.stack ?? r}`); });
 
 // ---------------------------------------------------------------------------
 // Start guacd for in-browser RDP/VNC support
 // ---------------------------------------------------------------------------
 function startGuacd() {
-  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'error'], {
+  log('Starting guacd...');
+  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'info'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   guacd.stdout?.on('data', d => process.stdout.write('[guacd] ' + d));
   guacd.stderr?.on('data', d => process.stderr.write('[guacd] ' + d));
-  guacd.on('error', err => {
-    if (err.code === 'ENOENT') console.log('guacd not found; RDP/VNC unavailable');
-    else console.error('[guacd] error:', err.message);
+  guacd.on('spawn', () => log('guacd spawned (pid ' + guacd.pid + ')'));
+  guacd.on('error', e => {
+    if (e.code === 'ENOENT') log('guacd not found — RDP/VNC unavailable');
+    else err('[guacd] spawn error: ' + e.message);
   });
+  guacd.on('exit', (code, signal) => log(`guacd exited code=${code} signal=${signal}`));
   process.on('exit', () => { try { guacd.kill(); } catch {} });
 }
 
@@ -69,18 +76,21 @@ const VNC_DEFAULTS = {
 // Guacamole WebSocket relay (RDP + VNC via guacd)
 // ---------------------------------------------------------------------------
 async function handleGuac(wsConn, req, id, protocol) {
+  log(`WS ${protocol.toUpperCase()} connection id=${id}`);
   let details;
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
       headers: { cookie: req.headers.cookie ?? '' },
     });
     if (!res.ok) {
+      err(`WS ${protocol} id=${id}: connect API returned ${res.status}`);
       wsConn.send(guacEncode(['error', 'Access denied', '0']));
       wsConn.close(1008);
       return;
     }
     details = await res.json();
-  } catch (err) {
+  } catch (e) {
+    err(`WS ${protocol} id=${id}: connect API error: ${e.message}`);
     wsConn.close(1011);
     return;
   }
@@ -95,14 +105,14 @@ async function handleGuac(wsConn, req, id, protocol) {
     ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
   };
 
-  // Wait for first browser message (guacamole-common-js connect handshake) then start guacd
   wsConn.once('message', () => {
     const tcp = new net.Socket();
     let buf = '';
     let streaming = false;
 
-    tcp.on('error', err => {
-      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', err.message, '514']));
+    tcp.on('error', e => {
+      err(`WS ${protocol} id=${id}: guacd TCP error: ${e.message}`);
+      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', e.message, '514']));
       try { wsConn.close(1011); } catch {}
     });
 
@@ -116,10 +126,10 @@ async function handleGuac(wsConn, req, id, protocol) {
         const opcode = parts[0];
 
         if (opcode === 'args') {
-          // Build connect instruction: map guacd's expected arg names to our values
           const values = parts.slice(1).map(name => params[name] ?? '');
           tcp.write(guacEncode(['connect', ...values]));
         } else if (opcode === 'ready') {
+          log(`WS ${protocol} id=${id}: guacd ready`);
           streaming = true;
           if (wsConn.readyState === 1) wsConn.send(instr);
         } else if (streaming) {
@@ -130,30 +140,32 @@ async function handleGuac(wsConn, req, id, protocol) {
 
     tcp.on('close', () => { try { wsConn.close(); } catch {} });
 
-    // Relay subsequent browser messages to guacd once streaming
     wsConn.on('message', data => {
       if (streaming) tcp.write(data.toString());
     });
     wsConn.on('close', () => tcp.destroy());
 
-    // Connect to guacd and send SELECT
     tcp.connect(4822, '127.0.0.1', () => {
+      log(`WS ${protocol} id=${id}: connected to guacd`);
       tcp.write(guacEncode(['select', protocol]));
     });
   });
 
-  wsConn.on('close', () => {}); // handled inside once('message')
+  wsConn.on('close', () => {});
 }
 
 // ---------------------------------------------------------------------------
 // SSH WebSocket proxy
 // ---------------------------------------------------------------------------
 async function handleSSH(wsConn, req, id) {
+  log(`WS SSH connection id=${id}`);
   try {
+    const { Client: SSHClient } = require('ssh2');
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
       headers: { cookie: req.headers.cookie ?? '' },
     });
     if (!res.ok) {
+      err(`WS SSH id=${id}: connect API returned ${res.status}`);
       wsConn.send('\r\n\x1b[31mAccess denied\x1b[0m\r\n');
       wsConn.close(1008);
       return;
@@ -167,8 +179,9 @@ async function handleSSH(wsConn, req, id) {
 
     const ssh = new SSHClient();
     ssh.on('ready', () => {
-      ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (err, stream) => {
-        if (err) { wsConn.close(1011); return; }
+      log(`WS SSH id=${id}: SSH ready`);
+      ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (e, stream) => {
+        if (e) { err(`WS SSH id=${id}: shell error: ${e.message}`); wsConn.close(1011); return; }
         stream.on('data', data => { if (wsConn.readyState === 1) wsConn.send(data); });
         stream.stderr.on('data', data => { if (wsConn.readyState === 1) wsConn.send(data); });
         stream.on('close', () => { try { wsConn.close(); } catch {} });
@@ -182,8 +195,9 @@ async function handleSSH(wsConn, req, id) {
         wsConn.on('close', () => { try { stream.end(); ssh.end(); } catch {} });
       });
     });
-    ssh.on('error', err => {
-      if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mSSH error: ${err.message}\x1b[0m\r\n`);
+    ssh.on('error', e => {
+      err(`WS SSH id=${id}: ${e.message}`);
+      if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mSSH error: ${e.message}\x1b[0m\r\n`);
       try { wsConn.close(1011); } catch {}
     });
     ssh.connect({
@@ -191,8 +205,9 @@ async function handleSSH(wsConn, req, id) {
       username: details.credential.username, password: details.credential.password,
       readyTimeout: 15000, keepaliveInterval: 15000,
     });
-  } catch (err) {
-    if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mError: ${err.message}\x1b[0m\r\n`);
+  } catch (e) {
+    err(`WS SSH id=${id}: ${e.stack ?? e.message}`);
+    if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mError: ${e.message}\x1b[0m\r\n`);
     try { wsConn.close(1011); } catch {}
   }
 }
@@ -201,34 +216,77 @@ async function handleSSH(wsConn, req, id) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
+  log(`Starting server — node ${process.version} port=${port}`);
+  log(`ENV: NODE_ENV=${process.env.NODE_ENV} HOSTNAME=${hostname}`);
+
+  // Log which required env vars are set (values redacted)
+  const envKeys = ['REMACC_JWT_SECRET','REMACC_DB_HOST','REMACC_DB_PORT','REMACC_DB_USER','REMACC_DB_NAME','REMACC_ADMIN_EMAIL'];
+  for (const k of envKeys) log(`  ${k}=${process.env[k] ? '(set)' : 'MISSING'}`);
+
   startGuacd();
 
-  const NextServer = require('./node_modules/next/dist/server/next-server').default;
-  const conf = require('./.next/required-server-files.json');
+  log('Loading Next.js server...');
+  let NextServer, conf;
+  try {
+    NextServer = require('./node_modules/next/dist/server/next-server').default;
+    conf = require('./.next/required-server-files.json');
+    log('Next.js modules loaded');
+  } catch (e) {
+    err('Failed to load Next.js modules: ' + (e.stack ?? e));
+    process.exit(1);
+  }
+
   const app = new NextServer({
     dir: __dirname, port, hostname, customServer: true,
     conf: conf.config, minimalMode: true,
   });
+
+  log('Preparing Next.js app...');
+  try {
+    await app.prepare();
+    log('Next.js app prepared');
+  } catch (e) {
+    err('Next.js prepare() failed: ' + (e.stack ?? e));
+    process.exit(1);
+  }
+
   const nextHandler = app.getRequestHandler();
 
   const server = http.createServer(async (req, res) => {
-    try { await nextHandler(req, res); }
-    catch (err) { if (!res.headersSent) { res.statusCode = 500; res.end('Internal Server Error'); } }
+    const start = Date.now();
+    try {
+      await nextHandler(req, res);
+    } catch (e) {
+      err(`Request ${req.method} ${req.url} error: ${e.stack ?? e}`);
+      if (!res.headersSent) { res.statusCode = 500; res.end('Internal Server Error'); }
+    } finally {
+      if (req.url !== '/api/health') {
+        log(`${req.method} ${req.url} ${res.statusCode} ${Date.now() - start}ms`);
+      }
+    }
   });
 
+  const { WebSocketServer } = require('ws');
   const wss = new WebSocketServer({ noServer: true });
   server.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '';
+    log(`WS upgrade: ${url}`);
     const mSsh = url.match(/^\/ws\/ssh\/(\d+)$/);
     const mRdp = url.match(/^\/ws\/rdp\/(\d+)$/);
     const mVnc = url.match(/^\/ws\/vnc\/(\d+)$/);
     if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
     else if (mRdp) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mRdp[1], 10), 'rdp'));
     else if (mVnc) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mVnc[1], 10), 'vnc'));
-    else socket.destroy();
+    else { log(`WS upgrade rejected: ${url}`); socket.destroy(); }
   });
 
-  server.listen(port, hostname, () => console.log(`> Ready on http://${hostname}:${port}`));
+  await new Promise((resolve, reject) => {
+    server.on('error', reject);
+    server.listen(port, hostname, () => {
+      log(`Ready on http://${hostname}:${port}`);
+      resolve();
+    });
+  });
 }
 
-main().catch(err => { console.error(err); process.exit(1); });
+main().catch(e => { err('FATAL: ' + (e.stack ?? e)); process.exit(1); });
