@@ -5,8 +5,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Loader2, Monitor, Folder, FolderOpen, Search,
-  Copy, Check, Download, X, Menu, Terminal,
+  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
 
@@ -19,9 +18,6 @@ interface Session {
   id: number;
   name: string;
   protocol: string;
-  host: string;
-  port: number;
-  credential: ConnectDetails["credential"];
 }
 
 const PROTO_BADGE: Record<string, string> = {
@@ -30,107 +26,9 @@ const PROTO_BADGE: Record<string, string> = {
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
-function CopyButton({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false);
-  function copy() {
-    navigator.clipboard.writeText(value);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  }
-  return (
-    <button onClick={copy} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground transition-colors shrink-0">
-      {copied ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
-    </button>
-  );
-}
-
-function DetailRow({ label, value, secret }: { label: string; value: string; secret?: boolean }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="flex items-center justify-between gap-2 py-1.5 border-b last:border-0">
-      <span className="text-xs text-muted-foreground w-20 shrink-0">{label}</span>
-      <span className={`text-sm font-mono flex-1 min-w-0 truncate ${secret && !show ? "blur-sm select-none" : ""}`}>{value}</span>
-      <div className="flex items-center gap-1 shrink-0">
-        {secret && (
-          <button onClick={() => setShow(v => !v)} className="p-1 rounded hover:bg-secondary text-muted-foreground hover:text-foreground text-xs">
-            {show ? "hide" : "show"}
-          </button>
-        )}
-        <CopyButton value={value} />
-      </div>
-    </div>
-  );
-}
-
-function CredPanel({ session, active }: { session: Session; active: boolean }) {
-  function downloadRdp() {
-    const lines = [
-      "screen mode id:i:2", "use multimon:i:0", "desktopwidth:i:1920",
-      "desktopheight:i:1080", "session bpp:i:32", "compression:i:1",
-      "keyboardhook:i:2", "audiocapturemode:i:0", "videoplaybackmode:i:1",
-      "connection type:i:7", "networkautodetect:i:1", "bandwidthautodetect:i:1",
-      "displayconnectionbar:i:1",
-      `full address:s:${session.host}:${session.port}`,
-      `username:s:${session.credential?.domain ? `${session.credential.domain}\\` : ""}${session.credential?.username ?? ""}`,
-      "authentication level:i:2", "prompt for credentials:i:0",
-      "negotiate security layer:i:1", "enablecredsspsupport:i:1",
-    ];
-    const blob = new Blob([lines.join("\r\n")], { type: "application/rdp" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${session.name.replace(/[^a-z0-9]/gi, "_")}.rdp`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <div
-      className="absolute inset-0 flex items-start justify-center p-8 overflow-y-auto"
-      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
-    >
-      <div className="w-full max-w-md space-y-4">
-        <div className="flex items-center gap-2">
-          <Monitor className="h-5 w-5 text-muted-foreground" />
-          <h2 className="font-semibold text-lg">{session.name}</h2>
-          <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[session.protocol] ?? ""}`}>
-            {session.protocol.toUpperCase()}
-          </span>
-        </div>
-        <div className="rounded-lg border p-3 space-y-0">
-          <DetailRow label="Host" value={session.host} />
-          <DetailRow label="Port" value={String(session.port)} />
-          {session.credential && (
-            <>
-              {session.credential.domain && <DetailRow label="Domain" value={session.credential.domain} />}
-              <DetailRow label="Username" value={session.credential.username} />
-              <DetailRow label="Password" value={session.credential.password} secret />
-            </>
-          )}
-          {!session.credential && (
-            <p className={`text-xs py-2 ${muted}`}>No credentials configured.</p>
-          )}
-        </div>
-        {session.protocol === "rdp" && (
-          <Button className="w-full" onClick={downloadRdp}>
-            <Download className="h-4 w-4 mr-2" />
-            Download .rdp file
-          </Button>
-        )}
-        {session.protocol === "vnc" && session.credential && (
-          <div className="rounded-lg border p-3">
-            <p className={`text-xs mb-1.5 ${muted}`}>VNC URL</p>
-            <div className="flex items-center gap-2">
-              <code className="text-xs font-mono flex-1 truncate">{`vnc://${session.host}:${session.port}`}</code>
-              <CopyButton value={`vnc://${session.host}:${session.port}`} />
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
+// ---------------------------------------------------------------------------
+// SSH Panel — xterm.js over WebSocket
+// ---------------------------------------------------------------------------
 function SshPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fitRef = useRef<{ fit: () => void } | null>(null);
@@ -167,12 +65,10 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}`);
       ws.binaryType = "arraybuffer";
-
       ws.onopen = () => { fit.fit(); };
       ws.onmessage = e => {
-        if (!term) return;
         const data = e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : e.data;
-        term.write(data as string);
+        term?.write(data as string);
       };
       ws.onclose = () => term?.write("\r\n\x1b[33m[Session closed]\x1b[0m\r\n");
       ws.onerror = () => term?.write("\r\n\x1b[31m[Connection error]\x1b[0m\r\n");
@@ -185,7 +81,7 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       });
     }
 
-    start().catch(e => console.error("SSH panel init error", e));
+    start().catch(e => console.error("SSH panel error", e));
 
     return () => {
       cancelled = true;
@@ -203,18 +99,113 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
   return (
     <div
       className="absolute inset-0"
-      style={{
-        opacity: active ? 1 : 0,
-        pointerEvents: active ? "auto" : "none",
-        background: "#111111",
-        padding: "8px",
-      }}
+      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none", background: "#111111", padding: "8px" }}
     >
       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
     </div>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Guacamole Panel — RDP + VNC in-browser via guacd
+// ---------------------------------------------------------------------------
+function GuacPanel({ session, active }: { session: Session; active: boolean }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef(active);
+  useEffect(() => { activeRef.current = active; }, [active]);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    let cancelled = false;
+    let client: any = null;
+    let keyboard: any = null;
+    let obs: ResizeObserver | null = null;
+
+    async function start() {
+      // guacamole-common-js is CommonJS; handle default export
+      const mod = await import("guacamole-common-js");
+      const Guac = (mod as any).default ?? mod;
+      if (cancelled || !containerRef.current) return;
+
+      const proto = location.protocol === "https:" ? "wss:" : "ws:";
+      const wsPath = session.protocol === "rdp"
+        ? `/ws/rdp/${session.id}`
+        : `/ws/vnc/${session.id}`;
+      const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
+      client = new Guac.Client(tunnel);
+
+      const display = client.getDisplay();
+      const displayEl: HTMLElement = display.getElement();
+      displayEl.style.position = "absolute";
+      displayEl.style.top = "50%";
+      displayEl.style.left = "50%";
+      displayEl.style.transform = "translate(-50%, -50%)";
+      containerRef.current.appendChild(displayEl);
+
+      function scaleDisplay() {
+        const cw = containerRef.current?.offsetWidth ?? 1;
+        const ch = containerRef.current?.offsetHeight ?? 1;
+        const dw = display.getWidth();
+        const dh = display.getHeight();
+        if (dw === 0 || dh === 0) return;
+        const scale = Math.min(cw / dw, ch / dh);
+        display.scale(scale);
+      }
+
+      display.onresize = scaleDisplay;
+      obs = new ResizeObserver(scaleDisplay);
+      obs.observe(containerRef.current);
+
+      // Mouse
+      const mouse = new Guac.Mouse(displayEl);
+      const sendMouse = (state: any) => { if (activeRef.current && client) client.sendMouseState(state); };
+      mouse.onmousedown = sendMouse;
+      mouse.onmouseup = sendMouse;
+      mouse.onmousemove = sendMouse;
+
+      // Keyboard on document (activeRef gates which panel processes it)
+      keyboard = new Guac.Keyboard(document);
+      keyboard.onkeydown = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(1, keysym); };
+      keyboard.onkeyup = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(0, keysym); };
+
+      tunnel.onerror = (err: any) => console.error("[Guac tunnel]", err);
+      client.onerror = (err: any) => console.error("[Guac client]", err);
+
+      // client.connect() triggers the first WS message; server ignores it and handles auth from DB
+      client.connect();
+    }
+
+    start().catch(e => console.error("GuacPanel error", e));
+
+    return () => {
+      cancelled = true;
+      obs?.disconnect();
+      if (keyboard) { try { keyboard.reset(); } catch {} }
+      if (client) { try { client.disconnect(); } catch {} }
+      client = null;
+    };
+  }, [session.id, session.protocol]);
+
+  useEffect(() => {
+    if (active) setTimeout(() => {
+      // Trigger resize recalculation when becoming active
+      window.dispatchEvent(new Event("resize"));
+    }, 50);
+  }, [active]);
+
+  return (
+    <div
+      className="absolute inset-0 overflow-hidden bg-black"
+      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
+    >
+      <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Dashboard
+// ---------------------------------------------------------------------------
 let sessionCounter = 0;
 
 export default function DashboardPage() {
@@ -247,18 +238,9 @@ export default function DashboardPage() {
     try {
       const r = await fetch(`/api/connections/${conn.id}/connect`);
       const d = await r.json();
-      if (!r.ok) { toast.error(d.error ?? "Failed to get connection details"); return; }
+      if (!r.ok) { toast.error(d.error ?? "Connection failed"); return; }
       const key = `s${++sessionCounter}`;
-      const session: Session = {
-        key,
-        id: conn.id,
-        name: conn.name,
-        protocol: conn.protocol,
-        host: d.host,
-        port: d.port,
-        credential: d.credential,
-      };
-      setSessions(prev => [...prev, session]);
+      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol }]);
       setActiveKey(key);
     } finally { setConnecting(null); }
   }
@@ -333,12 +315,7 @@ export default function DashboardPage() {
       <div className="p-2 border-b">
         <div className="relative">
           <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            className="pl-8 h-8 text-sm"
-            placeholder="Search…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
+          <Input className="pl-8 h-8 text-sm" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-1.5">
@@ -382,9 +359,7 @@ export default function DashboardPage() {
               key={s.key}
               onClick={() => setActiveKey(s.key)}
               className={`flex items-center gap-1.5 px-3 h-7 rounded text-xs whitespace-nowrap transition-colors shrink-0 ${
-                activeKey === s.key
-                  ? "bg-secondary font-medium"
-                  : "hover:bg-secondary/60 text-muted-foreground"
+                activeKey === s.key ? "bg-secondary font-medium" : "hover:bg-secondary/60 text-muted-foreground"
               }`}
             >
               {s.protocol === "ssh" ? <Terminal className="h-3 w-3 shrink-0" /> : <Monitor className="h-3 w-3 shrink-0" />}
@@ -403,14 +378,11 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Body: sidebar + content */}
+      {/* Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile overlay backdrop */}
+        {/* Mobile backdrop */}
         {sidebarOpen && (
-          <div
-            className="md:hidden absolute inset-0 z-10 bg-black/50"
-            onClick={() => setSidebarOpen(false)}
-          />
+          <div className="md:hidden absolute inset-0 z-10 bg-black/50" onClick={() => setSidebarOpen(false)} />
         )}
 
         {/* Sidebar */}
@@ -430,16 +402,13 @@ export default function DashboardPage() {
           {sidebarContent}
         </div>
 
-        {/* Content area */}
+        {/* Session area */}
         <div className="flex-1 relative overflow-hidden">
           {sessions.length === 0 ? (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <Monitor className="h-10 w-10 text-muted-foreground/30" />
               <p className={`text-sm ${muted}`}>Select a connection to start a session</p>
-              <button
-                className="md:hidden text-xs text-primary underline"
-                onClick={() => setSidebarOpen(true)}
-              >
+              <button className="md:hidden text-xs text-primary underline" onClick={() => setSidebarOpen(true)}>
                 Open connections
               </button>
             </div>
@@ -448,7 +417,7 @@ export default function DashboardPage() {
               s.protocol === "ssh" ? (
                 <SshPanel key={s.key} session={s} active={s.key === activeKey} />
               ) : (
-                <CredPanel key={s.key} session={s} active={s.key === activeKey} />
+                <GuacPanel key={s.key} session={s} active={s.key === activeKey} />
               )
             )
           )}
