@@ -14,6 +14,68 @@ process.on('uncaughtException', e => { err(`UNCAUGHT: ${e.stack ?? e}`); process
 process.on('unhandledRejection', (r) => { err(`UNHANDLED REJECTION: ${r?.stack ?? r}`); });
 
 // ---------------------------------------------------------------------------
+// Session grace period — keeps SSH/RDP/VNC alive after browser disconnect
+// ---------------------------------------------------------------------------
+const pendingSessions = new Map(); // key: `ssh:id` | `rdp:id` | `vnc:id`
+let _cachedGrace = 0;
+let _graceLastFetch = 0;
+
+async function getSessionGrace() {
+  const now = Date.now();
+  if (now - _graceLastFetch > 30000) {
+    try {
+      const r = await fetch(`http://127.0.0.1:${port}/api/admin/settings/connections`);
+      if (r.ok) _cachedGrace = (await r.json()).sessionGrace ?? 0;
+    } catch {}
+    _graceLastFetch = now;
+  }
+  return _cachedGrace;
+}
+
+function storePendingSession(key, grace, sessionData, cleanupFn) {
+  const expires = Date.now() + grace * 1000;
+  pendingSessions.set(key, { ...sessionData, expires });
+  log(`Session ${key} parked for ${grace}s`);
+  setTimeout(() => {
+    const s = pendingSessions.get(key);
+    if (s && Date.now() >= s.expires) {
+      pendingSessions.delete(key);
+      log(`Session ${key} expired`);
+      cleanupFn(s);
+    }
+  }, grace * 1000 + 500);
+}
+
+// SSH: buffer last 64KB of output so reconnect sees recent terminal state
+class SshSession {
+  constructor(ssh, stream) {
+    this.ssh = ssh;
+    this.stream = stream;
+    this.ws = null;
+    this.buf = Buffer.alloc(0);
+    stream.on('data', d => this._relay(d));
+    stream.stderr.on('data', d => this._relay(d));
+    stream.on('close', () => { if (this.ws?.readyState === 1) { try { this.ws.close(); } catch {} } });
+  }
+  attach(ws) {
+    this.ws = ws;
+    if (this.buf.length > 0) { ws.send(this.buf); this.buf = Buffer.alloc(0); }
+  }
+  detach() { this.ws = null; }
+  write(data) { try { this.stream.write(data); } catch {} }
+  resize(rows, cols) { try { this.stream.setWindow(rows, cols, 0, 0); } catch {} }
+  destroy() { try { this.stream.end(); this.ssh.end(); } catch {} }
+  _relay(d) {
+    if (this.ws?.readyState === 1) {
+      this.ws.send(d);
+    } else {
+      const merged = Buffer.concat([this.buf, d]);
+      this.buf = merged.length > 65536 ? merged.slice(merged.length - 65536) : merged;
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Start guacd for in-browser RDP/VNC support
 // ---------------------------------------------------------------------------
 function startGuacd() {
@@ -77,6 +139,34 @@ const VNC_DEFAULTS = {
 // ---------------------------------------------------------------------------
 async function handleGuac(wsConn, req, id, protocol) {
   log(`WS ${protocol.toUpperCase()} connection id=${id}`);
+
+  // Resume pending session if one exists
+  const key = `${protocol}:${id}`;
+  const pending = pendingSessions.get(key);
+  if (pending && Date.now() < pending.expires) {
+    pendingSessions.delete(key);
+    log(`WS ${protocol} id=${id}: resuming parked session`);
+    const { tcp, params } = pending;
+    let currentWs = wsConn;
+    // Re-attach TCP → WS relay
+    tcp.removeAllListeners('data');
+    let streaming = true;
+    tcp.on('data', chunk => { if (currentWs.readyState === 1) currentWs.send(chunk.toString()); });
+    tcp.on('close', () => { try { currentWs.close(); } catch {} });
+    wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
+    wsConn.on('close', async () => {
+      const grace = await getSessionGrace();
+      if (grace > 0 && !tcp.destroyed) {
+        tcp.removeAllListeners('data');
+        tcp.on('data', () => {}); // drain silently
+        storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
+      } else {
+        try { tcp.destroy(); } catch {}
+      }
+    });
+    return;
+  }
+
   let details;
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
@@ -140,10 +230,18 @@ async function handleGuac(wsConn, req, id, protocol) {
 
     tcp.on('close', () => { try { wsConn.close(); } catch {} });
 
-    wsConn.on('message', data => {
-      if (streaming) tcp.write(data.toString());
+    wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
+    wsConn.on('close', async () => {
+      if (!streaming) { try { tcp.destroy(); } catch {} return; }
+      const grace = await getSessionGrace();
+      if (grace > 0 && !tcp.destroyed) {
+        tcp.removeAllListeners('data');
+        tcp.on('data', () => {}); // drain silently while parked
+        storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
+      } else {
+        try { tcp.destroy(); } catch {}
+      }
     });
-    wsConn.on('close', () => tcp.destroy());
 
     tcp.connect(4822, '127.0.0.1', () => {
       log(`WS ${protocol} id=${id}: connected to guacd`);
@@ -159,6 +257,35 @@ async function handleGuac(wsConn, req, id, protocol) {
 // ---------------------------------------------------------------------------
 async function handleSSH(wsConn, req, id) {
   log(`WS SSH connection id=${id}`);
+
+  // Resume pending session if one exists
+  const key = `ssh:${id}`;
+  const pending = pendingSessions.get(key);
+  if (pending && Date.now() < pending.expires) {
+    pendingSessions.delete(key);
+    log(`WS SSH id=${id}: resuming parked session`);
+    const session = pending.session;
+    session.attach(wsConn);
+    wsConn.send('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
+    wsConn.on('message', raw => {
+      try {
+        const msg = JSON.parse(raw.toString());
+        if (msg.type === 'data') session.write(msg.data);
+        else if (msg.type === 'resize') session.resize(msg.rows, msg.cols);
+      } catch {}
+    });
+    wsConn.on('close', async () => {
+      session.detach();
+      const grace = await getSessionGrace();
+      if (grace > 0) {
+        storePendingSession(key, grace, { session }, s => s.session.destroy());
+      } else {
+        session.destroy();
+      }
+    });
+    return;
+  }
+
   try {
     const { Client: SSHClient } = require('ssh2');
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
@@ -182,17 +309,24 @@ async function handleSSH(wsConn, req, id) {
       log(`WS SSH id=${id}: SSH ready`);
       ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (e, stream) => {
         if (e) { err(`WS SSH id=${id}: shell error: ${e.message}`); wsConn.close(1011); return; }
-        stream.on('data', data => { if (wsConn.readyState === 1) wsConn.send(data); });
-        stream.stderr.on('data', data => { if (wsConn.readyState === 1) wsConn.send(data); });
-        stream.on('close', () => { try { wsConn.close(); } catch {} });
+        const session = new SshSession(ssh, stream);
+        session.attach(wsConn);
         wsConn.on('message', raw => {
           try {
             const msg = JSON.parse(raw.toString());
-            if (msg.type === 'data') stream.write(msg.data);
-            else if (msg.type === 'resize') stream.setWindow(msg.rows, msg.cols, 0, 0);
+            if (msg.type === 'data') session.write(msg.data);
+            else if (msg.type === 'resize') session.resize(msg.rows, msg.cols);
           } catch {}
         });
-        wsConn.on('close', () => { try { stream.end(); ssh.end(); } catch {} });
+        wsConn.on('close', async () => {
+          session.detach();
+          const grace = await getSessionGrace();
+          if (grace > 0) {
+            storePendingSession(key, grace, { session }, s => s.session.destroy());
+          } else {
+            session.destroy();
+          }
+        });
       });
     });
     ssh.on('error', e => {
