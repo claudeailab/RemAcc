@@ -238,7 +238,7 @@ async function main() {
 
   const app = new NextServer({
     dir: __dirname, port, hostname, customServer: true,
-    conf: conf.config, minimalMode: true,
+    conf: conf.config,
   });
 
   log('Preparing Next.js app...');
