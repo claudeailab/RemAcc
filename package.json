@@ -37,6 +37,10 @@
     "stripe": "^22.6.2",
     "tailwind-merge": "^3.7.0",
     "web-push": "^3.6.7",
+    "ws": "^8.18.3",
+    "ssh2": "^1.16.0",
+    "@xterm/xterm": "^5.5.0",
+    "@xterm/addon-fit": "^0.10.0",
     "zod": "^4.6.5"
   },
   "optionalDependencies": {
@@ -53,6 +57,8 @@
     "@types/bcrypt": "^6.0.0",
     "@types/node": "^22.20.4",
     "@types/nodemailer": "^8.0.2",
+    "@types/ws": "^8.5.14",
+    "@types/ssh2": "^1.15.4",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/web-push": "^3.6.4",

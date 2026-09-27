@@ -18,6 +18,15 @@ RUN --mount=type=cache,target=/root/.npm \
     cp -r /tmp/bcrypt-pkg/node_modules/bcrypt /app/node_modules/bcrypt && \
     rm -rf /tmp/bcrypt-pkg
 
+# Install ws and ssh2 for the custom WebSocket SSH proxy server.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefix /tmp/extra-pkg --no-save --no-audit --no-fund ws ssh2 && \
+    cp -r /tmp/extra-pkg/node_modules/. /app/node_modules/ && \
+    rm -rf /tmp/extra-pkg
+
+# Use custom server.js (WebSocket SSH proxy on same port as Next.js).
+COPY --chown=appuser:nodejs server.js ./server.js
+
 USER appuser
 EXPOSE 8020
 ENV PORT=8020 HOSTNAME=0.0.0.0
