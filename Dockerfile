@@ -1,15 +1,22 @@
 # syntax=docker/dockerfile:1
 # Next.js is pre-built on the CI runner; this image just packages the output.
-FROM node:22-slim AS runner
+FROM ubuntu:24.04 AS runner
 WORKDIR /app
+ENV DEBIAN_FRONTEND=noninteractive
 
-# guacd: in-browser RDP/VNC via Apache Guacamole
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      guacd \
-      libguac-client-rdp0 \
-      libguac-client-vnc0 \
-      curl \
+# Node.js 22 (nodesource) + guacd (ubuntu universe) for in-browser RDP/VNC
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      ca-certificates curl gnupg \
+    && mkdir -p /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key \
+       | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" \
+       > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       nodejs \
+       guacd \
+       libguac-client-rdp0 \
+       libguac-client-vnc0 \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
