@@ -263,35 +263,48 @@ async function main() {
 
   const nextHandler = app.getRequestHandler();
 
-  // Serve public/ files explicitly — Next.js standalone custom server does not serve them automatically
+  const path = require('path');
   const mime = {
     '.js': 'application/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
     '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json',
     '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff',
+    '.map': 'application/json', '.txt': 'text/plain',
   };
-  function servePublic(reqPath, res) {
-    const ext = require('path').extname(reqPath);
-    const filePath = require('path').join(publicDir, reqPath);
-    if (!filePath.startsWith(publicDir + require('path').sep) && filePath !== publicDir) return false;
+
+  // Serve a file from disk directly, bypassing Next.js handler
+  function serveFile(baseDir, reqPath, res, noCache = false) {
+    const filePath = path.join(baseDir, reqPath);
+    if (!filePath.startsWith(baseDir + path.sep) && filePath !== baseDir) return false;
     if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return false;
-    const ct = mime[ext] ?? 'application/octet-stream';
-    const noCache = reqPath === '/sw.js' || reqPath === '/manifest.json';
+    const ct = mime[path.extname(filePath)] ?? 'application/octet-stream';
     res.setHeader('Content-Type', ct);
-    res.setHeader('Cache-Control', noCache ? 'no-cache' : 'public, max-age=31536000, immutable');
+    res.setHeader('Cache-Control', noCache ? 'no-cache, no-store' : 'public, max-age=31536000, immutable');
+    res.writeHead(200);
     fs.createReadStream(filePath).pipe(res);
     return true;
   }
+
+  // Log the BUILD_ID and a sample of chunk names so we can verify consistency
+  try {
+    const buildId = fs.readFileSync(path.join(__dirname, '.next', 'BUILD_ID'), 'utf8').trim();
+    const chunkFiles = fs.readdirSync(path.join(staticDir, 'chunks')).slice(0, 5);
+    log(`BUILD_ID: ${buildId}`);
+    log(`Sample chunks: ${chunkFiles.join(', ')}`);
+  } catch {}
 
   const server = http.createServer(async (req, res) => {
     const start = Date.now();
     const urlPath = (req.url ?? '/').split('?')[0];
     try {
-      // Public files first (Next.js standalone doesn't auto-serve them)
+      // Serve /_next/static/ directly from disk — bypass Next.js handler
+      if (urlPath.startsWith('/_next/static/')) {
+        const rel = urlPath.slice('/_next/static'.length);
+        if (serveFile(staticDir, rel, res, false)) return;
+      }
+      // Serve public/ files directly — Next.js standalone doesn't auto-serve them
       if (!urlPath.startsWith('/_next/') && !urlPath.startsWith('/api/')) {
-        if (servePublic(urlPath, res)) {
-          log(`STATIC ${urlPath} 200 ${Date.now() - start}ms`);
-          return;
-        }
+        const noCache = urlPath === '/sw.js' || urlPath === '/manifest.json';
+        if (serveFile(publicDir, urlPath, res, noCache)) return;
       }
       await nextHandler(req, res);
     } catch (e) {
