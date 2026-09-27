@@ -1,5 +1,6 @@
 "use client";
 
+import "@xterm/xterm/css/xterm.css";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -31,14 +32,14 @@ const PROTO_BADGE: Record<string, string> = {
 // ---------------------------------------------------------------------------
 function SshPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const termRef = useRef<any>(null);
+  const wsRef = useRef<WebSocket | null>(null);
   const fitRef = useRef<{ fit: () => void } | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return;
     let cancelled = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let term: any = null;
-    let ws: WebSocket | null = null;
+    let keepalive: ReturnType<typeof setInterval> | null = null;
     const obs = new ResizeObserver(() => fitRef.current?.fit());
 
     async function start() {
@@ -48,14 +49,19 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       ]);
       if (cancelled || !containerRef.current) return;
 
-      term = new Terminal({
+      const term = new Terminal({
         cursorBlink: true,
         fontFamily: '"Cascadia Code", "Fira Code", monospace',
         fontSize: 13,
         lineHeight: 1.2,
-        scrollback: 2000,
+        scrollback: 5000,
+        allowTransparency: false,
+        // Let xterm handle ctrl sequences; we only intercept what the browser steals
+        macOptionIsMeta: false,
         theme: { background: "#111111", foreground: "#e0e0e0", cursor: "#e0e0e0" },
       });
+      termRef.current = term;
+
       const fit = new FitAddon();
       fitRef.current = fit as unknown as { fit: () => void };
       term.loadAddon(fit);
@@ -64,22 +70,47 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       obs.observe(containerRef.current);
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}`);
+      const ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}`);
+      wsRef.current = ws;
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => { fit.fit(); };
+
+      ws.onopen = () => {
+        fit.fit();
+        term.focus();
+      };
       ws.onmessage = e => {
         const data = e.data instanceof ArrayBuffer ? new Uint8Array(e.data) : e.data;
-        term?.write(data as string);
+        term.write(data as string);
       };
-      ws.onclose = () => term?.write("\r\n\x1b[33m[Session closed]\x1b[0m\r\n");
-      ws.onerror = () => term?.write("\r\n\x1b[31m[Connection error]\x1b[0m\r\n");
+      ws.onclose = () => term.write("\r\n\x1b[33m[Session closed]\x1b[0m\r\n");
+      ws.onerror  = () => term.write("\r\n\x1b[31m[Connection error]\x1b[0m\r\n");
 
-      term.onData((d: string) => {
-        if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "data", data: d }));
+      const send = (obj: object) => {
+        if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+      };
+
+      term.onData((d: string) => send({ type: "data", data: d }));
+      term.onResize(({ cols, rows }: { cols: number; rows: number }) => send({ type: "resize", cols, rows }));
+
+      // Ctrl+V — paste from clipboard (browser intercepts it before xterm)
+      term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+        if (e.type !== "keydown") return true;
+        if (e.ctrlKey && !e.altKey && !e.metaKey && e.key === "v") {
+          e.preventDefault();
+          navigator.clipboard.readText().then(t => send({ type: "data", data: t })).catch(() => {});
+          return false;
+        }
+        return true;
       });
-      term.onResize(({ cols, rows }: { cols: number; rows: number }) => {
-        if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "resize", cols, rows }));
+
+      // Right-click paste, like PuTTY
+      term.element?.addEventListener("contextmenu", (e: Event) => {
+        e.preventDefault();
+        navigator.clipboard.readText().then(t => send({ type: "data", data: t })).catch(() => {});
       });
+
+      // Keepalive so idle SSH sessions aren't dropped by the server's TCP timeout
+      keepalive = setInterval(() => send({ type: "ping" }), 25000);
     }
 
     start().catch(e => console.error("SSH panel error", e));
@@ -87,22 +118,40 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
     return () => {
       cancelled = true;
       obs.disconnect();
+      if (keepalive) clearInterval(keepalive);
+      const ws = wsRef.current;
       ws?.close();
-      term?.dispose();
+      termRef.current?.dispose();
+      termRef.current = null;
+      wsRef.current = null;
       fitRef.current = null;
     };
   }, [session.id]);
 
+  // Refocus and refit when this panel becomes the active tab
   useEffect(() => {
-    if (active) setTimeout(() => fitRef.current?.fit(), 50);
+    if (active) {
+      setTimeout(() => {
+        fitRef.current?.fit();
+        termRef.current?.focus();
+      }, 50);
+    }
   }, [active]);
 
   return (
     <div
       className="absolute inset-0"
-      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none", background: "#111111", padding: "8px" }}
+      style={{
+        opacity: active ? 1 : 0,
+        pointerEvents: active ? "auto" : "none",
+        background: "#111111",
+      }}
     >
-      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      {/* padding:8px gives a small gutter; box-sizing keeps the terminal from overflowing */}
+      <div
+        ref={containerRef}
+        style={{ width: "100%", height: "100%", padding: "8px", boxSizing: "border-box" }}
+      />
     </div>
   );
 }
@@ -120,10 +169,11 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     let cancelled = false;
     let client: any = null;
     let keyboard: any = null;
+    let tunnelRef: any = null;
     let obs: ResizeObserver | null = null;
+    let keepalive: ReturnType<typeof setInterval> | null = null;
 
     async function start() {
-      // guacamole-common-js is CommonJS; handle default export
       const mod = await import("guacamole-common-js");
       const Guac = (mod as any).default ?? mod;
       if (cancelled || !containerRef.current) return;
@@ -133,6 +183,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         ? `/ws/rdp/${session.id}`
         : `/ws/vnc/${session.id}`;
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
+      tunnelRef = tunnel;
       client = new Guac.Client(tunnel);
 
       const display = client.getDisplay();
@@ -149,30 +200,31 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        const scale = Math.min(cw / dw, ch / dh);
-        display.scale(scale);
+        display.scale(Math.min(cw / dw, ch / dh));
       }
 
       display.onresize = scaleDisplay;
       obs = new ResizeObserver(scaleDisplay);
       obs.observe(containerRef.current);
 
-      // Mouse
       const mouse = new Guac.Mouse(displayEl);
       const sendMouse = (state: any) => { if (activeRef.current && client) client.sendMouseState(state); };
       mouse.onmousedown = sendMouse;
-      mouse.onmouseup = sendMouse;
+      mouse.onmouseup   = sendMouse;
       mouse.onmousemove = sendMouse;
 
-      // Keyboard on document (activeRef gates which panel processes it)
       keyboard = new Guac.Keyboard(document);
       keyboard.onkeydown = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(1, keysym); };
-      keyboard.onkeyup = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(0, keysym); };
+      keyboard.onkeyup   = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(0, keysym); };
 
       tunnel.onerror = (err: any) => console.error("[Guac tunnel]", err);
       client.onerror = (err: any) => console.error("[Guac client]", err);
 
-      // client.connect() triggers the first WS message; server ignores it and handles auth from DB
+      // Keepalive: send guacamole nop every 25s to prevent idle disconnect
+      keepalive = setInterval(() => {
+        try { tunnel.sendMessage("nop"); } catch {}
+      }, 25000);
+
       client.connect();
     }
 
@@ -181,17 +233,15 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     return () => {
       cancelled = true;
       obs?.disconnect();
+      if (keepalive) clearInterval(keepalive);
       if (keyboard) { try { keyboard.reset(); } catch {} }
-      if (client) { try { client.disconnect(); } catch {} }
+      if (client)   { try { client.disconnect(); } catch {} }
       client = null;
     };
   }, [session.id, session.protocol]);
 
   useEffect(() => {
-    if (active) setTimeout(() => {
-      // Trigger resize recalculation when becoming active
-      window.dispatchEvent(new Event("resize"));
-    }, 50);
+    if (active) setTimeout(() => window.dispatchEvent(new Event("resize")), 50);
   }, [active]);
 
   return (
@@ -234,6 +284,14 @@ export default function DashboardPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleConnect(conn: Connection) {
+    // If this connection already has an open session, just switch to it
+    const existing = sessions.find(s => s.id === conn.id);
+    if (existing) {
+      setActiveKey(existing.key);
+      setSidebarOpen(false);
+      return;
+    }
+
     setConnecting(conn.id);
     setSidebarOpen(false);
     try {
@@ -265,6 +323,7 @@ export default function DashboardPage() {
     : null;
 
   function renderConn(c: Connection) {
+    const connected = sessions.some(s => s.id === c.id);
     return (
       <button
         key={c.id}
@@ -274,7 +333,14 @@ export default function DashboardPage() {
       >
         {connecting === c.id
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
-          : <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          : (
+            <span className="relative shrink-0">
+              <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+              {connected && (
+                <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-green-500 ring-1 ring-background" />
+              )}
+            </span>
+          )
         }
         <span className="text-sm truncate flex-1">{c.name}</span>
         <span className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
@@ -381,7 +447,6 @@ export default function DashboardPage() {
 
       {/* Body */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Mobile backdrop */}
         {sidebarOpen && (
           <div className="md:hidden absolute inset-0 z-10 bg-black/50" onClick={() => setSidebarOpen(false)} />
         )}
