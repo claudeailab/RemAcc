@@ -263,16 +263,43 @@ async function main() {
 
   const nextHandler = app.getRequestHandler();
 
+  // Serve public/ files explicitly — Next.js standalone custom server does not serve them automatically
+  const mime = {
+    '.js': 'application/javascript', '.css': 'text/css', '.svg': 'image/svg+xml',
+    '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json',
+    '.webp': 'image/webp', '.woff2': 'font/woff2', '.woff': 'font/woff',
+  };
+  function servePublic(reqPath, res) {
+    const ext = require('path').extname(reqPath);
+    const filePath = require('path').join(publicDir, reqPath);
+    if (!filePath.startsWith(publicDir + require('path').sep) && filePath !== publicDir) return false;
+    if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) return false;
+    const ct = mime[ext] ?? 'application/octet-stream';
+    const noCache = reqPath === '/sw.js' || reqPath === '/manifest.json';
+    res.setHeader('Content-Type', ct);
+    res.setHeader('Cache-Control', noCache ? 'no-cache' : 'public, max-age=31536000, immutable');
+    fs.createReadStream(filePath).pipe(res);
+    return true;
+  }
+
   const server = http.createServer(async (req, res) => {
     const start = Date.now();
+    const urlPath = (req.url ?? '/').split('?')[0];
     try {
+      // Public files first (Next.js standalone doesn't auto-serve them)
+      if (!urlPath.startsWith('/_next/') && !urlPath.startsWith('/api/')) {
+        if (servePublic(urlPath, res)) {
+          log(`STATIC ${urlPath} 200 ${Date.now() - start}ms`);
+          return;
+        }
+      }
       await nextHandler(req, res);
     } catch (e) {
       err(`Request ${req.method} ${req.url} error: ${e.stack ?? e}`);
       if (!res.headersSent) { res.statusCode = 500; res.end('Internal Server Error'); }
     } finally {
       if (req.url !== '/api/health') {
-        log(`${req.method} ${req.url} ${res.statusCode} ${Date.now() - start}ms`);
+        log(`${req.method} ${req.url} ${res.statusCode ?? '?'} ${Date.now() - start}ms`);
       }
     }
   });
