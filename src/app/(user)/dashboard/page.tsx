@@ -302,6 +302,8 @@ export default function DashboardPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const isDragging = useRef(false);
 
   // Restore sessions from localStorage on mount so a page refresh reconnects
   useEffect(() => {
@@ -332,6 +334,24 @@ export default function DashboardPage() {
     } catch {}
   }, [sessions, activeKey]);
 
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    isDragging.current = true;
+    const startX = e.clientX;
+    const startW = sidebarWidth;
+    function onMove(ev: MouseEvent) {
+      if (!isDragging.current) return;
+      setSidebarWidth(Math.max(160, Math.min(520, startW + ev.clientX - startX)));
+    }
+    function onUp() {
+      isDragging.current = false;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -339,7 +359,6 @@ export default function DashboardPage() {
       const d = await r.json();
       setConnections(d.connections ?? []);
       setFolders(d.folders ?? []);
-      setExpanded(new Set((d.folders ?? []).map((f: FolderRow) => f.id)));
     } finally { setLoading(false); }
   }, []);
 
@@ -514,13 +533,15 @@ export default function DashboardPage() {
         )}
 
         {/* Sidebar */}
-        <div className={`
-          flex-col border-r bg-background overflow-hidden
-          absolute md:relative z-20 md:z-auto
-          w-64 h-full
-          transition-transform duration-200 ease-in-out
-          ${sidebarOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"}
-        `}>
+        <div
+          className={`
+            flex-col border-r bg-background overflow-hidden relative
+            absolute md:relative z-20 md:z-auto h-full
+            transition-transform duration-200 ease-in-out
+            ${sidebarOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"}
+          `}
+          style={{ width: sidebarWidth, minWidth: 160, maxWidth: 520 }}
+        >
           <div className="flex items-center justify-between px-3 py-2 border-b md:hidden">
             <span className="text-sm font-medium">Connections</span>
             <button onClick={() => setSidebarOpen(false)} className="p-1 rounded hover:bg-secondary">
@@ -528,6 +549,11 @@ export default function DashboardPage() {
             </button>
           </div>
           {sidebarContent}
+          {/* Drag handle — desktop only */}
+          <div
+            className="hidden md:block absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-10"
+            onMouseDown={startResize}
+          />
         </div>
 
         {/* Session area */}

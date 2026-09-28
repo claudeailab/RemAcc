@@ -80,7 +80,7 @@ class SshSession {
 // ---------------------------------------------------------------------------
 function startGuacd() {
   log('Starting guacd...');
-  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'info'], {
+  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'debug'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   guacd.stdout?.on('data', d => process.stdout.write('[guacd] ' + d));
@@ -119,14 +119,28 @@ function guacParse(str) {
 }
 
 const RDP_DEFAULTS = {
+  // Core connection
   hostname: '', port: '3389', domain: '', username: '', password: '',
-  width: '1280', height: '800', dpi: '96',
-  'color-depth': '32',
-  'ignore-cert': 'true', security: 'any',
+  // Display
+  width: '1280', height: '800', dpi: '96', 'color-depth': '32',
+  // Security — nla works for most modern Windows; freerdp falls back gracefully
+  security: 'nla',
+  'ignore-cert': 'true',
+  'disable-auth': 'false',
+  // Performance
   'enable-wallpaper': 'false', 'enable-theming': 'false',
   'enable-font-smoothing': 'true', 'enable-desktop-composition': 'false',
   'enable-menu-animations': 'false',
+  // Clipboard + resize
+  'normalize-clipboard': 'true',
+  'resize-method': 'display-update',
+  // Recording
   'create-recording-path': 'false',
+  // Drive/clipboard/audio off by default
+  'enable-drive': 'false',
+  'enable-audio': 'false',
+  // Gatewayed connections (empty = no gateway)
+  'gateway-hostname': '', 'gateway-port': '443', 'gateway-username': '', 'gateway-password': '', 'gateway-domain': '',
 };
 
 const VNC_DEFAULTS = {

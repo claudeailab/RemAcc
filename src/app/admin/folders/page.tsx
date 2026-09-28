@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, Folder, FolderOpen } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface FolderRow { id: number; name: string; parentId: number | null; credentialId: number | null }
@@ -17,6 +17,7 @@ export default function FoldersPage() {
   const [list, setList] = useState<FolderRow[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [deleteError, setDeleteError] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -34,6 +35,14 @@ export default function FoldersPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  function toggleExpanded(id: number) {
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
 
   function openNew() {
     setForm({ id: 0, name: "", parentId: "", credentialId: "" });
@@ -74,29 +83,40 @@ export default function FoldersPage() {
     load();
   }
 
-  // Build simple indented tree
   const roots = list.filter(f => !f.parentId).sort((a, b) => a.name.localeCompare(b.name));
   const children = (parentId: number) => list.filter(f => f.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name));
 
   function renderFolder(f: FolderRow, depth = 0) {
     const cred = credentials.find(c => c.id === f.credentialId);
     const subs = children(f.id);
+    const isOpen = expanded.has(f.id);
     return (
       <div key={f.id}>
-        <div className="flex items-center justify-between rounded-lg border p-4" style={{ marginLeft: depth * 20 }}>
-          <div className="flex items-center gap-3 min-w-0">
-            {subs.length > 0 ? <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" /> : <Folder className="h-4 w-4 text-muted-foreground shrink-0" />}
-            <div className="min-w-0">
-              <p className="font-medium text-sm">{f.name}</p>
-              {cred && <p className={muted}>Credential: {cred.name}</p>}
-            </div>
+        <div
+          className="flex items-center justify-between py-1 px-2 rounded hover:bg-secondary/50 group"
+          style={{ paddingLeft: depth * 16 + 8 }}
+        >
+          <div className="flex items-center gap-1 min-w-0 flex-1">
+            <button
+              onClick={() => subs.length > 0 && toggleExpanded(f.id)}
+              className="shrink-0 p-0.5 rounded text-muted-foreground"
+              style={{ visibility: subs.length > 0 ? "visible" : "hidden" }}
+            >
+              {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+            </button>
+            {isOpen && subs.length > 0
+              ? <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+              : <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            }
+            <span className="text-sm truncate ml-1">{f.name}</span>
+            {cred && <span className={`text-xs truncate ml-1.5 ${muted}`}>({cred.name})</span>}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button size="icon" variant="ghost" onClick={() => openEdit(f)}><Pencil className="h-4 w-4" /></Button>
-            <Button size="icon" variant="ghost" onClick={() => { setDeleteId(f.id); setDeleteError(""); }}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setDeleteId(f.id); setDeleteError(""); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
           </div>
         </div>
-        {subs.map(s => renderFolder(s, depth + 1))}
+        {isOpen && subs.map(s => renderFolder(s, depth + 1))}
       </div>
     );
   }
@@ -114,7 +134,9 @@ export default function FoldersPage() {
         ) : list.length === 0 ? (
           <p className={`text-center py-12 ${muted}`}>No folders yet.</p>
         ) : (
-          <div className="space-y-2">{roots.map(f => renderFolder(f))}</div>
+          <div className="rounded-lg border py-1">
+            {roots.map(f => renderFolder(f))}
+          </div>
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

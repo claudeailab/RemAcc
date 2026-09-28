@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, KeyRound, Eye, EyeOff } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, KeyRound, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface Credential { id: number; name: string; username: string; domain: string | null; notes: string | null }
@@ -18,6 +18,7 @@ export default function CredentialsPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [revealLoading, setRevealLoading] = useState(false);
   const [form, setForm] = useState({ id: 0, name: "", username: "", password: "", domain: "", notes: "" });
 
   const load = useCallback(async () => {
@@ -41,6 +42,18 @@ export default function CredentialsPage() {
     setForm({ id: c.id, name: c.name, username: c.username, password: "", domain: c.domain ?? "", notes: c.notes ?? "" });
     setShowPw(false);
     setDialogOpen(true);
+  }
+
+  async function handleToggleShowPw() {
+    if (form.id && !form.password && !showPw) {
+      setRevealLoading(true);
+      try {
+        const r = await fetch(`/api/admin/credentials/${form.id}`);
+        const d = await r.json();
+        if (r.ok) setForm(f => ({ ...f, password: d.password }));
+      } finally { setRevealLoading(false); }
+    }
+    setShowPw(v => !v);
   }
 
   async function handleSave() {
@@ -127,8 +140,8 @@ export default function CredentialsPage() {
                     autoComplete="new-password"
                     className="pr-10"
                   />
-                  <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground">
-                    {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <button type="button" onClick={handleToggleShowPw} disabled={revealLoading} className="absolute right-2 top-2.5 text-muted-foreground hover:text-foreground disabled:opacity-50">
+                    {revealLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
                 </div>
               </div>
