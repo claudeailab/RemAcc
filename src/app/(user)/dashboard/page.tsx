@@ -213,14 +213,19 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       obs = new ResizeObserver(scaleDisplay);
       obs.observe(containerRef.current);
 
-      const mouse = new Guac.Mouse(displayEl);
-      // Guac.Mouse reports coordinates in screen (post-scale) pixels; remote expects
-      // coordinates in the remote desktop's pixel space — divide by current scale.
+      // Attach mouse to the unscaled container so events are captured everywhere.
+      // state.x/y from Guac.Mouse are relative to the container; subtract the
+      // display element's pixel offset, then divide by scale to get remote coords.
+      const mouse = new Guac.Mouse(containerRef.current);
       const sendMouse = (state: any) => {
         if (!activeRef.current || !client) return;
         const s = scaleRef.current || 1;
-        state.x = Math.round(state.x / s);
-        state.y = Math.round(state.y / s);
+        const offsetX = parseFloat(displayEl.style.left) || 0;
+        const offsetY = parseFloat(displayEl.style.top)  || 0;
+        state.x = Math.round((state.x - offsetX) / s);
+        state.y = Math.round((state.y - offsetY) / s);
+        state.x = Math.max(0, Math.min(display.getWidth()  - 1, state.x));
+        state.y = Math.max(0, Math.min(display.getHeight() - 1, state.y));
         client.sendMouseState(state);
       };
       mouse.onmousedown = sendMouse;
