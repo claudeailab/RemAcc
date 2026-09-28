@@ -156,6 +156,7 @@ export default function ConnectionsPage() {
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
+  const shadowEnabled = shadow.sessionId > 0;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -432,18 +433,23 @@ export default function ConnectionsPage() {
 
               {form.protocol === "rdp" && (
                 <div className="rounded-lg border p-3 space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Shadow Session</p>
-                  <p className={`text-xs ${muted}`}>Equivalent to <code className="font-mono">mstsc /shadow:N /v:IP /control /noConsentPrompt</code></p>
-                  <div className="flex flex-col gap-1.5">
-                    <Label>Session ID <span className={muted}>(0 = disabled)</span></Label>
-                    <Input
-                      type="number" min={0} max={9999} className="w-28"
-                      value={shadow.sessionId}
-                      onChange={e => setShadow(s => ({ ...s, sessionId: Math.max(0, parseInt(e.target.value) || 0) }))}
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Shadow Session</p>
+                    <Switch
+                      checked={shadowEnabled}
+                      onCheckedChange={v => setShadow(s => ({ ...s, sessionId: v ? 1 : 0 }))}
                     />
                   </div>
-                  {shadow.sessionId > 0 && (
-                    <div className="space-y-2">
+                  {shadowEnabled && (
+                    <div className="space-y-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label>Session ID</Label>
+                        <Input
+                          type="number" min={1} max={9999} className="w-28"
+                          value={shadow.sessionId}
+                          onChange={e => setShadow(s => ({ ...s, sessionId: Math.max(1, parseInt(e.target.value) || 1) }))}
+                        />
+                      </div>
                       <div className="flex items-center justify-between">
                         <div>
                           <Label>Control</Label>
