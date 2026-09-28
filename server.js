@@ -220,13 +220,12 @@ async function startDsmProxy(connId, host, vncPort, password) {
   await sleep(500);
 
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
-  const pluginPath = path.join(UVNC_DIR, manifest.uvnc_plugin);
-  const pkeyPath   = manifest.uvnc_pkey ? path.join(UVNC_DIR, manifest.uvnc_pkey) : null;
   const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: winePrefix, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
 
-  // Wine args — UltraVNC Viewer: host::port -dsmplugin plugin.dsm [pkey]
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-password', password, '-dsmplugin', pluginPath];
-  if (pkeyPath) wineArgs.push(pkeyPath);
+  // Use relative plugin filename — cwd is UVNC_DIR so Wine resolves it from there.
+  // The .pkey is auto-discovered by the plugin from the same directory; do NOT pass it
+  // as a positional arg or UltraVNC Viewer will treat it as the server address.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-password', password, '-dsmplugin', manifest.uvnc_plugin];
 
   const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
   procs.push(wine);
