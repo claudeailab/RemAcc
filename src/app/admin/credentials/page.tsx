@@ -93,7 +93,7 @@ export default function CredentialsPage() {
                   <KeyRound className="h-4 w-4 text-muted-foreground shrink-0" />
                   <div className="min-w-0">
                     <p className="font-medium text-sm">{c.name}</p>
-                    <p className={muted}>{c.domain ? `${c.domain}\\` : ""}{c.username}</p>
+                    {(c.username || c.domain) && <p className={muted}>{c.domain ? `${c.domain}\\` : ""}{c.username}</p>}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -114,7 +114,7 @@ export default function CredentialsPage() {
                 <Input placeholder="e.g. Production Admin" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Username</Label>
+                <Label>Username <span className={muted}>(optional)</span></Label>
                 <Input value={form.username} onChange={e => setForm(f => ({ ...f, username: e.target.value }))} autoComplete="off" />
               </div>
               <div className="flex flex-col gap-1.5">

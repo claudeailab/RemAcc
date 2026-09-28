@@ -75,8 +75,8 @@ export default function FoldersPage() {
   }
 
   // Build simple indented tree
-  const roots = list.filter(f => !f.parentId);
-  const children = (parentId: number) => list.filter(f => f.parentId === parentId);
+  const roots = list.filter(f => !f.parentId).sort((a, b) => a.name.localeCompare(b.name));
+  const children = (parentId: number) => list.filter(f => f.parentId === parentId).sort((a, b) => a.name.localeCompare(b.name));
 
   function renderFolder(f: FolderRow, depth = 0) {
     const cred = credentials.find(c => c.id === f.credentialId);
@@ -144,7 +144,7 @@ export default function FoldersPage() {
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {credentials.map(c => (
-                      <SelectItem key={c.id} value={String(c.id)}>{c.name} ({c.username})</SelectItem>
+                      <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

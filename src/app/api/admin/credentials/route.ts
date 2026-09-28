@@ -9,7 +9,7 @@ import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
   name: z.string().min(1),
-  username: z.string().min(1),
+  username: z.string().default(""),
   password: z.string().min(1),
   domain: z.string().optional(),
   notes: z.string().optional(),

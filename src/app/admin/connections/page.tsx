@@ -191,7 +191,7 @@ export default function ConnectionsPage() {
                   <SelectTrigger><SelectValue placeholder="Inherit from folder" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">Inherit from folder</SelectItem>
-                    {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name} ({c.username})</SelectItem>)}
+                    {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

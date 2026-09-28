@@ -68,8 +68,8 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
   const managementItems: NavItem[] = [
     { href: "/admin/connections", label: "Connections", icon: Monitor },
-    { href: "/admin/folders", label: "Folders", icon: Folder },
     { href: "/admin/credentials", label: "Credentials", icon: KeyRound },
+    { href: "/admin/folders", label: "Folders", icon: Folder },
   ];
   const systemItems: NavItem[] = allNavItems.filter(i => i.href !== "/admin" && !managementItems.some(m => m.href === i.href));
 
