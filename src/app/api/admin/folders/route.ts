@@ -25,10 +25,12 @@ export async function POST(req: NextRequest) {
   const parsed = createSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
   const { name, parentId, credentialId } = parsed.data;
-  await db.insert(folders).values({ name, parentId: parentId ?? null, credentialId: credentialId ?? null });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = await db.insert(folders).values({ name, parentId: parentId ?? null, credentialId: credentialId ?? null }) as any;
+  const id: number = result[0].insertId;
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   await logAudit({ userEmail: admin.email, action: "create", resource: "folder", detail: `name=${name}`, ip });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, id });
 }
 
 export async function PUT(req: NextRequest) {
