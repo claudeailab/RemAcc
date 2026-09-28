@@ -258,6 +258,7 @@ async function handleGuac(wsConn, req, id, protocol) {
       cursor: s.cursor ?? 'remote',
     };
   }
+  const shadow = details.options?.shadow ?? {};
   const params = {
     ...base,
     hostname: details.host,
@@ -265,6 +266,13 @@ async function handleGuac(wsConn, req, id, protocol) {
     username: details.credential?.username ?? '',
     password: details.credential?.password ?? '',
     ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
+    // RDP shadow options (passed through to guacd/FreeRDP if supported)
+    ...(shadow.sessionId > 0 ? {
+      'shadow': String(shadow.sessionId),
+      'shadow-control': shadow.control ? 'true' : 'false',
+      'shadow-no-consent': shadow.noConsent ? 'true' : 'false',
+      'read-only': shadow.control ? 'false' : 'true',
+    } : {}),
   };
 
   // Connect to guacd immediately — do not wait for first browser message.

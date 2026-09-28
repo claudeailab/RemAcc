@@ -47,6 +47,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const defaultPort = conn.protocol === "rdp" ? 3389 : conn.protocol === "ssh" ? 22 : 5900;
+  let options: Record<string, unknown> = {};
+  try { if (conn.options) options = JSON.parse(conn.options); } catch {}
   return NextResponse.json({
     id: conn.id,
     name: conn.name,
@@ -54,5 +56,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     port: conn.port ?? defaultPort,
     protocol: conn.protocol,
     credential: cred,
+    options,
   });
 }

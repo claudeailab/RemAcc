@@ -112,6 +112,7 @@ export const connections = mysqlTable("webapp_connections", {
   folderId: int("folder_id"),
   credentialId: int("credential_id"),
   notes: text("notes"),
+  options: text("options"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });

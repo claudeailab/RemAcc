@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import {
   Loader2, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight,
   Folder, FolderOpen, ChevronRight as Chevron, Monitor,
 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
-interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null }
+interface ShadowOptions { sessionId: number; control: boolean; noConsent: boolean }
+interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null; options: string | null }
 interface FolderRow { id: number; name: string; parentId: number | null }
 interface Credential { id: number; name: string; username: string }
 
@@ -153,6 +155,7 @@ export default function ConnectionsPage() {
   const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
   const [draggingId, setDraggingId] = useState<number | null>(null);
   const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
+  const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -173,6 +176,7 @@ export default function ConnectionsPage() {
 
   function openNew() {
     setForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: selectedFolder && selectedFolder !== UNASSIGNED ? String(selectedFolder) : "", credentialId: "", notes: "" });
+    setShadow({ sessionId: 0, control: true, noConsent: true });
     setDialogOpen(true);
   }
 
@@ -184,6 +188,10 @@ export default function ConnectionsPage() {
       credentialId: c.credentialId?.toString() ?? "",
       notes: c.notes ?? "",
     });
+    let opts: Record<string, unknown> = {};
+    try { if (c.options) opts = JSON.parse(c.options); } catch {}
+    const s = (opts.shadow ?? {}) as Partial<ShadowOptions>;
+    setShadow({ sessionId: s.sessionId ?? 0, control: s.control ?? true, noConsent: s.noConsent ?? true });
     setDialogOpen(true);
   }
 
@@ -191,6 +199,10 @@ export default function ConnectionsPage() {
     setSaving(true);
     try {
       const method = form.id ? "PUT" : "POST";
+      const opts: Record<string, unknown> = {};
+      if (form.protocol === "rdp" && shadow.sessionId > 0) {
+        opts.shadow = { sessionId: shadow.sessionId, control: shadow.control, noConsent: shadow.noConsent };
+      }
       const payload = {
         ...(form.id ? { id: form.id } : {}),
         name: form.name, host: form.host,
@@ -199,6 +211,7 @@ export default function ConnectionsPage() {
         folderId: form.folderId ? Number(form.folderId) : null,
         credentialId: form.credentialId ? Number(form.credentialId) : null,
         notes: form.notes || undefined,
+        options: Object.keys(opts).length > 0 ? JSON.stringify(opts) : null,
       };
       const r = await fetch("/api/admin/connections", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
       const d = await r.json();
@@ -225,7 +238,7 @@ export default function ConnectionsPage() {
     const r = await fetch("/api/admin/connections", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: connectionId, name: conn.name, host: conn.host, port: conn.port, protocol: conn.protocol, folderId, credentialId: conn.credentialId }),
+      body: JSON.stringify({ id: connectionId, name: conn.name, host: conn.host, port: conn.port, protocol: conn.protocol, folderId, credentialId: conn.credentialId, options: conn.options }),
     });
     if (!r.ok) {
       toast.error("Move failed");
@@ -416,6 +429,39 @@ export default function ConnectionsPage() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {form.protocol === "rdp" && (
+                <div className="rounded-lg border p-3 space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Shadow Session</p>
+                  <p className={`text-xs ${muted}`}>Equivalent to <code className="font-mono">mstsc /shadow:N /v:IP /control /noConsentPrompt</code></p>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Session ID <span className={muted}>(0 = disabled)</span></Label>
+                    <Input
+                      type="number" min={0} max={9999} className="w-28"
+                      value={shadow.sessionId}
+                      onChange={e => setShadow(s => ({ ...s, sessionId: Math.max(0, parseInt(e.target.value) || 0) }))}
+                    />
+                  </div>
+                  {shadow.sessionId > 0 && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>Control</Label>
+                          <p className={`text-xs ${muted}`}>Take control of the session (not view-only)</p>
+                        </div>
+                        <Switch checked={shadow.control} onCheckedChange={v => setShadow(s => ({ ...s, control: v }))} />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <Label>No Consent Prompt</Label>
+                          <p className={`text-xs ${muted}`}>Shadow without asking the remote user</p>
+                        </div>
+                        <Switch checked={shadow.noConsent} onCheckedChange={v => setShadow(s => ({ ...s, noConsent: v }))} />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
