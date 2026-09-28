@@ -14,6 +14,29 @@ process.on('uncaughtException', e => { err(`UNCAUGHT: ${e.stack ?? e}`); process
 process.on('unhandledRejection', (r) => { err(`UNHANDLED REJECTION: ${r?.stack ?? r}`); });
 
 // ---------------------------------------------------------------------------
+// Protocol settings cache — fetched from API and applied to guacd connections
+// ---------------------------------------------------------------------------
+let _protoSettings = null;
+let _protoLastFetch = 0;
+
+async function getProtoSettings() {
+  const now = Date.now();
+  if (now - _protoLastFetch > 30000) {
+    try {
+      const [rdpR, vncR, sshR] = await Promise.all([
+        fetch(`http://127.0.0.1:${port}/api/admin/settings/rdp`),
+        fetch(`http://127.0.0.1:${port}/api/admin/settings/vnc`),
+        fetch(`http://127.0.0.1:${port}/api/admin/settings/ssh`),
+      ]);
+      const [rdp, vnc, ssh] = await Promise.all([rdpR.json(), vncR.json(), sshR.json()]);
+      _protoSettings = { rdp, vnc, ssh };
+    } catch {}
+    _protoLastFetch = now;
+  }
+  return _protoSettings;
+}
+
+// ---------------------------------------------------------------------------
 // Session grace period — keeps SSH/RDP/VNC alive after browser disconnect
 // ---------------------------------------------------------------------------
 const pendingSessions = new Map(); // key: `ssh:id` | `rdp:id` | `vnc:id`
@@ -169,7 +192,12 @@ async function handleGuac(wsConn, req, id, protocol) {
     let streaming = true;
     tcp.on('data', chunk => { if (currentWs.readyState === 1) currentWs.send(chunk.toString()); });
     tcp.on('close', () => { try { currentWs.close(); } catch {} });
-    wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
+    wsConn.on('message', data => {
+      if (!streaming) return;
+      const str = data.toString();
+      try { const p = guacParse(str); if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return; } catch {}
+      tcp.write(str);
+    });
     wsConn.on('close', async () => {
       const grace = await getSessionGrace();
       if (grace > 0 && !tcp.destroyed) {
@@ -201,7 +229,35 @@ async function handleGuac(wsConn, req, id, protocol) {
     return;
   }
 
-  const base = protocol === 'rdp' ? RDP_DEFAULTS : VNC_DEFAULTS;
+  const proto = await getProtoSettings();
+  let base;
+  if (protocol === 'rdp') {
+    const s = proto?.rdp ?? {};
+    base = {
+      ...RDP_DEFAULTS,
+      security: s.security ?? RDP_DEFAULTS.security,
+      width: String(s.width ?? 1280),
+      height: String(s.height ?? 800),
+      'color-depth': String(s.colorDepth ?? 32),
+      'ignore-cert': (s.ignoreCert ?? true) ? 'true' : 'false',
+      'enable-wallpaper': (s.enableWallpaper ?? false) ? 'true' : 'false',
+      'enable-font-smoothing': (s.enableFontSmoothing ?? true) ? 'true' : 'false',
+      'enable-theming': (s.enableTheming ?? false) ? 'true' : 'false',
+      'normalize-clipboard': (s.normalizeClipboard ?? true) ? 'true' : 'false',
+      'resize-method': s.resizeMethod ?? 'display-update',
+    };
+  } else {
+    const s = proto?.vnc ?? {};
+    base = {
+      ...VNC_DEFAULTS,
+      port: String(s.port ?? 5900),
+      'color-depth': String(s.colorDepth ?? 32),
+      encoding: s.encoding ?? 'tight',
+      'read-only': (s.readOnly ?? false) ? 'true' : 'false',
+      'swap-red-blue': (s.swapRedBlue ?? false) ? 'true' : 'false',
+      cursor: s.cursor ?? 'remote',
+    };
+  }
   const params = {
     ...base,
     hostname: details.host,
@@ -240,6 +296,10 @@ async function handleGuac(wsConn, req, id, protocol) {
         tcp.write(guacEncode(['connect', ...values]));
       } else if (opcode === 'ready') {
         log(`WS ${protocol} id=${id}: guacd ready`);
+        // Inject size before the browser can send 0x0 (container not yet rendered)
+        const w = params.width || '1280';
+        const h = params.height || '800';
+        tcp.write(guacEncode(['size', w, h]));
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
       } else if (streaming) {
@@ -250,7 +310,13 @@ async function handleGuac(wsConn, req, id, protocol) {
 
   tcp.on('close', () => { try { wsConn.close(); } catch {} });
 
-  wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
+  wsConn.on('message', data => {
+    if (!streaming) return;
+    const str = data.toString();
+    log(`WS ${protocol} id=${id}: ← browser: ${str.slice(0, 200)}`);
+    try { const p = guacParse(str); if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) { log(`WS ${protocol} id=${id}: dropped 0x0 size`); return; } } catch {}
+    tcp.write(str);
+  });
   wsConn.on('close', async () => {
     if (!streaming) { try { tcp.destroy(); } catch {} return; }
     const grace = await getSessionGrace();
@@ -351,10 +417,12 @@ async function handleSSH(wsConn, req, id) {
       if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mSSH error: ${e.message}\x1b[0m\r\n`);
       try { wsConn.close(1011); } catch {}
     });
+    const sshProto = (await getProtoSettings())?.ssh ?? {};
     ssh.connect({
       host: details.host, port: details.port,
       username: details.credential.username, password: details.credential.password,
-      readyTimeout: 15000, keepaliveInterval: 15000,
+      readyTimeout: (sshProto.readyTimeout ?? 15) * 1000,
+      keepaliveInterval: (sshProto.keepaliveInterval ?? 25) * 1000,
     });
   } catch (e) {
     err(`WS SSH id=${id}: ${e.stack ?? e.message}`);
