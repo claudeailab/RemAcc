@@ -291,15 +291,18 @@ async function handleGuac(wsConn, req, id, protocol) {
       const opcode = parts[0];
 
       if (opcode === 'args') {
-        const values = parts.slice(1).map(name => params[name] ?? '');
-        log(`WS ${protocol} id=${id}: sending connect (${parts.length - 1} args)`);
-        tcp.write(guacEncode(['connect', ...values]));
-      } else if (opcode === 'ready') {
-        log(`WS ${protocol} id=${id}: guacd ready`);
-        // Inject size before the browser can send 0x0 (container not yet rendered)
+        // Guacamole protocol requires: size + audio + video + image BEFORE connect
         const w = params.width || '1280';
         const h = params.height || '800';
         tcp.write(guacEncode(['size', w, h]));
+        tcp.write(guacEncode(['audio']));
+        tcp.write(guacEncode(['video']));
+        tcp.write(guacEncode(['image', 'image/png', 'image/jpeg', 'image/webp']));
+        const values = parts.slice(1).map(name => params[name] ?? '');
+        log(`WS ${protocol} id=${id}: sending connect (${parts.length - 1} args) size=${w}x${h}`);
+        tcp.write(guacEncode(['connect', ...values]));
+      } else if (opcode === 'ready') {
+        log(`WS ${protocol} id=${id}: guacd ready`);
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
       } else if (streaming) {

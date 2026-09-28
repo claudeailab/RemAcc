@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Loader2, Plus, Pencil, Trash2, CheckCircle2, Search } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
 import { PLATFORM_PERMISSIONS } from "@/lib/permissions";
@@ -51,84 +50,6 @@ function ThemeButton({ value, current, label, onClick }: { value: Theme; current
       <div className={`h-10 w-16 rounded-md ${value === "light" ? "bg-[hsl(40_8%_98%)] border border-border" : value === "dark" ? "bg-[hsl(20_8%_9%)]" : "bg-gradient-to-br from-[hsl(40_8%_98%)] to-[hsl(20_8%_9%)]"}`} />
       <span className="text-sm font-medium">{label}</span>
     </button>
-  );
-}
-
-const GRACE_OPTIONS = [
-  { value: 30,  label: "30 seconds" },
-  { value: 60,  label: "1 minute" },
-  { value: 120, label: "2 minutes" },
-  { value: 300, label: "5 minutes" },
-];
-
-function ConnectionsTab() {
-  const [grace, setGrace] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/admin/settings/connections").then(r => r.json()).then(d => {
-      setGrace(d.sessionGrace ?? 0);
-      setLoading(false);
-    });
-  }, []);
-
-  async function save(newGrace: number) {
-    setSaving(true);
-    try {
-      const r = await fetch("/api/admin/settings/connections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionGrace: newGrace }),
-      });
-      if (r.ok) {
-        setGrace(newGrace);
-        toast.success("Saved");
-      } else {
-        toast.error("Failed to save");
-      }
-    } finally { setSaving(false); }
-  }
-
-  if (loading) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
-
-  return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between rounded-xl border p-4 bg-card">
-        <div>
-          <p className="font-medium text-sm">Keep sessions alive on page refresh</p>
-          <p className="text-xs text-muted-foreground mt-0.5">SSH, RDP, and VNC connections stay open for the grace period if the browser disconnects. Reconnecting within the window resumes the session seamlessly.</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0 ml-4">
-          {saving && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-          <Switch
-            checked={grace > 0}
-            disabled={saving}
-            onCheckedChange={v => save(v ? 60 : 0)}
-          />
-        </div>
-      </div>
-      {grace > 0 && (
-        <div className="rounded-xl border p-4 bg-card">
-          <Label className="text-sm font-medium">Grace period</Label>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-3">How long to keep the session alive after the browser disconnects.</p>
-          <Select
-            value={String(grace)}
-            onValueChange={v => save(parseInt(v, 10))}
-            disabled={saving}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {GRACE_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={String(o.value)}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -784,7 +705,6 @@ export default function SettingsPage() {
             <TabsTrigger value="visual">Visual</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
-            <TabsTrigger value="connections">Connections</TabsTrigger>
           </TabsList>
           <TabsContent value="platform">
             <Card><CardContent className="pt-6"><PlatformTab /></CardContent></Card>
@@ -811,9 +731,6 @@ export default function SettingsPage() {
           </TabsContent>
           <TabsContent value="permissions">
             <Card><CardContent className="pt-6"><PermissionsTab /></CardContent></Card>
-          </TabsContent>
-          <TabsContent value="connections">
-            <Card><CardContent className="pt-6"><ConnectionsTab /></CardContent></Card>
           </TabsContent>
         </Tabs>
       </div>

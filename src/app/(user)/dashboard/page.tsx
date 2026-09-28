@@ -535,12 +535,12 @@ export default function DashboardPage() {
         {/* Sidebar */}
         <div
           className={`
-            flex-col border-r bg-background overflow-hidden relative
+            flex-col border-r bg-background overflow-hidden
             absolute md:relative z-20 md:z-auto h-full
             transition-transform duration-200 ease-in-out
             ${sidebarOpen ? "translate-x-0 flex" : "-translate-x-full md:translate-x-0 hidden md:flex"}
           `}
-          style={{ width: sidebarWidth, minWidth: 160, maxWidth: 520 }}
+          style={{ width: sidebarWidth, minWidth: 160, maxWidth: 520, flexShrink: 0 }}
         >
           <div className="flex items-center justify-between px-3 py-2 border-b md:hidden">
             <span className="text-sm font-medium">Connections</span>
@@ -549,12 +549,13 @@ export default function DashboardPage() {
             </button>
           </div>
           {sidebarContent}
-          {/* Drag handle — desktop only */}
-          <div
-            className="hidden md:block absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary/40 active:bg-primary/60 transition-colors z-10"
-            onMouseDown={startResize}
-          />
         </div>
+
+        {/* Drag handle between sidebar and content — desktop only */}
+        <div
+          className="hidden md:flex items-center justify-center w-1 h-full cursor-col-resize shrink-0 hover:bg-primary/50 active:bg-primary/70 transition-colors z-10"
+          onMouseDown={startResize}
+        />
 
         {/* Session area */}
         <div className="flex-1 relative overflow-hidden">

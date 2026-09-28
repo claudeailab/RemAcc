@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, Monitor } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null }
@@ -20,6 +20,8 @@ const PROTO_BADGE: Record<string, string> = {
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
+const PAGE_SIZE = 50;
+
 export default function ConnectionsPage() {
   const [list, setList] = useState<Connection[]>([]);
   const [folders, setFolders] = useState<FolderRow[]>([]);
@@ -28,6 +30,8 @@ export default function ConnectionsPage() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
 
   const load = useCallback(async () => {
@@ -94,56 +98,111 @@ export default function ConnectionsPage() {
     load();
   }
 
-  function folderPath(folderId: number | null): string {
+  function folderName(folderId: number | null): string {
     if (!folderId) return "";
-    const folder = folders.find(f => f.id === folderId);
-    if (!folder) return "";
-    if (folder.parentId) {
-      const parent = folders.find(f => f.id === folder.parentId);
-      return parent ? `${parent.name} / ${folder.name}` : folder.name;
-    }
-    return folder.name;
+    return folders.find(f => f.id === folderId)?.name ?? "";
+  }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(c =>
+      c.name.toLowerCase().includes(q) ||
+      c.host.toLowerCase().includes(q) ||
+      c.protocol.includes(q)
+    );
+  }, [list, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function handleSearch(v: string) {
+    setSearch(v);
+    setPage(1);
   }
 
   return (
     <div className={pageWrapper}>
       <div className={pageInner}>
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h1 className={pageTitle}>Connections</h1>
-          <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-1" />Add Connection</Button>
+          <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-1" />Add</Button>
+        </div>
+
+        <div className="relative mb-3">
+          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            className="pl-8 h-8 text-sm"
+            placeholder="Search by name, host, or protocol…"
+            value={search}
+            onChange={e => handleSearch(e.target.value)}
+          />
         </div>
 
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
-        ) : list.length === 0 ? (
-          <p className={`text-center py-12 ${muted}`}>No connections yet.</p>
+        ) : filtered.length === 0 ? (
+          <p className={`text-center py-12 text-sm ${muted}`}>{search ? "No matches." : "No connections yet."}</p>
         ) : (
-          <div className="space-y-2">
-            {list.map(c => {
-              const cred = credentials.find(cr => cr.id === c.credentialId);
-              const fp = folderPath(c.folderId);
-              return (
-                <div key={c.id} className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Monitor className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-sm">{c.name}</p>
-                        <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
-                      </div>
-                      <p className={muted}>{c.host}{c.port ? `:${c.port}` : ""}{fp ? ` · ${fp}` : ""}</p>
-                      {cred && <p className="text-xs text-primary">{cred.name}</p>}
-                      {!cred && c.folderId && <p className={`text-xs ${muted}`}>Inherits credential from folder</p>}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
-                    <Button size="icon" variant="ghost" onClick={() => setDeleteId(c.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </div>
+          <>
+            <div className="rounded-lg border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Name</th>
+                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden sm:table-cell">Host</th>
+                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Proto</th>
+                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden md:table-cell">Folder</th>
+                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden lg:table-cell">Credential</th>
+                    <th className="px-2 py-2 w-16" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {paged.map((c, i) => {
+                    const cred = credentials.find(cr => cr.id === c.credentialId);
+                    const fn = folderName(c.folderId);
+                    return (
+                      <tr
+                        key={c.id}
+                        className={`border-b last:border-0 hover:bg-muted/20 transition-colors group ${i % 2 === 0 ? "" : "bg-muted/5"}`}
+                      >
+                        <td className="px-3 py-1.5 font-medium truncate max-w-[140px]">{c.name}</td>
+                        <td className={`px-3 py-1.5 font-mono text-xs truncate max-w-[160px] hidden sm:table-cell ${muted}`}>
+                          {c.host}{c.port ? `:${c.port}` : ""}
+                        </td>
+                        <td className="px-3 py-1.5">
+                          <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+                        </td>
+                        <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
+                        <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden lg:table-cell ${muted}`}>{cred?.name ?? ""}</td>
+                        <td className="px-2 py-1.5">
+                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                <span>{filtered.length} total · page {currentPage} of {totalPages}</span>
+                <div className="flex items-center gap-1">
+                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === 1} onClick={() => setPage(p => p - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === totalPages} onClick={() => setPage(p => p + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            )}
+          </>
         )}
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

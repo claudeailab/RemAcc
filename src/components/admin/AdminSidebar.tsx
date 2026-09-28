@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles, Bell, ClipboardList, Monitor, Folder, KeyRound, MonitorCheck, Globe } from "lucide-react";
+import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles, Bell, ClipboardList, Monitor, Folder, KeyRound, MonitorCheck, Globe, Timer } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
@@ -73,6 +73,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
     { href: "/admin/rdp", label: "RDP", icon: MonitorCheck },
     { href: "/admin/ssh", label: "SSH", icon: Globe },
     { href: "/admin/vnc", label: "VNC", icon: MonitorCheck },
+    { href: "/admin/connection-settings", label: "Session", icon: Timer },
   ];
   const systemItems: NavItem[] = allNavItems.filter(i => i.href !== "/admin" && !managementItems.some(m => m.href === i.href));
 
