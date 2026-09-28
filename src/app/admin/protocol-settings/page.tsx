@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, CheckCircle2, XCircle, Trash2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 // ── RDP ──────────────────────────────────────────────────────────────────────
@@ -341,6 +341,108 @@ function SshTab() {
   );
 }
 
+// ── UltraVNC DSM ─────────────────────────────────────────────────────────────
+
+interface UvncFileStatus {
+  key: string; label: string; uploaded: boolean;
+  filename: string | null; size: number | null; updatedAt: string | null;
+}
+
+function UltraVncTab() {
+  const [files, setFiles] = useState<UvncFileStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/admin/settings/uvnc");
+      if (r.ok) setFiles(await r.json());
+    } finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleUpload(key: string, e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(key);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`/api/admin/settings/uvnc?key=${key}`, { method: "POST", body: fd });
+      if (r.ok) { toast.success("File uploaded"); await load(); }
+      else toast.error((await r.json()).error ?? "Upload failed");
+    } finally { setUploading(null); e.target.value = ""; }
+  }
+
+  async function handleDelete(key: string) {
+    setDeleting(key);
+    try {
+      const r = await fetch(`/api/admin/settings/uvnc?key=${key}`, { method: "DELETE" });
+      if (r.ok) { toast.success("File removed"); await load(); }
+      else toast.error("Delete failed");
+    } finally { setDeleting(null); }
+  }
+
+  if (loading) return <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin" /></div>;
+
+  return (
+    <div className="space-y-4 max-w-xl">
+      <div className="rounded-lg border p-4 space-y-1">
+        <p className="text-sm font-medium">UltraVNC DSM Plugin Files</p>
+        <p className={`text-xs ${muted}`}>
+          Upload the DSM plugin (.dsm), client key (.pkey), and UltraVNC Viewer binary (.exe) to enable DSM-encrypted VNC connections. The server relays them via Wine.
+        </p>
+      </div>
+
+      <div className="rounded-lg border divide-y">
+        {files.map(f => (
+          <div key={f.key} className="flex items-center justify-between p-3 gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              {f.uploaded
+                ? <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                : <XCircle className="h-4 w-4 text-muted-foreground shrink-0" />}
+              <div className="min-w-0">
+                <p className="text-sm font-medium truncate">{f.label}</p>
+                {f.filename && <p className={`text-xs ${muted} truncate`}>{f.filename} · {f.size ? (f.size / 1024).toFixed(0) + " KB" : ""}</p>}
+                {!f.uploaded && <p className={`text-xs ${muted}`}>Not uploaded</p>}
+              </div>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <label className="cursor-pointer">
+                <input type="file" className="hidden" onChange={e => handleUpload(f.key, e)} />
+                <span className="inline-flex items-center gap-1 text-xs border rounded px-2 py-1 hover:bg-accent transition-colors">
+                  {uploading === f.key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                  {f.uploaded ? "Replace" : "Upload"}
+                </span>
+              </label>
+              {f.uploaded && (
+                <button
+                  className="inline-flex items-center gap-1 text-xs border rounded px-2 py-1 hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                  onClick={() => handleDelete(f.key)}
+                  disabled={deleting === f.key}
+                >
+                  {deleting === f.key ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg border p-4 space-y-1 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">Required files</p>
+        <p><span className="font-mono">SecureVNCPlugin64.dsm</span> — the DSM plugin DLL (renamed .dsm)</p>
+        <p><span className="font-mono">*.pkey</span> — client private key for authentication</p>
+        <p><span className="font-mono">vncviewer.exe</span> — UltraVNC Viewer Windows binary</p>
+        <p className="pt-1">Once uploaded, enable "Use DSM Plugin" on individual VNC connections.</p>
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProtocolSettingsPage() {
@@ -353,10 +455,12 @@ export default function ProtocolSettingsPage() {
             <TabsTrigger value="rdp">RDP</TabsTrigger>
             <TabsTrigger value="vnc">VNC</TabsTrigger>
             <TabsTrigger value="ssh">SSH</TabsTrigger>
+            <TabsTrigger value="uvnc">UltraVNC</TabsTrigger>
           </TabsList>
           <TabsContent value="rdp" className="mt-4"><RdpTab /></TabsContent>
           <TabsContent value="vnc" className="mt-4"><VncTab /></TabsContent>
           <TabsContent value="ssh" className="mt-4"><SshTab /></TabsContent>
+          <TabsContent value="uvnc" className="mt-4"><UltraVncTab /></TabsContent>
         </Tabs>
       </div>
     </div>

@@ -174,6 +174,88 @@ const VNC_DEFAULTS = {
 };
 
 // ---------------------------------------------------------------------------
+// UltraVNC DSM proxy (Wine + Xvfb + x11vnc relay)
+// ---------------------------------------------------------------------------
+const UVNC_DIR = '/tmp/uvnc';
+const dsmSessions = new Map(); // connId -> { display, port, procs }
+
+function findFreeDisplay() {
+  const fs = require('fs');
+  for (let d = 50; d < 150; d++) {
+    if (!fs.existsSync(`/tmp/.X${d}-lock`) && !fs.existsSync(`/tmp/.X11-unix/X${d}`)) return d;
+  }
+  throw new Error('No free X display');
+}
+
+function findFreePort() {
+  const net2 = require('net');
+  return new Promise((resolve, reject) => {
+    const srv = net2.createServer();
+    srv.listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => resolve(p)); });
+    srv.on('error', reject);
+  });
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+async function startDsmProxy(connId, host, vncPort, password) {
+  const fs = require('fs');
+  const path = require('path');
+
+  const manifestPath = path.join(UVNC_DIR, 'manifest.json');
+  if (!fs.existsSync(manifestPath)) throw new Error('UltraVNC files not uploaded. Upload them in Admin → Protocol Settings → UltraVNC.');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  if (!manifest.uvnc_plugin) throw new Error('DSM plugin file not uploaded');
+  if (!manifest.uvnc_viewer) throw new Error('UltraVNC Viewer not uploaded');
+
+  const display = findFreeDisplay();
+  const proxyPort = await findFreePort();
+  const procs = [];
+  const winePrefix = '/tmp/uvnc-wine';
+
+  // Start Xvfb
+  const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', '1920x1080x24', '-nolisten', 'tcp'], { stdio: 'ignore' });
+  procs.push(xvfb);
+  xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
+  await sleep(500);
+
+  const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
+  const pluginPath = path.join(UVNC_DIR, manifest.uvnc_plugin);
+  const pkeyPath   = manifest.uvnc_pkey ? path.join(UVNC_DIR, manifest.uvnc_pkey) : null;
+  const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: winePrefix, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
+
+  // Wine args — UltraVNC Viewer: host::port -dsmplugin plugin.dsm [pkey]
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-password', password, '-dsmplugin', pluginPath];
+  if (pkeyPath) wineArgs.push(pkeyPath);
+
+  const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
+  procs.push(wine);
+  wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
+  await sleep(4000); // wait for Wine + viewer to connect
+
+  // Start x11vnc
+  const x11vnc = spawn('x11vnc', [
+    '-display', `:${display}`, '-rfbport', String(proxyPort),
+    '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+  ], { stdio: 'ignore' });
+  procs.push(x11vnc);
+  x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
+  await sleep(500);
+
+  dsmSessions.set(String(connId), { display, port: proxyPort, procs });
+  log(`DSM proxy id=${connId}: display=:${display} port=${proxyPort}`);
+  return proxyPort;
+}
+
+function stopDsmProxy(connId) {
+  const session = dsmSessions.get(String(connId));
+  if (!session) return;
+  for (const proc of session.procs) { try { proc.kill('SIGKILL'); } catch {} }
+  dsmSessions.delete(String(connId));
+  log(`DSM proxy id=${connId}: stopped`);
+}
+
+// ---------------------------------------------------------------------------
 // Guacamole WebSocket relay (RDP + VNC via guacd)
 // ---------------------------------------------------------------------------
 async function handleGuac(wsConn, req, id, protocol) {
@@ -258,11 +340,30 @@ async function handleGuac(wsConn, req, id, protocol) {
       cursor: s.cursor ?? 'remote',
     };
   }
+  // DSM proxy: for VNC connections with dsmPlugin option, relay via Wine+Xvfb+x11vnc
+  let guacHost = details.host;
+  let guacPort = String(details.port);
+  let dsmActive = false;
+  if (protocol === 'vnc' && details.options?.dsmPlugin) {
+    try {
+      const proxyPort = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.password ?? '');
+      guacHost = '127.0.0.1';
+      guacPort = String(proxyPort);
+      dsmActive = true;
+      log(`WS VNC id=${id}: using DSM proxy on 127.0.0.1:${proxyPort}`);
+    } catch (e) {
+      err(`WS VNC id=${id}: DSM proxy failed: ${e.message}`);
+      wsConn.send(guacEncode(['error', 'DSM proxy error: ' + e.message, '514']));
+      wsConn.close(1011);
+      return;
+    }
+  }
+
   const shadow = details.options?.shadow ?? {};
   const params = {
     ...base,
-    hostname: details.host,
-    port: String(details.port),
+    hostname: guacHost,
+    port: guacPort,
     username: details.credential?.username ?? '',
     password: details.credential?.password ?? '',
     ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
@@ -329,14 +430,15 @@ async function handleGuac(wsConn, req, id, protocol) {
     tcp.write(str);
   });
   wsConn.on('close', async () => {
-    if (!streaming) { try { tcp.destroy(); } catch {} return; }
+    if (!streaming) { try { tcp.destroy(); } catch {} if (dsmActive) stopDsmProxy(id); return; }
     const grace = await getSessionGrace();
-    if (grace > 0 && !tcp.destroyed) {
+    if (grace > 0 && !tcp.destroyed && !dsmActive) {
       tcp.removeAllListeners('data');
       tcp.on('data', () => {}); // drain silently while parked
       storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
     } else {
       try { tcp.destroy(); } catch {}
+      if (dsmActive) stopDsmProxy(id);
     }
   });
 

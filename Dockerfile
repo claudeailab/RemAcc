@@ -17,6 +17,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        guacd \
        libguac-client-rdp0 \
        libguac-client-vnc0 \
+    && dpkg --add-architecture i386 \
+    && apt-get update && apt-get install -y --no-install-recommends \
+       wine wine64 \
+       xvfb \
+       x11vnc \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser

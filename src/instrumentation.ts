@@ -109,6 +109,14 @@ export async function register() {
         \`updated_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (\`id\`)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+      `CREATE TABLE IF NOT EXISTS \`webapp_binary_assets\` (
+        \`key\` varchar(255) NOT NULL,
+        \`filename\` varchar(255) NOT NULL,
+        \`data\` mediumtext NOT NULL,
+        \`size\` int NOT NULL,
+        \`updated_at\` timestamp NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (\`key\`)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
       `CREATE TABLE IF NOT EXISTS \`webapp_connections\` (
         \`id\` int NOT NULL AUTO_INCREMENT,
         \`name\` varchar(255) NOT NULL,
@@ -142,6 +150,28 @@ export async function register() {
       try {
         await db.execute(sql as unknown as Parameters<typeof db.execute>[0]);
       } catch { /* column already dropped or doesn't exist */ }
+    }
+
+    // Write UltraVNC DSM files from DB to /tmp/uvnc/ so server.js can use them
+    {
+      const { binary_assets } = await import("./lib/db/schema");
+      const fs = await import("fs");
+      const path = await import("path");
+      const uvncDir = "/tmp/uvnc";
+      const uvncKeys = ["uvnc_plugin", "uvnc_pkey", "uvnc_viewer"];
+      const rows = await db.select().from(binary_assets);
+      const uvncRows = rows.filter(r => uvncKeys.includes(r.key));
+      if (uvncRows.length > 0) {
+        if (!fs.existsSync(uvncDir)) fs.mkdirSync(uvncDir, { recursive: true });
+        for (const row of uvncRows) {
+          const dest = path.join(uvncDir, row.filename);
+          fs.writeFileSync(dest, Buffer.from(row.data, "base64"));
+        }
+        const manifest: Record<string, string> = {};
+        for (const row of uvncRows) manifest[row.key] = row.filename;
+        fs.writeFileSync(path.join(uvncDir, "manifest.json"), JSON.stringify(manifest));
+        console.log(`Extracted ${uvncRows.length} UltraVNC files to ${uvncDir}`);
+      }
     }
 
     // Seed feature catalog from REMACC_FEATURE_CATALOG (once, if table is empty)

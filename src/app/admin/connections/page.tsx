@@ -157,6 +157,7 @@ export default function ConnectionsPage() {
   const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
   const shadowEnabled = shadow.sessionId > 0;
+  const [dsmPlugin, setDsmPlugin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -178,6 +179,7 @@ export default function ConnectionsPage() {
   function openNew() {
     setForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: selectedFolder && selectedFolder !== UNASSIGNED ? String(selectedFolder) : "", credentialId: "", notes: "" });
     setShadow({ sessionId: 0, control: true, noConsent: true });
+    setDsmPlugin(false);
     setDialogOpen(true);
   }
 
@@ -193,6 +195,7 @@ export default function ConnectionsPage() {
     try { if (c.options) opts = JSON.parse(c.options); } catch {}
     const s = (opts.shadow ?? {}) as Partial<ShadowOptions>;
     setShadow({ sessionId: s.sessionId ?? 0, control: s.control ?? true, noConsent: s.noConsent ?? true });
+    setDsmPlugin(!!(opts.dsmPlugin));
     setDialogOpen(true);
   }
 
@@ -203,6 +206,9 @@ export default function ConnectionsPage() {
       const opts: Record<string, unknown> = {};
       if (form.protocol === "rdp" && shadow.sessionId > 0) {
         opts.shadow = { sessionId: shadow.sessionId, control: shadow.control, noConsent: shadow.noConsent };
+      }
+      if (form.protocol === "vnc" && dsmPlugin) {
+        opts.dsmPlugin = true;
       }
       const payload = {
         ...(form.id ? { id: form.id } : {}),
@@ -483,6 +489,18 @@ export default function ConnectionsPage() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+
+              {form.protocol === "vnc" && (
+                <div className="rounded-lg border p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">DSM Encryption</p>
+                      <p className={`text-xs ${muted}`}>UltraVNC SecureVNCPlugin — requires files uploaded in Protocol Settings</p>
+                    </div>
+                    <Switch checked={dsmPlugin} onCheckedChange={setDsmPlugin} />
+                  </div>
                 </div>
               )}
             </div>

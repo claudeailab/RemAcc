@@ -103,6 +103,14 @@ export const folders = mysqlTable("webapp_folders", {
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 });
 
+export const binary_assets = mysqlTable("webapp_binary_assets", {
+  key: varchar("key", { length: 255 }).primaryKey(),
+  filename: varchar("filename", { length: 255 }).notNull(),
+  data: text("data").notNull(), // base64-encoded
+  size: int("size").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
+});
+
 export const connections = mysqlTable("webapp_connections", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
