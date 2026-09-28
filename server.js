@@ -198,7 +198,7 @@ function findFreePort() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function startDsmProxy(connId, host, vncPort, password) {
+async function startDsmProxy(connId, host, vncPort, username, password) {
   const fs = require('fs');
   const path = require('path');
 
@@ -225,7 +225,9 @@ async function startDsmProxy(connId, host, vncPort, password) {
   // Use relative plugin filename — cwd is UVNC_DIR so Wine resolves it from there.
   // The .pkey is auto-discovered by the plugin from the same directory; do NOT pass it
   // as a positional arg or UltraVNC Viewer will treat it as the server address.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-password', password, '-dsmplugin', manifest.uvnc_plugin];
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin];
+  if (password) wineArgs.push('-password', password);
+  if (username) wineArgs.push('-user', username);
 
   const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
   procs.push(wine);
@@ -345,7 +347,7 @@ async function handleGuac(wsConn, req, id, protocol) {
   let dsmActive = false;
   if (protocol === 'vnc' && details.options?.dsmPlugin) {
     try {
-      const proxyPort = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.password ?? '');
+      const proxyPort = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.username ?? '', details.credential?.password ?? '');
       guacHost = '127.0.0.1';
       guacPort = String(proxyPort);
       dsmActive = true;
