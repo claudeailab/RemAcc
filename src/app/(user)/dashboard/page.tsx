@@ -162,6 +162,8 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(active);
+  const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
+  const [errorMsg, setErrorMsg] = useState("");
   useEffect(() => { activeRef.current = active; }, [active]);
 
   useEffect(() => {
@@ -217,8 +219,21 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       keyboard.onkeydown = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(1, keysym); };
       keyboard.onkeyup   = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(0, keysym); };
 
-      tunnel.onerror = (err: any) => console.error("[Guac tunnel]", err);
-      client.onerror = (err: any) => console.error("[Guac client]", err);
+      tunnel.onerror = (err: any) => {
+        console.error("[Guac tunnel]", err);
+        setStatus("error");
+        setErrorMsg(err?.message ?? "Tunnel error");
+      };
+      client.onerror = (err: any) => {
+        console.error("[Guac client]", err);
+        setStatus("error");
+        setErrorMsg(err?.message ?? String(err?.code ?? "Connection failed"));
+      };
+      client.onstatechange = (state: number) => {
+        // 3 = connected, 5 = disconnected
+        if (state === 3) setStatus("connected");
+        if (state === 5) { setStatus("error"); setErrorMsg("Disconnected"); }
+      };
 
       // Keepalive: send guacamole nop every 25s to prevent idle disconnect
       keepalive = setInterval(() => {
@@ -250,6 +265,23 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
       <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+      {status !== "connected" && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="flex flex-col items-center gap-2 text-center px-6">
+            {status === "connecting" ? (
+              <>
+                <Loader2 className="h-6 w-6 animate-spin text-white/60" />
+                <p className="text-sm text-white/60">Connecting…</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-red-400 font-medium">Connection failed</p>
+                {errorMsg && <p className="text-xs text-white/40 max-w-xs">{errorMsg}</p>}
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

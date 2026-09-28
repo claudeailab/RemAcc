@@ -121,10 +121,12 @@ function guacParse(str) {
 const RDP_DEFAULTS = {
   hostname: '', port: '3389', domain: '', username: '', password: '',
   width: '1280', height: '800', dpi: '96',
+  'color-depth': '32',
   'ignore-cert': 'true', security: 'any',
   'enable-wallpaper': 'false', 'enable-theming': 'false',
   'enable-font-smoothing': 'true', 'enable-desktop-composition': 'false',
   'enable-menu-animations': 'false',
+  'create-recording-path': 'false',
 };
 
 const VNC_DEFAULTS = {
