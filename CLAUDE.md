@@ -8,7 +8,7 @@
 - Modern, intuitive, elegant UI — no over-engineering
 - **Complete removal** when deleting anything — no dead code, orphaned files, stale references
 - Absolute visual and behavioural consistency — enforced via `ui-conventions.ts`
-- Version shown in admin sidebar and user profile menu only — nowhere else
+- Version shown in app header (next to platform name), admin sidebar, and user profile menu — nowhere else
 - Version bumped with every push; commit message format: `v{version} - short description`
 - Aggressively minimize GitHub Actions runtime: BuildKit cache, GHA layer cache, path filters, concurrency groups
 - **After every resolved issue**: update the webapp skill (`references/steps.md` and `references/conventions.md`) so the fix is captured for future sessions
