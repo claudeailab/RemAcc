@@ -456,9 +456,10 @@ async function main() {
   server.on('upgrade', (req, socket, head) => {
     const url = req.url ?? '';
     log(`WS upgrade: ${url}`);
-    const mSsh = url.match(/^\/ws\/ssh\/(\d+)$/);
-    const mRdp = url.match(/^\/ws\/rdp\/(\d+)$/);
-    const mVnc = url.match(/^\/ws\/vnc\/(\d+)$/);
+    const path = url.split('?')[0];
+    const mSsh = path.match(/^\/ws\/ssh\/(\d+)$/);
+    const mRdp = path.match(/^\/ws\/rdp\/(\d+)$/);
+    const mVnc = path.match(/^\/ws\/vnc\/(\d+)$/);
     if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
     else if (mRdp) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mRdp[1], 10), 'rdp'));
     else if (mVnc) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mVnc[1], 10), 'vnc'));
