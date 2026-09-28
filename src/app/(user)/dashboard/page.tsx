@@ -176,6 +176,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     let tunnelRef: any = null;
     let obs: ResizeObserver | null = null;
     let keepalive: ReturnType<typeof setInterval> | null = null;
+    let cleanupMouse: (() => void) | null = null;
 
     async function start() {
       const mod = await import("guacamole-common-js");
@@ -213,24 +214,58 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       obs = new ResizeObserver(scaleDisplay);
       obs.observe(containerRef.current);
 
-      // Attach mouse to the unscaled container so events are captured everywhere.
-      // state.x/y from Guac.Mouse are relative to the container; subtract the
-      // display element's pixel offset, then divide by scale to get remote coords.
-      const mouse = new Guac.Mouse(containerRef.current);
-      const sendMouse = (state: any) => {
-        if (!activeRef.current || !client) return;
+      // Native mouse events — bypass Guacamole.Mouse entirely for exact coords.
+      // getBoundingClientRect() on the container gives viewport position without
+      // any transform confusion; subtract display offset and divide by scale.
+      const container = containerRef.current;
+      let btnLeft = false, btnMiddle = false, btnRight = false;
+
+      function remoteCoords(e: MouseEvent) {
+        const rect = container.getBoundingClientRect();
         const s = scaleRef.current || 1;
-        const offsetX = parseFloat(displayEl.style.left) || 0;
-        const offsetY = parseFloat(displayEl.style.top)  || 0;
-        state.x = Math.round((state.x - offsetX) / s);
-        state.y = Math.round((state.y - offsetY) / s);
-        state.x = Math.max(0, Math.min(display.getWidth()  - 1, state.x));
-        state.y = Math.max(0, Math.min(display.getHeight() - 1, state.y));
-        client.sendMouseState(state);
+        const ox = parseFloat(displayEl.style.left) || 0;
+        const oy = parseFloat(displayEl.style.top)  || 0;
+        return {
+          x: Math.max(0, Math.min(display.getWidth()  - 1, Math.round((e.clientX - rect.left - ox) / s))),
+          y: Math.max(0, Math.min(display.getHeight() - 1, Math.round((e.clientY - rect.top  - oy) / s))),
+        };
+      }
+
+      function sendMouse(coords: { x: number; y: number }, up = false, down = false) {
+        if (!activeRef.current || !client) return;
+        client.sendMouseState({ ...coords, left: btnLeft, middle: btnMiddle, right: btnRight, up, down });
+      }
+
+      const onMouseMove    = (e: MouseEvent)  => sendMouse(remoteCoords(e));
+      const onMouseDown    = (e: MouseEvent)  => {
+        if (e.button === 0) btnLeft   = true;
+        else if (e.button === 1) btnMiddle = true;
+        else if (e.button === 2) btnRight  = true;
+        sendMouse(remoteCoords(e));
       };
-      mouse.onmousedown = sendMouse;
-      mouse.onmouseup   = sendMouse;
-      mouse.onmousemove = sendMouse;
+      const onMouseUp      = (e: MouseEvent)  => {
+        const c = remoteCoords(e);
+        if (e.button === 0) btnLeft   = false;
+        else if (e.button === 1) btnMiddle = false;
+        else if (e.button === 2) btnRight  = false;
+        sendMouse(c);
+      };
+      const onWheel        = (e: WheelEvent)  => { e.preventDefault(); sendMouse(remoteCoords(e), e.deltaY < 0, e.deltaY > 0); };
+      const onContextMenu  = (e: Event)        => e.preventDefault();
+
+      container.addEventListener("mousemove",   onMouseMove);
+      container.addEventListener("mousedown",   onMouseDown);
+      document .addEventListener("mouseup",     onMouseUp);
+      container.addEventListener("wheel",       onWheel, { passive: false });
+      container.addEventListener("contextmenu", onContextMenu);
+
+      cleanupMouse = () => {
+        container.removeEventListener("mousemove",   onMouseMove);
+        container.removeEventListener("mousedown",   onMouseDown);
+        document .removeEventListener("mouseup",     onMouseUp);
+        container.removeEventListener("wheel",       onWheel);
+        container.removeEventListener("contextmenu", onContextMenu);
+      };
 
       keyboard = new Guac.Keyboard(document);
       keyboard.onkeydown = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(1, keysym); };
@@ -247,12 +282,10 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         setErrorMsg(err?.message ?? String(err?.code ?? "Connection failed"));
       };
       client.onstatechange = (state: number) => {
-        // 3 = connected, 5 = disconnected
         if (state === 3) setStatus("connected");
         if (state === 5) { setStatus("error"); setErrorMsg("Disconnected"); }
       };
 
-      // Keepalive: send guacamole nop every 25s to prevent idle disconnect
       keepalive = setInterval(() => {
         try { tunnel.sendMessage("nop"); } catch {}
       }, 25000);
@@ -264,6 +297,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 
     return () => {
       cancelled = true;
+      cleanupMouse?.();
       obs?.disconnect();
       if (keepalive) clearInterval(keepalive);
       if (keyboard) { try { keyboard.reset(); } catch {} }
