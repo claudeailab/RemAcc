@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight,
+  Loader2, Plus, Pencil, Trash2, Copy, Search, ChevronLeft, ChevronRight,
   Folder, FolderOpen, ChevronRight as Chevron, Monitor,
 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
@@ -223,6 +223,22 @@ export default function ConnectionsPage() {
     } finally { setSaving(false); }
   }
 
+  async function handleClone(c: Connection) {
+    const r = await fetch("/api/admin/connections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: `${c.name} (copy)`,
+        host: c.host, port: c.port, protocol: c.protocol,
+        folderId: c.folderId, credentialId: c.credentialId,
+        notes: c.notes ?? undefined, options: c.options ?? undefined,
+      }),
+    });
+    if (!r.ok) { toast.error("Clone failed"); return; }
+    toast.success("Connection cloned");
+    load();
+  }
+
   async function handleDelete(id: number) {
     const r = await fetch(`/api/admin/connections?id=${id}`, { method: "DELETE" });
     if (!r.ok) { toast.error("Delete failed"); return; }
@@ -353,6 +369,7 @@ export default function ConnectionsPage() {
                             <td className="px-2 py-1.5">
                               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleClone(c)}><Copy className="h-3 w-3" /></Button>
                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
                               </div>
                             </td>
