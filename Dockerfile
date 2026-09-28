@@ -17,8 +17,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        guacd \
        libguac-client-rdp0 \
        libguac-client-vnc0 \
-    && dpkg --add-architecture i386 \
-    && apt-get update && apt-get install -y --no-install-recommends \
        wine wine64 \
        xvfb \
        x11vnc \
