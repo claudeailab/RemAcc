@@ -367,7 +367,7 @@ export default function ConnectionsPage() {
                             </td>
                             <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
                             <td className="px-2 py-1.5">
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center gap-0.5">
                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleClone(c)}><Copy className="h-3 w-3" /></Button>
                                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
