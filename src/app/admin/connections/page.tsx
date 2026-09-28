@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Loader2, Plus, Pencil, Trash2, Search, ChevronLeft, ChevronRight,
+  Folder, FolderOpen, ChevronRight as Chevron, Monitor,
+} from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null }
@@ -21,6 +24,121 @@ const PROTO_BADGE: Record<string, string> = {
 };
 
 const PAGE_SIZE = 50;
+const UNASSIGNED = -1; // sentinel for "no folder"
+
+// ── Folder tree ───────────────────────────────────────────────────────────────
+
+function FolderTree({
+  folders, connections, selected, onSelect, onDrop,
+}: {
+  folders: FolderRow[];
+  connections: Connection[];
+  selected: number | null;
+  onSelect: (id: number | null) => void;
+  onDrop: (connectionId: number, folderId: number | null) => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const [dragOver, setDragOver] = useState<number | null>(undefined as unknown as null);
+
+  function toggle(id: number) {
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  function handleDragOver(e: React.DragEvent, folderId: number | null) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOver(folderId ?? UNASSIGNED);
+  }
+
+  function handleDrop(e: React.DragEvent, folderId: number | null) {
+    e.preventDefault();
+    setDragOver(null);
+    const id = Number(e.dataTransfer.getData("connectionId"));
+    if (id) onDrop(id, folderId);
+  }
+
+  function renderFolder(f: FolderRow, depth = 0): React.ReactNode {
+    const isOpen = expanded.has(f.id);
+    const isActive = selected === f.id;
+    const isDragTarget = dragOver === f.id;
+    const count = connections.filter(c => c.folderId === f.id).length;
+    const children = folders.filter(sf => sf.parentId === f.id);
+    return (
+      <div key={f.id}>
+        <div
+          style={{ paddingLeft: 8 + depth * 14 }}
+          className={`group flex items-center gap-1.5 py-1 pr-2 rounded cursor-pointer select-none text-sm transition-colors
+            ${isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}
+            ${isDragTarget ? "ring-1 ring-primary bg-primary/10" : ""}`}
+          onClick={() => onSelect(isActive ? null : f.id)}
+          onDragOver={e => handleDragOver(e, f.id)}
+          onDragLeave={() => setDragOver(null)}
+          onDrop={e => handleDrop(e, f.id)}
+        >
+          <button
+            type="button"
+            className="shrink-0 p-0.5"
+            onClick={e => { e.stopPropagation(); if (children.length > 0) toggle(f.id); }}
+          >
+            {children.length > 0
+              ? <Chevron className={`h-3 w-3 transition-transform ${isOpen ? "rotate-90" : ""}`} />
+              : <span className="w-3" />
+            }
+          </button>
+          {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
+          <span className="truncate flex-1">{f.name}</span>
+          {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{count}</span>}
+        </div>
+        {isOpen && children.map(c => renderFolder(c, depth + 1))}
+      </div>
+    );
+  }
+
+  const rootFolders = folders.filter(f => !f.parentId);
+  const unassignedCount = connections.filter(c => !c.folderId).length;
+  const isAllActive = selected === null;
+  const isUnassignedActive = selected === UNASSIGNED;
+  const isDragAll = dragOver === null;
+  const isDragUnassigned = dragOver === UNASSIGNED;
+
+  return (
+    <div className="flex flex-col gap-0.5 p-1 text-sm">
+      {/* All */}
+      <div
+        className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer select-none transition-colors
+          ${isAllActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}`}
+        onClick={() => onSelect(null)}
+      >
+        <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="flex-1">All connections</span>
+        <span className="text-[10px] text-muted-foreground">{connections.length}</span>
+      </div>
+
+      {/* Unassigned */}
+      <div
+        className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer select-none transition-colors
+          ${isUnassignedActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}
+          ${isDragUnassigned ? "ring-1 ring-primary bg-primary/10" : ""}`}
+        onClick={() => onSelect(UNASSIGNED)}
+        onDragOver={e => handleDragOver(e, null)}
+        onDragLeave={() => setDragOver(null)}
+        onDrop={e => handleDrop(e, null)}
+      >
+        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <span className="flex-1 text-muted-foreground">Unassigned</span>
+        {unassignedCount > 0 && <span className="text-[10px] text-muted-foreground">{unassignedCount}</span>}
+      </div>
+
+      {rootFolders.length > 0 && (
+        <div className="mt-1 border-t pt-1">
+          {rootFolders.map(f => renderFolder(f))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function ConnectionsPage() {
   const [list, setList] = useState<Connection[]>([]);
@@ -32,6 +150,8 @@ export default function ConnectionsPage() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
+  const [draggingId, setDraggingId] = useState<number | null>(null);
   const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
 
   const load = useCallback(async () => {
@@ -52,7 +172,7 @@ export default function ConnectionsPage() {
   useEffect(() => { load(); }, [load]);
 
   function openNew() {
-    setForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
+    setForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: selectedFolder && selectedFolder !== UNASSIGNED ? String(selectedFolder) : "", credentialId: "", notes: "" });
     setDialogOpen(true);
   }
 
@@ -73,8 +193,7 @@ export default function ConnectionsPage() {
       const method = form.id ? "PUT" : "POST";
       const payload = {
         ...(form.id ? { id: form.id } : {}),
-        name: form.name,
-        host: form.host,
+        name: form.name, host: form.host,
         port: form.port ? Number(form.port) : null,
         protocol: form.protocol,
         folderId: form.folderId ? Number(form.folderId) : null,
@@ -98,29 +217,50 @@ export default function ConnectionsPage() {
     load();
   }
 
+  async function handleDrop(connectionId: number, folderId: number | null) {
+    const conn = list.find(c => c.id === connectionId);
+    if (!conn || conn.folderId === folderId) return;
+    // Optimistic update
+    setList(prev => prev.map(c => c.id === connectionId ? { ...c, folderId } : c));
+    const r = await fetch("/api/admin/connections", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: connectionId, name: conn.name, host: conn.host, port: conn.port, protocol: conn.protocol, folderId, credentialId: conn.credentialId }),
+    });
+    if (!r.ok) {
+      toast.error("Move failed");
+      setList(prev => prev.map(c => c.id === connectionId ? { ...c, folderId: conn.folderId } : c));
+    }
+  }
+
   function folderName(folderId: number | null): string {
     if (!folderId) return "";
     return folders.find(f => f.id === folderId)?.name ?? "";
   }
 
   const filtered = useMemo(() => {
+    let items = list;
+    if (selectedFolder === UNASSIGNED) items = items.filter(c => !c.folderId);
+    else if (selectedFolder !== null) {
+      const allDescendants = new Set<number>();
+      const addDescendants = (id: number) => {
+        allDescendants.add(id);
+        folders.filter(f => f.parentId === id).forEach(f => addDescendants(f.id));
+      };
+      addDescendants(selectedFolder);
+      items = items.filter(c => c.folderId !== null && allDescendants.has(c.folderId));
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return list;
-    return list.filter(c =>
-      c.name.toLowerCase().includes(q) ||
-      c.host.toLowerCase().includes(q) ||
-      c.protocol.includes(q)
-    );
-  }, [list, search]);
+    if (q) items = items.filter(c => c.name.toLowerCase().includes(q) || c.host.toLowerCase().includes(q) || c.protocol.includes(q));
+    return items;
+  }, [list, selectedFolder, search, folders]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  function handleSearch(v: string) {
-    setSearch(v);
-    setPage(1);
-  }
+  function handleSearch(v: string) { setSearch(v); setPage(1); }
+  function handleSelectFolder(id: number | null) { setSelectedFolder(id); setPage(1); setSearch(""); }
 
   return (
     <div className={pageWrapper}>
@@ -130,80 +270,102 @@ export default function ConnectionsPage() {
           <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-1" />Add</Button>
         </div>
 
-        <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <Input
-            className="pl-8 h-8 text-sm"
-            placeholder="Search by name, host, or protocol…"
-            value={search}
-            onChange={e => handleSearch(e.target.value)}
-          />
-        </div>
+        <div className="flex gap-4">
+          {/* Folder tree */}
+          <div className="w-44 shrink-0 rounded-lg border overflow-hidden self-start">
+            <FolderTree
+              folders={folders}
+              connections={list}
+              selected={selectedFolder}
+              onSelect={handleSelectFolder}
+              onDrop={handleDrop}
+            />
+          </div>
 
-        {loading ? (
-          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
-        ) : filtered.length === 0 ? (
-          <p className={`text-center py-12 text-sm ${muted}`}>{search ? "No matches." : "No connections yet."}</p>
-        ) : (
-          <>
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Name</th>
-                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden sm:table-cell">Host</th>
-                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground">Proto</th>
-                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden md:table-cell">Folder</th>
-                    <th className="text-left px-3 py-2 font-medium text-xs text-muted-foreground hidden lg:table-cell">Credential</th>
-                    <th className="px-2 py-2 w-16" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {paged.map((c, i) => {
-                    const cred = credentials.find(cr => cr.id === c.credentialId);
-                    const fn = folderName(c.folderId);
-                    return (
-                      <tr
-                        key={c.id}
-                        className={`border-b last:border-0 hover:bg-muted/20 transition-colors group ${i % 2 === 0 ? "" : "bg-muted/5"}`}
-                      >
-                        <td className="px-3 py-1.5 font-medium truncate max-w-[140px]">{c.name}</td>
-                        <td className={`px-3 py-1.5 font-mono text-xs truncate max-w-[160px] hidden sm:table-cell ${muted}`}>
-                          {c.host}{c.port ? `:${c.port}` : ""}
-                        </td>
-                        <td className="px-3 py-1.5">
-                          <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
-                        </td>
-                        <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
-                        <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden lg:table-cell ${muted}`}>{cred?.name ?? ""}</td>
-                        <td className="px-2 py-1.5">
-                          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
-                            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {/* Connections table */}
+          <div className="flex-1 min-w-0">
+            <div className="relative mb-3">
+              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+              <Input className="pl-8 h-8 text-sm" placeholder="Search…" value={search} onChange={e => handleSearch(e.target.value)} />
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                <span>{filtered.length} total · page {currentPage} of {totalPages}</span>
-                <div className="flex items-center gap-1">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === 1} onClick={() => setPage(p => p - 1)}>
-                    <ChevronLeft className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === totalPages} onClick={() => setPage(p => p + 1)}>
-                    <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
+            {loading ? (
+              <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : filtered.length === 0 ? (
+              <p className={`text-center py-12 text-sm ${muted}`}>{search ? "No matches." : "No connections here."}</p>
+            ) : (
+              <>
+                <div className="rounded-lg border overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b bg-muted/40">
+                        <th className="w-4 px-2 py-1.5" />
+                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground">Name</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">Host</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground">Proto</th>
+                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground hidden md:table-cell">Folder</th>
+                        <th className="px-2 py-1.5 w-14" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paged.map((c, i) => {
+                        const fn = folderName(c.folderId);
+                        const isDragging = draggingId === c.id;
+                        return (
+                          <tr
+                            key={c.id}
+                            draggable
+                            onDragStart={e => { e.dataTransfer.setData("connectionId", String(c.id)); setDraggingId(c.id); }}
+                            onDragEnd={() => setDraggingId(null)}
+                            className={`border-b last:border-0 hover:bg-muted/20 transition-colors group cursor-grab active:cursor-grabbing
+                              ${isDragging ? "opacity-40" : ""}
+                              ${i % 2 === 0 ? "" : "bg-muted/5"}`}
+                          >
+                            <td className="px-2 py-1.5 text-muted-foreground/30 group-hover:text-muted-foreground/60">
+                              <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+                                <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+                                <circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/>
+                                <circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
+                              </svg>
+                            </td>
+                            <td className="px-3 py-1.5 font-medium truncate max-w-[140px]">{c.name}</td>
+                            <td className={`px-3 py-1.5 font-mono text-xs truncate max-w-[160px] hidden sm:table-cell ${muted}`}>
+                              {c.host}{c.port ? `:${c.port}` : ""}
+                            </td>
+                            <td className="px-3 py-1.5">
+                              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+                            </td>
+                            <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
+                            <td className="px-2 py-1.5">
+                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
+                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
+                    <span>{filtered.length} total · page {currentPage} of {totalPages}</span>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === 1} onClick={() => setPage(p => p - 1)}>
+                        <ChevronLeft className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === totalPages} onClick={() => setPage(p => p + 1)}>
+                        <ChevronRight className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </div>
+        </div>
 
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogContent>

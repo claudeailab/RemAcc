@@ -191,9 +191,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       const display = client.getDisplay();
       const displayEl: HTMLElement = display.getElement();
       displayEl.style.position = "absolute";
-      displayEl.style.top = "50%";
-      displayEl.style.left = "50%";
-      displayEl.style.transform = "translate(-50%, -50%)";
+      displayEl.style.transformOrigin = "0 0";
       containerRef.current.appendChild(displayEl);
 
       function scaleDisplay() {
@@ -202,7 +200,11 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        display.scale(Math.min(cw / dw, ch / dh));
+        const scale = Math.min(cw / dw, ch / dh);
+        // Position with explicit pixels so display.scale() doesn't fight a centering transform
+        displayEl.style.left = Math.max(0, (cw - dw * scale) / 2) + "px";
+        displayEl.style.top  = Math.max(0, (ch - dh * scale) / 2) + "px";
+        display.scale(scale);
       }
 
       display.onresize = scaleDisplay;
