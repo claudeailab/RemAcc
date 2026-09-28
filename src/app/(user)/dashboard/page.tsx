@@ -258,6 +258,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 // Dashboard
 // ---------------------------------------------------------------------------
 let sessionCounter = 0;
+const SESSION_STORE = "remacc_sessions";
 
 export default function DashboardPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -269,6 +270,35 @@ export default function DashboardPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Restore sessions from localStorage on mount so a page refresh reconnects
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SESSION_STORE);
+      if (!raw) return;
+      const { sessions: saved, activeKey: savedKey } = JSON.parse(raw);
+      if (!Array.isArray(saved) || saved.length === 0) return;
+      // Advance counter past any restored keys to avoid collisions
+      const maxN = saved.reduce((m: number, s: Session) => {
+        const n = parseInt(s.key.slice(1), 10);
+        return isNaN(n) ? m : Math.max(m, n);
+      }, 0);
+      sessionCounter = maxN;
+      setSessions(saved);
+      setActiveKey(savedKey ?? saved[saved.length - 1].key);
+    } catch {}
+  }, []);
+
+  // Persist sessions to localStorage whenever they change
+  useEffect(() => {
+    try {
+      if (sessions.length > 0) {
+        localStorage.setItem(SESSION_STORE, JSON.stringify({ sessions, activeKey }));
+      } else {
+        localStorage.removeItem(SESSION_STORE);
+      }
+    } catch {}
+  }, [sessions, activeKey]);
 
   const load = useCallback(async () => {
     setLoading(true);
