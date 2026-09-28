@@ -197,61 +197,62 @@ async function handleGuac(wsConn, req, id, protocol) {
     ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
   };
 
-  wsConn.once('message', () => {
-    const tcp = new net.Socket();
-    let buf = '';
-    let streaming = false;
+  // Connect to guacd immediately — do not wait for first browser message.
+  // The browser's guacamole client waits for `ready` and then streams;
+  // all handshake (select → args → connect) is handled server-side.
+  const tcp = new net.Socket();
+  let buf = '';
+  let streaming = false;
 
-    tcp.on('error', e => {
-      err(`WS ${protocol} id=${id}: guacd TCP error: ${e.message}`);
-      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', e.message, '514']));
-      try { wsConn.close(1011); } catch {}
-    });
-
-    tcp.on('data', chunk => {
-      buf += chunk.toString();
-      let semi;
-      while ((semi = buf.indexOf(';')) !== -1) {
-        const instr = buf.slice(0, semi + 1);
-        buf = buf.slice(semi + 1);
-        const parts = guacParse(instr);
-        const opcode = parts[0];
-
-        if (opcode === 'args') {
-          const values = parts.slice(1).map(name => params[name] ?? '');
-          tcp.write(guacEncode(['connect', ...values]));
-        } else if (opcode === 'ready') {
-          log(`WS ${protocol} id=${id}: guacd ready`);
-          streaming = true;
-          if (wsConn.readyState === 1) wsConn.send(instr);
-        } else if (streaming) {
-          if (wsConn.readyState === 1) wsConn.send(instr);
-        }
-      }
-    });
-
-    tcp.on('close', () => { try { wsConn.close(); } catch {} });
-
-    wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
-    wsConn.on('close', async () => {
-      if (!streaming) { try { tcp.destroy(); } catch {} return; }
-      const grace = await getSessionGrace();
-      if (grace > 0 && !tcp.destroyed) {
-        tcp.removeAllListeners('data');
-        tcp.on('data', () => {}); // drain silently while parked
-        storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
-      } else {
-        try { tcp.destroy(); } catch {}
-      }
-    });
-
-    tcp.connect(4822, '127.0.0.1', () => {
-      log(`WS ${protocol} id=${id}: connected to guacd`);
-      tcp.write(guacEncode(['select', protocol]));
-    });
+  tcp.on('error', e => {
+    err(`WS ${protocol} id=${id}: guacd TCP error: ${e.message}`);
+    if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', e.message, '514']));
+    try { wsConn.close(1011); } catch {}
   });
 
-  wsConn.on('close', () => {});
+  tcp.on('data', chunk => {
+    const raw = chunk.toString();
+    buf += raw;
+    let semi;
+    while ((semi = buf.indexOf(';')) !== -1) {
+      const instr = buf.slice(0, semi + 1);
+      buf = buf.slice(semi + 1);
+      const parts = guacParse(instr);
+      const opcode = parts[0];
+
+      if (opcode === 'args') {
+        const values = parts.slice(1).map(name => params[name] ?? '');
+        log(`WS ${protocol} id=${id}: sending connect (${parts.length - 1} args)`);
+        tcp.write(guacEncode(['connect', ...values]));
+      } else if (opcode === 'ready') {
+        log(`WS ${protocol} id=${id}: guacd ready`);
+        streaming = true;
+        if (wsConn.readyState === 1) wsConn.send(instr);
+      } else if (streaming) {
+        if (wsConn.readyState === 1) wsConn.send(instr);
+      }
+    }
+  });
+
+  tcp.on('close', () => { try { wsConn.close(); } catch {} });
+
+  wsConn.on('message', data => { if (streaming) tcp.write(data.toString()); });
+  wsConn.on('close', async () => {
+    if (!streaming) { try { tcp.destroy(); } catch {} return; }
+    const grace = await getSessionGrace();
+    if (grace > 0 && !tcp.destroyed) {
+      tcp.removeAllListeners('data');
+      tcp.on('data', () => {}); // drain silently while parked
+      storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
+    } else {
+      try { tcp.destroy(); } catch {}
+    }
+  });
+
+  tcp.connect(4822, '127.0.0.1', () => {
+    log(`WS ${protocol} id=${id}: connected to guacd`);
+    tcp.write(guacEncode(['select', protocol]));
+  });
 }
 
 // ---------------------------------------------------------------------------
