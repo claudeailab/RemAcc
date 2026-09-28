@@ -166,6 +166,8 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const [errorMsg, setErrorMsg] = useState("");
   useEffect(() => { activeRef.current = active; }, [active]);
 
+  const scaleRef = useRef(1);
+
   useEffect(() => {
     if (!containerRef.current) return;
     let cancelled = false;
@@ -201,7 +203,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
         const scale = Math.min(cw / dw, ch / dh);
-        // Position with explicit pixels so display.scale() doesn't fight a centering transform
+        scaleRef.current = scale;
         displayEl.style.left = Math.max(0, (cw - dw * scale) / 2) + "px";
         displayEl.style.top  = Math.max(0, (ch - dh * scale) / 2) + "px";
         display.scale(scale);
@@ -212,7 +214,15 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       obs.observe(containerRef.current);
 
       const mouse = new Guac.Mouse(displayEl);
-      const sendMouse = (state: any) => { if (activeRef.current && client) client.sendMouseState(state); };
+      // Guac.Mouse reports coordinates in screen (post-scale) pixels; remote expects
+      // coordinates in the remote desktop's pixel space — divide by current scale.
+      const sendMouse = (state: any) => {
+        if (!activeRef.current || !client) return;
+        const s = scaleRef.current || 1;
+        state.x = Math.round(state.x / s);
+        state.y = Math.round(state.y / s);
+        client.sendMouseState(state);
+      };
       mouse.onmousedown = sendMouse;
       mouse.onmouseup   = sendMouse;
       mouse.onmousemove = sendMouse;
