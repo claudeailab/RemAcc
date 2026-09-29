@@ -264,34 +264,14 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
   await waitForX(display);
 
-  // openbox auto-maximizes every window so the viewer fills the display.
-  // We avoid -fullscreen on the viewer because Wine's fullscreen path uses
-  // DirectDraw and does not write to the X11 framebuffer, causing a black
-  // screen in x11vnc. Windowed GDI mode renders correctly.
-  const obConfigDir = `/tmp/openbox-${display}`;
-  fs.mkdirSync(obConfigDir, { recursive: true });
-  fs.writeFileSync(path.join(obConfigDir, 'rc.xml'),
-    '<?xml version="1.0" encoding="UTF-8"?>\n' +
-    '<openbox_config xmlns="http://openbox.org/3.4/rc">\n' +
-    '  <applications>\n' +
-    '    <application class="*"><maximized>yes</maximized></application>\n' +
-    '  </applications>\n' +
-    '</openbox_config>\n'
-  );
-  const wm = spawn('openbox', ['--config-file', path.join(obConfigDir, 'rc.xml'), '--sm-disable'],
-    { env: { ...process.env, DISPLAY: `:${display}` }, stdio: 'ignore' });
-  procs.push(wm);
-  wm.on('error', e => err(`openbox :${display} error: ${e.message}`));
-  await sleep(150);
-
-  // Start x11vnc immediately so guacd can connect right away and the viewer's
-  // connection progress is shown live, instead of blocking on a fixed sleep.
+  // Start x11vnc before Wine so guacd can connect immediately and stream
+  // the connection progress dialog live.
   const x11vnc = spawn('x11vnc', [
     '-display', `:${display}`, '-rfbport', String(proxyPort),
     '-nopw', '-forever', '-shared', '-quiet', '-localhost',
     '-noxdamage',        // Wine draws via mmap; XDAMAGE misses updates on Xvfb
-    '-wait', '10', '-defer', '10', // low-latency polling/coalescing
-    '-nocursorshape',    // bake the remote cursor into the framebuffer
+    '-wait', '5', '-defer', '5',
+    '-nocursorshape',
   ], { stdio: 'ignore' });
   procs.push(x11vnc);
   x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
@@ -299,8 +279,9 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
   const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
 
-  // No -fullscreen: windowed GDI mode renders to X11 correctly; openbox
-  // maximizes the window automatically so the remote desktop fills the screen.
+  // No -fullscreen and no WM: Wine renders in GDI/windowed mode to X11 natively.
+  // openbox was found to block Wine's window painting. The viewer window appears
+  // on the Xvfb display and x11vnc captures it directly.
   const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);

@@ -20,7 +20,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        wine wine64 \
        xvfb \
        x11vnc \
-       openbox \
     && rm -rf /var/lib/apt/lists/*
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
