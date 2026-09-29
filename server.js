@@ -259,13 +259,17 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   const proxyPort = await findFreePort();
   const procs = [];
 
-  // Bare Xvfb — no window manager, no desktop background. The viewer runs
-  // fullscreen/borderless on it, so the captured screen is only the remote
-  // Windows desktop, edge to edge (no Linux chrome ever visible).
   const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', `${SCREEN_W}x${SCREEN_H}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
   procs.push(xvfb);
   xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
   await waitForX(display);
+
+  // openbox is required for Wine's -fullscreen to be honoured; without a WM
+  // the fullscreen hint is ignored and the viewer window never paints.
+  const wm = spawn('openbox', ['--sm-disable'], { env: { ...process.env, DISPLAY: `:${display}` }, stdio: 'ignore' });
+  procs.push(wm);
+  wm.on('error', e => err(`openbox :${display} error: ${e.message}`));
+  await sleep(200); // give WM time to own the display before Wine starts
 
   // Start x11vnc immediately so guacd can connect right away and the viewer's
   // connection progress is shown live, instead of blocking on a fixed sleep.
