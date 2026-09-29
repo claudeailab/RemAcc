@@ -177,6 +177,8 @@ const VNC_DEFAULTS = {
 // UltraVNC DSM proxy (Wine + Xvfb + x11vnc relay)
 // ---------------------------------------------------------------------------
 const UVNC_DIR = '/tmp/uvnc';
+const WINE_PREFIX = '/tmp/uvnc-wine';
+const SCREEN_W = 1920, SCREEN_H = 1080;
 const dsmSessions = new Map(); // connId -> { display, port, procs }
 
 function findFreeDisplay() {
@@ -198,6 +200,49 @@ function findFreePort() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Poll until the X11 socket for a display exists, instead of a fixed sleep.
+async function waitForX(display, timeoutMs = 5000) {
+  const fs = require('fs');
+  const sock = `/tmp/.X11-unix/X${display}`;
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (fs.existsSync(sock)) return;
+    await sleep(40);
+  }
+  throw new Error(`Xvfb :${display} did not come up`);
+}
+
+// Poll until a TCP port accepts connections (x11vnc ready to serve).
+async function waitForPort(port, timeoutMs = 5000) {
+  const net2 = require('net');
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const ok = await new Promise(res => {
+      const s = net2.connect(port, '127.0.0.1');
+      s.on('connect', () => { s.destroy(); res(true); });
+      s.on('error', () => res(false));
+    });
+    if (ok) return;
+    await sleep(40);
+  }
+  throw new Error(`port ${port} did not open`);
+}
+
+// Initialise the Wine prefix once and cache it, so the first real connection
+// does not pay the cold wineboot cost. Warmed at startup, awaited on use.
+let _winePrefixReady = null;
+function ensureWinePrefix() {
+  if (_winePrefixReady) return _winePrefixReady;
+  _winePrefixReady = new Promise(resolve => {
+    const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '' };
+    const wb = spawn('wineboot', ['-i'], { env, stdio: 'ignore' });
+    const done = () => resolve();
+    wb.on('exit', done);
+    wb.on('error', done); // proceed even if wineboot is unavailable
+  });
+  return _winePrefixReady;
+}
+
 async function startDsmProxy(connId, host, vncPort, username, password) {
   const fs = require('fs');
   const path = require('path');
@@ -208,41 +253,47 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   if (!manifest.uvnc_plugin) throw new Error('DSM plugin file not uploaded');
   if (!manifest.uvnc_viewer) throw new Error('UltraVNC Viewer not uploaded');
 
+  await ensureWinePrefix();
+
   const display = findFreeDisplay();
   const proxyPort = await findFreePort();
   const procs = [];
-  const winePrefix = '/tmp/uvnc-wine';
 
-  // Start Xvfb
-  const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', '1920x1080x24', '-nolisten', 'tcp'], { stdio: 'ignore' });
+  // Bare Xvfb — no window manager, no desktop background. The viewer runs
+  // fullscreen/borderless on it, so the captured screen is only the remote
+  // Windows desktop, edge to edge (no Linux chrome ever visible).
+  const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', `${SCREEN_W}x${SCREEN_H}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
   procs.push(xvfb);
   xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
-  await sleep(500);
+  await waitForX(display);
+
+  // Start x11vnc immediately so guacd can connect right away and the viewer's
+  // connection progress is shown live, instead of blocking on a fixed sleep.
+  const x11vnc = spawn('x11vnc', [
+    '-display', `:${display}`, '-rfbport', String(proxyPort),
+    '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+    '-noxdamage',        // Wine draws via mmap; XDAMAGE misses updates on Xvfb
+    '-wait', '10', '-defer', '10', // low-latency polling/coalescing
+    '-nocursorshape',    // bake the remote cursor into the framebuffer
+  ], { stdio: 'ignore' });
+  procs.push(x11vnc);
+  x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
 
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
-  const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: winePrefix, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
+  const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
 
-  // Use relative plugin filename — cwd is UVNC_DIR so Wine resolves it from there.
-  // The .pkey is auto-discovered by the plugin from the same directory; do NOT pass it
-  // as a positional arg or UltraVNC Viewer will treat it as the server address.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin];
+  // Fullscreen + no toolbar → the remote desktop fills the screen with no
+  // viewer chrome. Relative plugin filename (cwd is UVNC_DIR); the .pkey is
+  // auto-discovered from the same directory, never passed as a positional arg.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-fullscreen', '-notoolbar'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);
 
   const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
   procs.push(wine);
   wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
-  await sleep(4000); // wait for Wine + viewer to connect
 
-  // Start x11vnc
-  const x11vnc = spawn('x11vnc', [
-    '-display', `:${display}`, '-rfbport', String(proxyPort),
-    '-nopw', '-forever', '-shared', '-quiet', '-localhost',
-  ], { stdio: 'ignore' });
-  procs.push(x11vnc);
-  x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
-  await sleep(500);
-
+  await waitForPort(proxyPort);
   dsmSessions.set(String(connId), { display, port: proxyPort, procs });
   log(`DSM proxy id=${connId}: display=:${display} port=${proxyPort}`);
   return proxyPort;
@@ -557,6 +608,7 @@ async function main() {
   for (const k of envKeys) log(`  ${k}=${process.env[k] ? '(set)' : 'MISSING'}`);
 
   startGuacd();
+  ensureWinePrefix(); // warm the Wine prefix in the background for fast first DSM connect
 
   // Verify critical directories exist
   const fs = require('fs');
