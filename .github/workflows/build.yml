@@ -52,7 +52,7 @@ jobs:
 
       - name: Install dependencies
         if: steps.nextjs-cache.outputs.cache-hit != 'true'
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
 
       - name: Build
         if: steps.nextjs-cache.outputs.cache-hit != 'true'
