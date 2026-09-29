@@ -20,7 +20,7 @@ export default function FoldersPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [deleteError, setDeleteError] = useState("");
+  const [deleteName, setDeleteName] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ id: 0, name: "", parentId: "", credentialId: "" });
@@ -106,10 +106,9 @@ export default function FoldersPage() {
   }
 
   async function handleDelete(id: number) {
-    setDeleteError("");
     const r = await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
     const d = await r.json();
-    if (!r.ok) { setDeleteError(d.error ?? "Delete failed"); return; }
+    if (!r.ok) { toast.error(d.error ?? "Delete failed"); return; }
     toast.success("Folder deleted");
     setDeleteId(null);
     load();
@@ -146,7 +145,7 @@ export default function FoldersPage() {
           <div className="flex items-center gap-1 shrink-0">
             <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button>
             <Button size="icon" variant="ghost" className="h-6 w-6" title="Clone" onClick={() => handleClone(f)}><Copy className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" title="Delete" onClick={() => { setDeleteId(f.id); setDeleteError(""); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Delete" onClick={() => { setDeleteId(f.id); setDeleteName(f.name); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
           </div>
         </div>
         {isOpen && subs.map(s => renderFolder(s, depth + 1))}
@@ -217,16 +216,10 @@ export default function FoldersPage() {
         <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
           <DialogContent>
             <DialogHeader><DialogTitle>Delete Folder</DialogTitle></DialogHeader>
-            {deleteError ? (
-              <p className="text-sm text-destructive">{deleteError}</p>
-            ) : (
-              <p className="text-sm">Are you sure? This cannot be undone.</p>
-            )}
+            <p className="text-sm">Delete <strong>{deleteName}</strong>? All subfolders will be deleted. Connections inside will be moved to the root level. This cannot be undone.</p>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-              {!deleteError && (
-                <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)}>Delete</Button>
-              )}
+              <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)}>Delete</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

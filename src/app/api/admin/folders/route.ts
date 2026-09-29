@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { folders, connections } from "@/lib/db/schema";
-import { eq, isNull, or } from "drizzle-orm";
+import { eq, inArray, isNull, or } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
@@ -53,12 +53,25 @@ export async function DELETE(req: NextRequest) {
   const admin = await requireAdmin();
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-  const [child] = await db.select({ id: folders.id }).from(folders).where(eq(folders.parentId, id)).limit(1);
-  if (child) return NextResponse.json({ error: "Folder has sub-folders" }, { status: 409 });
-  const [conn] = await db.select({ id: connections.id }).from(connections).where(eq(connections.folderId, id)).limit(1);
-  if (conn) return NextResponse.json({ error: "Folder has connections" }, { status: 409 });
-  await db.delete(folders).where(eq(folders.id, id));
+
+  // Collect all descendant folder IDs (BFS)
+  const allFolders = await db.select({ id: folders.id, parentId: folders.parentId }).from(folders);
+  const toDelete: number[] = [];
+  const queue = [id];
+  while (queue.length) {
+    const cur = queue.shift()!;
+    toDelete.push(cur);
+    allFolders.filter(f => f.parentId === cur).forEach(f => queue.push(f.id));
+  }
+
+  // Unassign connections in all affected folders
+  await db.update(connections).set({ folderId: null }).where(inArray(connections.folderId, toDelete));
+  // Delete folders deepest-first (reverse BFS order)
+  for (let i = toDelete.length - 1; i >= 0; i--) {
+    await db.delete(folders).where(eq(folders.id, toDelete[i]));
+  }
+
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  await logAudit({ userEmail: admin.email, action: "delete", resource: "folder", detail: `id=${id}`, ip });
+  await logAudit({ userEmail: admin.email, action: "delete", resource: "folder", detail: `id=${id} cascade=${toDelete.length}`, ip });
   return NextResponse.json({ ok: true });
 }
