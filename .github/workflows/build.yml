@@ -18,7 +18,57 @@ permissions:
   packages: write
 
 jobs:
+  # Build Next.js once (architecture-independent output).
+  # Skipped entirely on cache hit so server.js/Dockerfile-only pushes pay ~0s here.
+  build-app:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Next.js output
+        id: nextjs-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .next/standalone
+            .next/static
+          key: nextjs-${{ hashFiles('src/**', 'public/**', 'package.json', 'package-lock.json') }}
+
+      - name: Cache npm
+        if: steps.nextjs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: npm-${{ hashFiles('package-lock.json') }}
+          restore-keys: npm-
+
+      - name: Cache Next.js incremental
+        if: steps.nextjs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: nextjs-inc-${{ hashFiles('src/**', 'public/**', 'package.json') }}
+          restore-keys: nextjs-inc-
+
+      - name: Install dependencies
+        if: steps.nextjs-cache.outputs.cache-hit != 'true'
+        run: npm ci --no-audit --no-fund
+
+      - name: Build
+        if: steps.nextjs-cache.outputs.cache-hit != 'true'
+        run: npm run build
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: |
+            .next/standalone
+            .next/static
+          retention-days: 3
+
   docker:
+    needs: build-app
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -33,25 +83,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cache npm
-        uses: actions/cache@v4
+      - name: Download Next.js build
+        uses: actions/download-artifact@v4
         with:
-          path: ~/.npm
-          key: npm-${{ matrix.arch }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: npm-${{ matrix.arch }}-
-
-      - name: Cache Next.js build
-        uses: actions/cache@v4
-        with:
-          path: .next/cache
-          key: nextjs-${{ matrix.arch }}-${{ hashFiles('src/**', 'public/**', 'package.json') }}
-          restore-keys: nextjs-${{ matrix.arch }}-
-
-      - name: Install dependencies
-        run: npm install --no-audit --no-fund
-
-      - name: Build
-        run: npm run build
+          name: nextjs-build
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
