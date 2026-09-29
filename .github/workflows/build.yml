@@ -32,7 +32,7 @@ jobs:
           path: |
             .next/standalone
             .next/static
-          key: nextjs-${{ hashFiles('src/**', 'public/**', 'package.json', 'package-lock.json') }}
+          key: nextjs-${{ hashFiles('src/**', 'public/**', 'package.json', 'package-lock.json', 'version.json') }}
 
       - name: Cache npm
         if: steps.nextjs-cache.outputs.cache-hit != 'true'

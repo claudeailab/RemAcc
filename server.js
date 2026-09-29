@@ -236,16 +236,9 @@ function ensureWinePrefix() {
   _winePrefixReady = new Promise(resolve => {
     const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
     const wb = spawn('wineboot', ['-i'], { env, stdio: 'ignore' });
-    wb.on('error', resolve);
-    wb.on('exit', () => {
-      // Disable UltraVNC's connection-info dialog (headless — no Wine GUI appears)
-      const reg = spawn('wine', [
-        'reg', 'add', 'HKCU\\Software\\ORL\\VNCviewer\\Options',
-        '/v', 'InfoOnConnect', '/t', 'REG_DWORD', '/d', '0', '/f',
-      ], { env, stdio: 'ignore' });
-      reg.on('exit', resolve);
-      reg.on('error', resolve);
-    });
+    const done = () => resolve();
+    wb.on('exit', done);
+    wb.on('error', done); // proceed even if wineboot is unavailable
   });
   return _winePrefixReady;
 }
@@ -287,28 +280,16 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
   const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
 
-  // Windowed mode (no -fullscreen): Wine uses GDI, rendering is captured by x11vnc.
-  // The connection-info dialog is modal in windowed mode and blocks the VNC frame
-  // loop until dismissed — xdotool presses Return to clear it after auth completes.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar'];
+  // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
+  // the window in an endless loop, so the viewer never requests a frame. The DirectX path skips it.
+  // -autoscaling: fit any remote resolution into the Xvfb screen at a uniform ratio.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);
 
   const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
   procs.push(wine);
   wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
-
-  // Close the UltraVNC connection-info dialog via WM_DELETE_WINDOW (= clicking X).
-  // 'key Return' was pressing Cancel which disconnected the session — windowclose
-  // just hides the info dialog while the VNC session continues.
-  const dismissEnv = { ...process.env, DISPLAY: `:${display}` };
-  const closeInfoDialog = () => {
-    spawn('xdotool', ['search', '--name', 'Connection Info', 'windowclose'], { env: dismissEnv, stdio: 'ignore' })
-      .on('error', () => {});
-  };
-  setTimeout(closeInfoDialog, 3000);
-  setTimeout(closeInfoDialog, 5000);
-  setTimeout(closeInfoDialog, 8000);
 
   await waitForPort(proxyPort);
   dsmSessions.set(String(connId), { display, port: proxyPort, procs });

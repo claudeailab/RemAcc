@@ -28,3 +28,15 @@ Update all three files atomically:
 - `package-lock.json` — both `.version` fields (use `replace_all: true`)
 
 Commit format: `v{version} - short description`
+
+The `build-app` CI cache key must include every file baked into the Next.js build — including `version.json` (imported by `AdminSidebar.tsx`, read by `UserNavbar.tsx`). A missing key file makes CI reuse a stale build and the UI shows an old version.
+
+## UltraVNC DSM Viewer Stuck on "Password accepted" (Wine)
+
+Symptom: the "UltraVNC Viewer Status for <host>" window stays up with Speed 123 / FPS 1 (dialog placeholders, not measurements) and the desktop never appears.
+
+Cause: under Wine the viewer's GDI path loops forever in `WM_SIZE` → `Scrollbar_RecalculateSize` → `SetWindowPos` → `WM_SIZE` (~20k `SetWindowPos` calls, viewer at 20–40% CPU), so it never requests a frame. Not DSM-specific; the status window is not modal and needs no dismissal.
+
+Fix: launch the viewer with `-directx -autoscaling` (both skip the scrollbar code; `-autoscaling` fits any remote size into the 1920x1080 Xvfb). Do not use `-fullscreen` — D3D fullscreen stretches non-uniformly and drops regions.
+
+Reproducing locally: build `vncviewer.exe` from github.com/ultravnc/UltraVNC with MinGW (x86_64-w64-mingw32-g++-posix, UNICODE, static zlib/zstd/libjpeg-turbo/xz/minizip-ng/libsodium), run it in an `ubuntu:24.04` container with the Dockerfile's apt packages as root (compose uses `user: "0"`; Wine refuses to create `/tmp/uvnc-wine` as non-root), point it at a password-protected x11vnc, and use `-loglevel 10 -logfile` + `winedbg` (`bt all`) + `x86_64-w64-mingw32-addr2line` to locate stalls.

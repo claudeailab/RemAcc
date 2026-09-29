@@ -75,7 +75,11 @@ MySQL + Drizzle ORM. Table prefix: `webapp_`. Auto-migrated on startup. AES-256-
 
 ## Versioning
 
-`version.json` is the source of truth. `package.json` and `package-lock.json` must match. Bump all three on every push.
+`version.json` is the source of truth. `package.json` and `package-lock.json` must match. Bump all three on every push. `version.json` must stay in the `build-app` Next.js cache key in `build.yml`.
+
+## UltraVNC DSM Proxy (server.js)
+
+Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling` (+ `-password`, `-user`). `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
 
 ## MCP GitHub Tools (vs curl)
 
