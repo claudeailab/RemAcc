@@ -79,7 +79,7 @@ MySQL + Drizzle ORM. Table prefix: `webapp_`. Auto-migrated on startup. AES-256-
 
 ## UltraVNC DSM Proxy (server.js)
 
-Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling -noremotecursor -noemulate3` (+ `-password`, `-user`). `-noemulate3`: UltraVNC holds left/right presses on a `WM_TIMER` for middle-button emulation; timers are the lowest-priority message and can starve on a busy UI thread. `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
+Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -noremotecursor -noemulate3` (+ `-password`, `-user`). No `-autoscaling`: the relay Xvfb is 7680x2160, the viewer draws the remote 1:1, `findViewerWindow` (`xwininfo`, from `x11-utils` in the Dockerfile) reads the viewer window's exact geometry and x11vnc exports only that rectangle (`-clip`), so guacd receives the remote at native size. A dialog without a main window for 3 s (e.g. "password check failed") is exported as a 1920x1080 area around it. `-noemulate3`: UltraVNC holds left/right presses on a `WM_TIMER` for middle-button emulation; timers are the lowest-priority message and can starve on a busy UI thread. `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
 
 Relay x11vnc: `-wait 1 -defer 1 -nocursor` with XDAMAGE (no `-noxdamage`). Wine prefix: `Direct3D\renderer=gdi` set headless in `ensureWinePrefix`. guacd gets `cursor: 'local'` for DSM sessions.
 
@@ -88,6 +88,10 @@ Session lifecycle: a relay belongs to exactly one WebSocket — start only if th
 Service worker: reload on `controllerchange` only when the page already had a controller — a first claim must not reload (it reopens remote sessions).
 
 Logging: never log per browser message on the relay hot path (stdout to a pipe is synchronous in Node); guacd runs at `-L info`. Each DSM session logs one line per 10 s (`DSM id=N: frames/s, browser round trip p50/max, CPU% viewer/x11vnc/Xvfb, load`) — round trip = guacd `sync` relayed → browser `sync` ack, i.e. network + browser; high CPU% = relay saturated; both low while the user sees lag = delay is between the viewer and the UltraVNC server.
+
+## Multi-monitor Sessions (dashboard GuacPanel)
+
+Remote monitors are inferred as equal side-by-side screens: `n = round(width / height / (16/9))`. When `n > 1` a `1 | 2 | … | All` toolbar crops the display to one monitor (CSS `left` offset + `clip-path`, pointer clamped to that monitor) and the choice is stored per connection in `localStorage` (`remacc_screen_<id>`, default screen 1). Same code for plain VNC and DSM, because the DSM relay exports the remote at native size.
 
 ## Admin UI
 

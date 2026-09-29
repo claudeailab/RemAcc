@@ -167,6 +167,22 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   useEffect(() => { activeRef.current = active; }, [active]);
 
   const scaleRef = useRef(1);
+  // Multi-monitor remotes: show one monitor at a time (index) or all (-1); remembered per connection
+  const screenKey = `remacc_screen_${session.id}`;
+  const [screens, setScreens] = useState(1);
+  const [screen, setScreen] = useState(() => {
+    try { return Number(localStorage.getItem(screenKey) ?? 0); } catch { return 0; }
+  });
+  const screensRef = useRef(1);
+  const screenRef = useRef(screen);
+  const rescaleRef = useRef<() => void>(() => {});
+
+  function chooseScreen(i: number) {
+    setScreen(i);
+    screenRef.current = i;
+    try { localStorage.setItem(screenKey, String(i)); } catch {}
+    rescaleRef.current();
+  }
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -197,18 +213,32 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       displayEl.style.transformOrigin = "0 0";
       containerRef.current.appendChild(displayEl);
 
+      // Side-by-side monitors of equal size, inferred from the aspect ratio (VNC has no layout info)
+      function visibleRange() {
+        const dw = display.getWidth();
+        const n = screensRef.current;
+        const k = screenRef.current;
+        const vw = dw / n;
+        return n > 1 && k >= 0 && k < n ? { x0: k * vw, vw } : { x0: 0, vw: dw };
+      }
+
       function scaleDisplay() {
         const cw = containerRef.current?.offsetWidth ?? 1;
         const ch = containerRef.current?.offsetHeight ?? 1;
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        const scale = Math.min(cw / dw, ch / dh);
+        const n = Math.max(1, Math.round(dw / dh / (16 / 9)));
+        if (n !== screensRef.current) { screensRef.current = n; setScreens(n); }
+        const { x0, vw } = visibleRange();
+        const scale = Math.min(cw / vw, ch / dh);
         scaleRef.current = scale;
-        displayEl.style.left = Math.max(0, (cw - dw * scale) / 2) + "px";
+        displayEl.style.left = (cw - vw * scale) / 2 - x0 * scale + "px";
         displayEl.style.top  = Math.max(0, (ch - dh * scale) / 2) + "px";
+        displayEl.style.clipPath = `inset(0 ${(dw - x0 - vw) * scale}px 0 ${x0 * scale}px)`;
         display.scale(scale);
       }
+      rescaleRef.current = scaleDisplay;
 
       display.onresize = scaleDisplay;
       obs = new ResizeObserver(scaleDisplay);
@@ -225,8 +255,9 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const s = scaleRef.current || 1;
         const ox = parseFloat(displayEl.style.left) || 0;
         const oy = parseFloat(displayEl.style.top)  || 0;
+        const { x0, vw } = visibleRange(); // keep the pointer on the monitor being shown
         return {
-          x: Math.max(0, Math.min(display.getWidth()  - 1, Math.round((e.clientX - rect.left - ox) / s))),
+          x: Math.max(x0, Math.min(x0 + vw - 1, Math.round((e.clientX - rect.left - ox) / s))),
           y: Math.max(0, Math.min(display.getHeight() - 1, Math.round((e.clientY - rect.top  - oy) / s))),
         };
       }
@@ -316,6 +347,28 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
       <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+      {status === "connected" && screens > 1 && (
+        <div
+          className="absolute right-2 top-2 z-10 flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur"
+          onMouseDown={e => e.stopPropagation()}
+          onMouseUp={e => e.stopPropagation()}
+        >
+          {Array.from({ length: screens }, (_, i) => (
+            <button
+              key={i} type="button" title={`Screen ${i + 1}`} onClick={() => chooseScreen(i)}
+              className={`px-3 py-1.5 transition-colors ${screen === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            >
+              {i + 1}
+            </button>
+          ))}
+          <button
+            type="button" title="All screens" onClick={() => chooseScreen(-1)}
+            className={`px-3 py-1.5 transition-colors ${screen === -1 || screen >= screens ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+          >
+            All
+          </button>
+        </div>
+      )}
       {status !== "connected" && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="flex flex-col items-center gap-2 text-center px-6">

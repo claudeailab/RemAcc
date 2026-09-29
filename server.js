@@ -178,7 +178,8 @@ const VNC_DEFAULTS = {
 // ---------------------------------------------------------------------------
 const UVNC_DIR = '/tmp/uvnc';
 const WINE_PREFIX = '/tmp/uvnc-wine';
-const SCREEN_W = 1920, SCREEN_H = 1080;
+// Room for multi-monitor remotes at 1:1; x11vnc exports only the viewer window's rectangle
+const SCREEN_W = 7680, SCREEN_H = 2160;
 const dsmDisplays = new Set();  // X displays owned by running or starting DSM proxies
 const dsmByConn = new Map();    // connId -> session; one relay per connection, latest wins
 
@@ -299,29 +300,18 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     await waitForX(display);
     alive();
 
-    // Start x11vnc before Wine so guacd can connect immediately and stream
-    // the connection progress dialog live.
-    const x11vnc = spawn('x11vnc', [
-      '-display', `:${display}`, '-rfbport', String(session.port),
-      '-nopw', '-forever', '-shared', '-quiet', '-localhost',
-      '-wait', '1', '-defer', '1', // with XDAMAGE hints: ~30 ms lower latency than 5/5 polling
-      '-nocursor',         // the browser's own pointer is the only cursor
-    ], { stdio: 'ignore' });
-    procs.push(x11vnc);
-    x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
-
     const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
     // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
     const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
 
     // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
     // the window in an endless loop, so the viewer never requests a frame. The DirectX path skips it.
-    // -autoscaling: fit any remote resolution into the Xvfb screen at a uniform ratio.
+    // No -autoscaling: the viewer draws the remote 1:1, so every monitor stays at native resolution.
     // -noremotecursor: the server does not paint its cursor and the viewer draws none — a painted
     // cursor lags behind the browser's pointer and shows up as a second mouse.
     // -noemulate3: button presses are sent at once instead of being held on a timer for
     // left+right middle-button emulation (the browser sends real middle clicks).
-    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling', '-noremotecursor', '-noemulate3'];
+    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-noremotecursor', '-noemulate3'];
     if (password) wineArgs.push('-password', password);
     if (username) wineArgs.push('-user', username);
 
@@ -329,14 +319,83 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     procs.push(wine);
     wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
 
+    // Export exactly the viewer window (= the remote screen). If the viewer shows a dialog instead
+    // (e.g. authentication failed), export a 1920x1080 area around it so the user can read and answer it.
+    const found = await waitForViewerWindow(display, wine, alive);
+    alive();
+    const win = found?.screen ? found.win : null;
+    const clip = win ? clipRect(win) : dialogRect(found?.win);
+    const x11vnc = spawn('x11vnc', [
+      '-display', `:${display}`, '-rfbport', String(session.port), '-clip', clip,
+      '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+      '-wait', '1', '-defer', '1', // with XDAMAGE hints: ~30 ms lower latency than 5/5 polling
+      '-nocursor',         // the browser's own pointer is the only cursor
+    ], { stdio: 'ignore' });
+    procs.push(x11vnc);
+    x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
+
     await waitForPort(session.port);
     alive();
+    log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip}`);
   } catch (e) {
     session.stop();
     throw e;
   }
-  log(`DSM proxy id=${connId}: display=:${display} port=${session.port}`);
   return session;
+}
+
+// Largest viewable vncviewer.exe window at least minW x minH, excluding the connection status
+// dialog. At 1:1 the viewer's main window has exactly the remote framebuffer's size.
+async function findViewerWindow(display, minW, minH) {
+  const { execFile } = require('child_process');
+  const xwininfo = args => new Promise((resolve, reject) =>
+    execFile('xwininfo', args, { env: { ...process.env, DISPLAY: `:${display}` } }, (e, out) => e ? reject(e) : resolve(out)));
+  let best = null;
+  for (const line of (await xwininfo(['-root', '-tree'])).split('\n')) {
+    const m = line.match(/^\s+(0x[0-9a-f]+) (?:"(.*)"|\(has no name\)): \("vncviewer\.exe" [^)]*\)\s+(\d+)x(\d+)\+(-?\d+)\+(-?\d+)/);
+    if (!m) continue;
+    const [, id, name = '', w, h, x, y] = m;
+    if (name.startsWith('UltraVNC Viewer Status') || +w < minW || +h < minH) continue;
+    if (!best || +w * +h > best.w * best.h) best = { id, w: +w, h: +h, x: +x, y: +y };
+  }
+  if (!best) return null;
+  return /Map State: IsViewable/.test(await xwininfo(['-id', best.id])) ? best : null;
+}
+
+// Wait for the viewer's main window with a stable geometry -> { screen: true, win }. A dialog that
+// stays up for 3 s without a main window -> { screen: false, win }. Gives up after 30 s.
+async function waitForViewerWindow(display, wine, alive) {
+  const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
+  let prev = null;
+  let dialogSince = 0;
+  let dialog = null;
+  const start = Date.now();
+  while (Date.now() - start < 30000) {
+    alive();
+    if (wine.exitCode !== null) throw new Error('UltraVNC viewer exited before showing the remote screen');
+    const win = await findViewerWindow(display, 640, 400).catch(() => null);
+    if (same(win, prev)) return { screen: true, win };
+    prev = win;
+    dialog = win ? null : await findViewerWindow(display, 50, 30).catch(() => null);
+    dialogSince = dialog ? dialogSince || Date.now() : 0;
+    if (dialog && Date.now() - dialogSince >= 3000) return { screen: false, win: dialog };
+    await sleep(250);
+  }
+  return dialog && { screen: false, win: dialog };
+}
+
+function clipRect(win) {
+  const x = Math.max(0, win.x), y = Math.max(0, win.y);
+  return `${Math.min(win.w, SCREEN_W - x)}x${Math.min(win.h, SCREEN_H - y)}+${x}+${y}`;
+}
+
+// 1920x1080 area centred on the dialog (or the screen), inside the screen
+function dialogRect(win) {
+  const cx = win ? win.x + (win.w >> 1) : SCREEN_W >> 1;
+  const cy = win ? win.y + (win.h >> 1) : SCREEN_H >> 1;
+  const x = Math.min(Math.max(0, cx - 960), SCREEN_W - 1920);
+  const y = Math.min(Math.max(0, cy - 540), SCREEN_H - 1080);
+  return `1920x1080+${x}+${y}`;
 }
 
 // One log line per 10 s for a DSM session, to locate delays: frames/s and the browser round trip
@@ -350,10 +409,13 @@ function startDsmDiag(connId, session) {
   const ticks = pid => {
     try { const f = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' '); return +f[11] + +f[12]; } catch { return 0; }
   };
-  let prev = session.procs.map(p => ticks(p.pid));
+  const names = { viewer: 'wine', x11vnc: 'x11vnc', Xvfb: 'Xvfb' };
+  const sample = () => Object.fromEntries(Object.entries(names).map(([k, file]) =>
+    [k, ticks(session.procs.find(p => p.spawnfile === file)?.pid)]));
+  let prev = sample();
   const timer = setInterval(() => {
-    const now = session.procs.map(p => ticks(p.pid));
-    const cpu = now.map((t, i) => Math.round((t - (prev[i] ?? 0)) / 10)); // 100 ticks/s over 10 s -> %
+    const now = sample();
+    const cpu = Object.fromEntries(Object.keys(now).map(k => [k, Math.round((now[k] - prev[k]) / 10)])); // 100 ticks/s over 10 s -> %
     prev = now;
     lags.sort((a, b) => a - b);
     const p50 = lags.length ? lags[lags.length >> 1] : '-';
@@ -361,7 +423,7 @@ function startDsmDiag(connId, session) {
     const cutoff = Date.now() - 30000;
     for (const [ts, t] of sent) if (t < cutoff) sent.delete(ts);
     log(`DSM id=${connId}: ${(frames / 10).toFixed(1)} frames/s, browser round trip p50 ${p50} ms max ${max} ms, ` +
-        `CPU% viewer ${cpu[2] ?? '-'} x11vnc ${cpu[1] ?? '-'} Xvfb ${cpu[0] ?? '-'}, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`);
+        `CPU% viewer ${cpu.viewer} x11vnc ${cpu.x11vnc} Xvfb ${cpu.Xvfb}, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`);
     frames = 0;
     lags = [];
   }, 10000);
