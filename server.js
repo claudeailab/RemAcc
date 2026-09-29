@@ -234,7 +234,7 @@ let _winePrefixReady = null;
 function ensureWinePrefix() {
   if (_winePrefixReady) return _winePrefixReady;
   _winePrefixReady = new Promise(resolve => {
-    const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '' };
+    const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
     const wb = spawn('wineboot', ['-i'], { env, stdio: 'ignore' });
     const done = () => resolve();
     wb.on('exit', done);
@@ -277,26 +277,29 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
 
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
-  const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
+  // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
+  const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
 
-  // Force Wine DirectDraw to use GDI renderer so fullscreen Wine windows are
-  // captured by x11vnc. Without this, Wine switches to a DirectDraw path that
-  // bypasses the X11 framebuffer and x11vnc sees only black.
-  await new Promise(resolve => {
-    const r = spawn('wine', ['reg', 'add', 'HKCU\\Software\\Wine\\DirectDraw', '/v', 'DirectDrawRenderer', '/t', 'REG_SZ', '/d', 'gdi', '/f'],
-      { env: wineEnv, stdio: 'ignore' });
-    r.on('exit', resolve); r.on('error', resolve);
-  });
-
-  // -fullscreen causes the connection-info dialog to auto-dismiss once the first
-  // framebuffer update arrives. GDI renderer makes this visible to x11vnc.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-fullscreen', '-notoolbar'];
+  // Windowed mode (no -fullscreen): Wine uses GDI, rendering is captured by x11vnc.
+  // The connection-info dialog is modal in windowed mode and blocks the VNC frame
+  // loop until dismissed — xdotool presses Return to clear it after auth completes.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);
 
   const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
   procs.push(wine);
   wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
+
+  // Dismiss the modal connection-info dialog so the VNC frame loop can start.
+  // DSM auth (RSA-2048 key exchange) takes ~1-3s; we try at 3s and 6s.
+  const dismissEnv = { ...process.env, DISPLAY: `:${display}` };
+  const sendReturn = () => {
+    spawn('xdotool', ['key', '--clearmodifiers', 'Return'], { env: dismissEnv, stdio: 'ignore' })
+      .on('error', () => {});
+  };
+  setTimeout(sendReturn, 3000);
+  setTimeout(sendReturn, 6000);
 
   await waitForPort(proxyPort);
   dsmSessions.set(String(connId), { display, port: proxyPort, procs });
