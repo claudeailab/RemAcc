@@ -22,9 +22,11 @@ export default function ServiceWorkerRegister() {
       })
       .catch(() => {});
 
-    // Reload when a new SW takes control (clears stale cache)
+    // Reload when a new SW replaces an old one (clears stale cache). A first-time claim
+    // needs no reload — the page is already fresh, and reloading reopens remote sessions.
+    const hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      window.location.reload();
+      if (hadController) window.location.reload();
     });
   }, []);
   return null;

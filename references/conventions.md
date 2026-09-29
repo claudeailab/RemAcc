@@ -79,7 +79,13 @@ MySQL + Drizzle ORM. Table prefix: `webapp_`. Auto-migrated on startup. AES-256-
 
 ## UltraVNC DSM Proxy (server.js)
 
-Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling` (+ `-password`, `-user`). `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
+Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling -noremotecursor` (+ `-password`, `-user`). `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
+
+Relay x11vnc: `-wait 1 -defer 1 -nocursor` with XDAMAGE (no `-noxdamage`). Wine prefix: `Direct3D\renderer=gdi` set headless in `ensureWinePrefix`. guacd gets `cursor: 'local'` for DSM sessions.
+
+Session lifecycle: a relay belongs to exactly one WebSocket — start only if the socket is open, stop if it closed during startup, stop on its `close`. One relay per connection id (newest wins; the older socket is closed). Displays come from `allocDisplay()` (synchronous reservation) and are released with their lock/socket files. Every change here must be verified with the E2E harness in `references/steps.md` (processes and `/tmp/.X*-lock` must be 0 after sessions end).
+
+Service worker: reload on `controllerchange` only when the page already had a controller — a first claim must not reload (it reopens remote sessions).
 
 ## MCP GitHub Tools (vs curl)
 

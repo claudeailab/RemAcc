@@ -179,14 +179,24 @@ const VNC_DEFAULTS = {
 const UVNC_DIR = '/tmp/uvnc';
 const WINE_PREFIX = '/tmp/uvnc-wine';
 const SCREEN_W = 1920, SCREEN_H = 1080;
-const dsmSessions = new Map(); // connId -> { display, port, procs }
+const dsmDisplays = new Set();  // X displays owned by running or starting DSM proxies
+const dsmByConn = new Map();    // connId -> session; one relay per connection, latest wins
 
-function findFreeDisplay() {
-  const fs = require('fs');
+// Displays 50-149 belong to this process, so lock/socket files of a display not in
+// dsmDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
+function allocDisplay() {
   for (let d = 50; d < 150; d++) {
-    if (!fs.existsSync(`/tmp/.X${d}-lock`) && !fs.existsSync(`/tmp/.X11-unix/X${d}`)) return d;
+    if (dsmDisplays.has(d)) continue;
+    dsmDisplays.add(d);
+    removeDisplayFiles(d);
+    return d;
   }
   throw new Error('No free X display');
+}
+
+function removeDisplayFiles(d) {
+  const fs = require('fs');
+  for (const f of [`/tmp/.X${d}-lock`, `/tmp/.X11-unix/X${d}`]) fs.rmSync(f, { force: true });
 }
 
 function findFreePort() {
@@ -237,8 +247,13 @@ function ensureWinePrefix() {
     const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
     const wb = spawn('wineboot', ['-i'], { env, stdio: 'ignore' });
     const done = () => resolve();
-    wb.on('exit', done);
     wb.on('error', done); // proceed even if wineboot is unavailable
+    wb.on('exit', () => {
+      // wined3d GDI renderer: the viewer's Direct3D frames skip OpenGL (Mesa llvmpipe), ~50 ms faster per update
+      const reg = spawn('wine', ['reg', 'add', 'HKCU\\Software\\Wine\\Direct3D', '/v', 'renderer', '/t', 'REG_SZ', '/d', 'gdi', '/f'], { env, stdio: 'ignore' });
+      reg.on('exit', done);
+      reg.on('error', done);
+    });
   });
   return _winePrefixReady;
 }
@@ -253,56 +268,73 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   if (!manifest.uvnc_plugin) throw new Error('DSM plugin file not uploaded');
   if (!manifest.uvnc_viewer) throw new Error('UltraVNC Viewer not uploaded');
 
-  await ensureWinePrefix();
-
-  const display = findFreeDisplay();
-  const proxyPort = await findFreePort();
+  // A second viewer on the same server would be kicked (non-shared) and auto-reconnect,
+  // fighting the first one — the newest browser session takes over.
+  dsmByConn.get(connId)?.stop();
+  const display = allocDisplay();
   const procs = [];
+  const session = { display, port: 0, stopped: false };
+  session.stop = () => {
+    if (session.stopped) return;
+    session.stopped = true;
+    for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
+    removeDisplayFiles(display);
+    dsmDisplays.delete(display);
+    if (dsmByConn.get(connId) === session) dsmByConn.delete(connId);
+    session.onStop?.();
+    log(`DSM proxy id=${connId}: display=:${display} stopped`);
+  };
+  dsmByConn.set(connId, session);
+  const alive = () => { if (session.stopped) throw new Error('DSM proxy superseded'); };
 
-  const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', `${SCREEN_W}x${SCREEN_H}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
-  procs.push(xvfb);
-  xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
-  await waitForX(display);
+  try {
+    await ensureWinePrefix();
+    alive();
+    session.port = await findFreePort();
+    alive();
 
-  // Start x11vnc before Wine so guacd can connect immediately and stream
-  // the connection progress dialog live.
-  const x11vnc = spawn('x11vnc', [
-    '-display', `:${display}`, '-rfbport', String(proxyPort),
-    '-nopw', '-forever', '-shared', '-quiet', '-localhost',
-    '-noxdamage',        // Wine draws via mmap; XDAMAGE misses updates on Xvfb
-    '-wait', '5', '-defer', '5',
-    '-nocursorshape',
-  ], { stdio: 'ignore' });
-  procs.push(x11vnc);
-  x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
+    const xvfb = spawn('Xvfb', [`:${display}`, '-screen', '0', `${SCREEN_W}x${SCREEN_H}x24`, '-nolisten', 'tcp'], { stdio: 'ignore' });
+    procs.push(xvfb);
+    xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
+    await waitForX(display);
+    alive();
 
-  const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
-  // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
-  const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
+    // Start x11vnc before Wine so guacd can connect immediately and stream
+    // the connection progress dialog live.
+    const x11vnc = spawn('x11vnc', [
+      '-display', `:${display}`, '-rfbport', String(session.port),
+      '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+      '-wait', '1', '-defer', '1', // with XDAMAGE hints: ~30 ms lower latency than 5/5 polling
+      '-nocursor',         // the browser's own pointer is the only cursor
+    ], { stdio: 'ignore' });
+    procs.push(x11vnc);
+    x11vnc.on('error', e => err(`x11vnc id=${connId} error: ${e.message}`));
 
-  // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
-  // the window in an endless loop, so the viewer never requests a frame. The DirectX path skips it.
-  // -autoscaling: fit any remote resolution into the Xvfb screen at a uniform ratio.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling'];
-  if (password) wineArgs.push('-password', password);
-  if (username) wineArgs.push('-user', username);
+    const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
+    // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
+    const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
 
-  const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
-  procs.push(wine);
-  wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
+    // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
+    // the window in an endless loop, so the viewer never requests a frame. The DirectX path skips it.
+    // -autoscaling: fit any remote resolution into the Xvfb screen at a uniform ratio.
+    // -noremotecursor: the server does not paint its cursor and the viewer draws none — a painted
+    // cursor lags behind the browser's pointer and shows up as a second mouse.
+    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling', '-noremotecursor'];
+    if (password) wineArgs.push('-password', password);
+    if (username) wineArgs.push('-user', username);
 
-  await waitForPort(proxyPort);
-  dsmSessions.set(String(connId), { display, port: proxyPort, procs });
-  log(`DSM proxy id=${connId}: display=:${display} port=${proxyPort}`);
-  return proxyPort;
-}
+    const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
+    procs.push(wine);
+    wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
 
-function stopDsmProxy(connId) {
-  const session = dsmSessions.get(String(connId));
-  if (!session) return;
-  for (const proc of session.procs) { try { proc.kill('SIGKILL'); } catch {} }
-  dsmSessions.delete(String(connId));
-  log(`DSM proxy id=${connId}: stopped`);
+    await waitForPort(session.port);
+    alive();
+  } catch (e) {
+    session.stop();
+    throw e;
+  }
+  log(`DSM proxy id=${connId}: display=:${display} port=${session.port}`);
+  return session;
 }
 
 // ---------------------------------------------------------------------------
@@ -393,20 +425,26 @@ async function handleGuac(wsConn, req, id, protocol) {
   // DSM proxy: for VNC connections with dsmPlugin option, relay via Wine+Xvfb+x11vnc
   let guacHost = details.host;
   let guacPort = String(details.port);
-  let dsmActive = false;
+  let dsm = null;
   if (protocol === 'vnc' && details.options?.dsmPlugin) {
+    // A socket that already closed must not start (and supersede) a relay
+    if (wsConn.readyState !== 1) return;
     try {
-      const proxyPort = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.username ?? '', details.credential?.password ?? '');
-      guacHost = '127.0.0.1';
-      guacPort = String(proxyPort);
-      dsmActive = true;
-      log(`WS VNC id=${id}: using DSM proxy on 127.0.0.1:${proxyPort}`);
+      dsm = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.username ?? '', details.credential?.password ?? '');
     } catch (e) {
       err(`WS VNC id=${id}: DSM proxy failed: ${e.message}`);
-      wsConn.send(guacEncode(['error', 'DSM proxy error: ' + e.message, '514']));
-      wsConn.close(1011);
+      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', 'DSM proxy error: ' + e.message, '514']));
+      try { wsConn.close(1011); } catch {}
       return;
     }
+    // The browser may have left (e.g. page reload) while the relay was starting
+    if (wsConn.readyState !== 1) { dsm.stop(); return; }
+    wsConn.once('close', dsm.stop);
+    dsm.onStop = () => { try { wsConn.close(); } catch {} }; // superseded by a newer session
+    guacHost = '127.0.0.1';
+    guacPort = String(dsm.port);
+    base.cursor = 'local'; // the relay paints no cursor; 'remote' would add guacd's position dot
+    log(`WS VNC id=${id}: using DSM proxy on 127.0.0.1:${dsm.port}`);
   }
 
   const shadow = details.options?.shadow ?? {};
@@ -480,15 +518,14 @@ async function handleGuac(wsConn, req, id, protocol) {
     tcp.write(str);
   });
   wsConn.on('close', async () => {
-    if (!streaming) { try { tcp.destroy(); } catch {} if (dsmActive) stopDsmProxy(id); return; }
+    if (!streaming) { try { tcp.destroy(); } catch {} return; }
     const grace = await getSessionGrace();
-    if (grace > 0 && !tcp.destroyed && !dsmActive) {
+    if (grace > 0 && !tcp.destroyed && !dsm) {
       tcp.removeAllListeners('data');
       tcp.on('data', () => {}); // drain silently while parked
       storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
     } else {
       try { tcp.destroy(); } catch {}
-      if (dsmActive) stopDsmProxy(id);
     }
   });
 
