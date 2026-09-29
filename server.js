@@ -274,7 +274,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   dsmByConn.get(connId)?.stop();
   const display = allocDisplay();
   const procs = [];
-  const session = { display, port: 0, stopped: false, procs };
+  const session = { display, port: 0, stopped: false, procs, remote: { host, port: vncPort } };
   session.stop = () => {
     if (session.stopped) return;
     session.stopped = true;
@@ -398,14 +398,84 @@ function dialogRect(win) {
   return `1920x1080+${x}+${y}`;
 }
 
+// The viewer's TCP connection to the UltraVNC server as the kernel sees it (iproute2 ss): bytes
+// received, ms since the last send/receive, smoothed RTT. null when there is no such connection.
+function vncLinkStats(ip, port) {
+  const { execFile } = require('child_process');
+  const dst = ip.includes(':') ? `[${ip}]:${port}` : `${ip}:${port}`;
+  return new Promise(resolve => execFile('ss', ['-Htin', 'state', 'established', 'dst', dst], { timeout: 1000 }, (e, out) => {
+    if (e || !out.includes('bytes_received:')) return resolve(null);
+    const num = re => +(out.match(re)?.[1] ?? 0);
+    resolve({ at: Date.now(), recv: num(/bytes_received:(\d+)/), lastsnd: num(/lastsnd:(\d+)/),
+      lastrcv: num(/lastrcv:(\d+)/), rtt: num(/\brtt:([\d.]+)\//) });
+  }));
+}
+
 // One log line per 10 s for a DSM session, to locate delays: frames/s and the browser round trip
-// (guacd sync -> browser ack) cover network + browser; CPU% covers the relay processes.
+// (guacd sync -> browser ack) cover network + browser; CPU% covers the relay processes; the VNC
+// server link covers viewer <-> UltraVNC server. Each click/key press is traced hop by hop.
 function startDsmDiag(connId, session) {
   const fs = require('fs');
   const os = require('os');
   const sent = new Map(); // guacd frame timestamp -> ms when relayed to the browser
   let frames = 0;
   let lags = [];
+  let stopped = false;
+  let ip = null;
+  require('dns').promises.lookup(session.remote.host).then(r => { ip = r.address; }, () => {});
+  const link = () => ip ? vncLinkStats(ip, session.remote.port) : Promise.resolve(null);
+  const kb = bytes => (bytes / 1024).toFixed(bytes < 10240 ? 1 : 0);
+  const ms = v => v < 10 ? v.toFixed(1) : Math.round(v);
+  let linkPrev = null, linkIn = 0, linkPeak = 0, rtt = null;
+  const linkTimer = setInterval(async () => {
+    const s = await link();
+    if (!s) return;
+    if (linkPrev) {
+      const d = s.recv - linkPrev.recv;
+      linkIn += d;
+      linkPeak = Math.max(linkPeak, d * 1000 / Math.max(1, s.at - linkPrev.at));
+    }
+    linkPrev = s;
+    rtt = s.rtt;
+  }, 1000);
+
+  // One input at a time, sampled every 50 ms for 6 s: when the viewer sent it to the UltraVNC server,
+  // the bursts of data that server sent back (size, from/to), and when the relay passed the image
+  // following the first burst on to the browser.
+  let tracing = false;
+  let buttons = 0;
+  let images = [];
+  async function trace(what) {
+    if (tracing || !ip || stopped) return;
+    tracing = true;
+    images = [];
+    const t0 = Date.now();
+    const samples = [];
+    while (Date.now() - t0 < 6000 && !stopped) {
+      const s = await link();
+      if (s) samples.push(s);
+      await sleep(50);
+    }
+    tracing = false;
+    if (samples.length < 2 || stopped) return;
+    const rel = t => t === undefined ? '-' : `+${t - t0} ms`;
+    const sentAt = samples.map(s => s.at - s.lastsnd).filter(t => t >= t0).sort((a, b) => a - b)[0];
+    // A sample with new bytes ends its burst at its last packet (lastrcv); consecutive ones merge
+    const bursts = [];
+    for (let i = 1; i < samples.length; i++) {
+      const bytes = samples[i].recv - samples[i - 1].recv;
+      if (!bytes) continue;
+      const end = Math.max(samples[i - 1].at, samples[i].at - samples[i].lastrcv);
+      const last = bursts[bursts.length - 1];
+      if (last?.i === i - 1) Object.assign(last, { bytes: last.bytes + bytes, end, i });
+      else bursts.push({ start: samples[i - 1].at, end, bytes, i });
+    }
+    const big = bursts.filter(b => b.bytes >= 1024).slice(0, 4);
+    const answer = big.length ? big.map(b => `${kb(b.bytes)} KB +${b.start - t0}..+${b.end - t0} ms`).join(', ') : 'nothing';
+    log(`DSM id=${connId} ${what} trace: viewer -> VNC server by ${rel(sentAt)}; VNC server -> viewer ${answer}; ` +
+        `relay -> browser ${big.length ? rel(images.find(t => t >= big[0].end)) : '-'}; ` +
+        `VNC server link rtt ${ms(samples[samples.length - 1].rtt)} ms`);
+  }
   const ticks = pid => {
     try { const f = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' '); return +f[11] + +f[12]; } catch { return 0; }
   };
@@ -422,15 +492,26 @@ function startDsmDiag(connId, session) {
     const max = lags.length ? lags[lags.length - 1] : '-';
     const cutoff = Date.now() - 30000;
     for (const [ts, t] of sent) if (t < cutoff) sent.delete(ts);
+    const linkText = rtt === null ? '' : `, VNC server link rtt ${ms(rtt)} ms, in ${kb(linkIn / 10)} KB/s peak ${kb(linkPeak)} KB/s`;
     log(`DSM id=${connId}: ${(frames / 10).toFixed(1)} frames/s, browser round trip p50 ${p50} ms max ${max} ms, ` +
-        `CPU% viewer ${cpu.viewer} x11vnc ${cpu.x11vnc} Xvfb ${cpu.Xvfb}, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`);
+        `CPU% viewer ${cpu.viewer} x11vnc ${cpu.x11vnc} Xvfb ${cpu.Xvfb}, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores${linkText}`);
     frames = 0;
     lags = [];
+    linkIn = 0;
+    linkPeak = 0;
   }, 10000);
   return {
     frameSent(ts) { frames++; if (sent.size < 500) sent.set(ts, Date.now()); },
     frameAcked(ts) { const t = sent.get(ts); if (t !== undefined) { lags.push(Date.now() - t); sent.delete(ts); } },
-    stop() { clearInterval(timer); },
+    imageSent() { if (tracing && images.length < 1000) images.push(Date.now()); },
+    input(p) {
+      if (p[0] === 'mouse') {
+        const b = +p[3] & 7;
+        if (b && !buttons) trace('click');
+        buttons = b;
+      } else if (p[0] === 'key' && p[2] === '1') trace('key');
+    },
+    stop() { stopped = true; clearInterval(timer); clearInterval(linkTimer); },
   };
 }
 
@@ -603,6 +684,7 @@ async function handleGuac(wsConn, req, id, protocol) {
         if (wsConn.readyState === 1) wsConn.send(instr);
       } else if (streaming) {
         if (opcode === 'sync') diag?.frameSent(parts[1]);
+        else if (opcode === 'img') diag?.imageSent();
         if (wsConn.readyState === 1) wsConn.send(instr);
       }
     }
@@ -617,6 +699,7 @@ async function handleGuac(wsConn, req, id, protocol) {
       const p = guacParse(str);
       if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
       if (p[0] === 'sync') diag?.frameAcked(p[1]);
+      else diag?.input(p);
     } catch {}
     tcp.write(str);
   });

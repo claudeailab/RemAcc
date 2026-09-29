@@ -87,7 +87,9 @@ Session lifecycle: a relay belongs to exactly one WebSocket — start only if th
 
 Service worker: reload on `controllerchange` only when the page already had a controller — a first claim must not reload (it reopens remote sessions).
 
-Logging: never log per browser message on the relay hot path (stdout to a pipe is synchronous in Node); guacd runs at `-L info`. Each DSM session logs one line per 10 s (`DSM id=N: frames/s, browser round trip p50/max, CPU% viewer/x11vnc/Xvfb, load`) — round trip = guacd `sync` relayed → browser `sync` ack, i.e. network + browser; high CPU% = relay saturated; both low while the user sees lag = delay is between the viewer and the UltraVNC server.
+Logging: never log per browser message on the relay hot path (stdout to a pipe is synchronous in Node); guacd runs at `-L info`. Each DSM session logs one line per 10 s (`DSM id=N: frames/s, browser round trip p50/max, CPU% viewer/x11vnc/Xvfb, load, VNC server link rtt, in KB/s peak KB/s`) — round trip = guacd `sync` relayed → browser `sync` ack, i.e. network + browser; high CPU% = relay saturated; the link figures come from the kernel's view of the viewer's TCP socket to the UltraVNC server (`ss -tin`, `iproute2` in the Dockerfile). Each mouse/key press is traced for 6 s at 50 ms (one at a time): `viewer -> VNC server by +X ms; VNC server -> viewer <KB> +start..+end ms, …; relay -> browser +Y ms` — `lastsnd`/`lastrcv` give exact packet times. Reading it: late send = local input path; long burst at a low peak KB/s = bandwidth; late short burst = UltraVNC server reacts late; big gap from burst end to relay → browser = relay rendering.
+
+UltraVNC viewer facts (verified in source, 1.8.2.4 and main): a command-line launch never applies the Auto quick-option (`HandleQuickOption` runs only from the connect dialog), so it uses Ultra2 (JPEG, quality 8 → 80) with `autoDetect` off; the viewer requests a full non-incremental update every 30 s (`m_fullupdate_timer`, hard-coded).
 
 ## Multi-monitor Sessions (dashboard GuacPanel)
 
