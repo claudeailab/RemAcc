@@ -264,12 +264,25 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   xvfb.on('error', e => err(`Xvfb :${display} error: ${e.message}`));
   await waitForX(display);
 
-  // openbox is required for Wine's -fullscreen to be honoured; without a WM
-  // the fullscreen hint is ignored and the viewer window never paints.
-  const wm = spawn('openbox', ['--sm-disable'], { env: { ...process.env, DISPLAY: `:${display}` }, stdio: 'ignore' });
+  // openbox auto-maximizes every window so the viewer fills the display.
+  // We avoid -fullscreen on the viewer because Wine's fullscreen path uses
+  // DirectDraw and does not write to the X11 framebuffer, causing a black
+  // screen in x11vnc. Windowed GDI mode renders correctly.
+  const obConfigDir = `/tmp/openbox-${display}`;
+  fs.mkdirSync(obConfigDir, { recursive: true });
+  fs.writeFileSync(path.join(obConfigDir, 'rc.xml'),
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<openbox_config xmlns="http://openbox.org/3.4/rc">\n' +
+    '  <applications>\n' +
+    '    <application class="*"><maximized>yes</maximized></application>\n' +
+    '  </applications>\n' +
+    '</openbox_config>\n'
+  );
+  const wm = spawn('openbox', ['--config-file', path.join(obConfigDir, 'rc.xml'), '--sm-disable'],
+    { env: { ...process.env, DISPLAY: `:${display}` }, stdio: 'ignore' });
   procs.push(wm);
   wm.on('error', e => err(`openbox :${display} error: ${e.message}`));
-  await sleep(200); // give WM time to own the display before Wine starts
+  await sleep(150);
 
   // Start x11vnc immediately so guacd can connect right away and the viewer's
   // connection progress is shown live, instead of blocking on a fixed sleep.
@@ -286,10 +299,9 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
   const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
 
-  // Fullscreen + no toolbar → the remote desktop fills the screen with no
-  // viewer chrome. Relative plugin filename (cwd is UVNC_DIR); the .pkey is
-  // auto-discovered from the same directory, never passed as a positional arg.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-fullscreen', '-notoolbar'];
+  // No -fullscreen: windowed GDI mode renders to X11 correctly; openbox
+  // maximizes the window automatically so the remote desktop fills the screen.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);
 
