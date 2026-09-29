@@ -236,9 +236,16 @@ function ensureWinePrefix() {
   _winePrefixReady = new Promise(resolve => {
     const env = { ...process.env, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', DISPLAY: '', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
     const wb = spawn('wineboot', ['-i'], { env, stdio: 'ignore' });
-    const done = () => resolve();
-    wb.on('exit', done);
-    wb.on('error', done); // proceed even if wineboot is unavailable
+    wb.on('error', resolve);
+    wb.on('exit', () => {
+      // Disable UltraVNC's connection-info dialog (headless — no Wine GUI appears)
+      const reg = spawn('wine', [
+        'reg', 'add', 'HKCU\\Software\\ORL\\VNCviewer\\Options',
+        '/v', 'InfoOnConnect', '/t', 'REG_DWORD', '/d', '0', '/f',
+      ], { env, stdio: 'ignore' });
+      reg.on('exit', resolve);
+      reg.on('error', resolve);
+    });
   });
   return _winePrefixReady;
 }
@@ -291,15 +298,17 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   procs.push(wine);
   wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
 
-  // Dismiss the modal connection-info dialog so the VNC frame loop can start.
-  // DSM auth (RSA-2048 key exchange) takes ~1-3s; we try at 3s and 6s.
+  // Close the UltraVNC connection-info dialog via WM_DELETE_WINDOW (= clicking X).
+  // 'key Return' was pressing Cancel which disconnected the session — windowclose
+  // just hides the info dialog while the VNC session continues.
   const dismissEnv = { ...process.env, DISPLAY: `:${display}` };
-  const sendReturn = () => {
-    spawn('xdotool', ['key', '--clearmodifiers', 'Return'], { env: dismissEnv, stdio: 'ignore' })
+  const closeInfoDialog = () => {
+    spawn('xdotool', ['search', '--name', 'Connection Info', 'windowclose'], { env: dismissEnv, stdio: 'ignore' })
       .on('error', () => {});
   };
-  setTimeout(sendReturn, 3000);
-  setTimeout(sendReturn, 6000);
+  setTimeout(closeInfoDialog, 3000);
+  setTimeout(closeInfoDialog, 5000);
+  setTimeout(closeInfoDialog, 8000);
 
   await waitForPort(proxyPort);
   dsmSessions.set(String(connId), { display, port: proxyPort, procs });
