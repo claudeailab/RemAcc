@@ -8,3 +8,4 @@ export const pageTitle = "text-2xl font-bold tracking-tight md:text-3xl";
 export const sectionTitle = "text-lg font-semibold tracking-tight";
 export const label = "text-sm font-medium leading-none";
 export const muted = "text-sm text-muted-foreground";
+export const versionBadge = "w-fit shrink-0 rounded-md bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-semibold leading-none text-primary";

@@ -7,11 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
+import { Loader2, Plus, Pencil, Copy, Trash2, Folder, FolderOpen, ChevronRight, ChevronDown } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface FolderRow { id: number; name: string; parentId: number | null; credentialId: number | null }
 interface Credential { id: number; name: string; username: string }
+interface Connection { name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null; options: string | null }
 
 export default function FoldersPage() {
   const [list, setList] = useState<FolderRow[]>([]);
@@ -73,6 +74,37 @@ export default function FoldersPage() {
     } finally { setSaving(false); }
   }
 
+  // Copies the folder with its sub-folders and connections
+  async function handleClone(folder: FolderRow) {
+    const cr = await fetch("/api/admin/connections");
+    const { connections = [] } = (await cr.json()) as { connections?: Connection[] };
+    async function cloneRecursive(src: FolderRow, destParentId: number | null, name: string) {
+      const r = await fetch("/api/admin/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parentId: destParentId, credentialId: src.credentialId }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "Failed to create folder");
+      for (const c of connections.filter(c => c.folderId === src.id)) {
+        const cr2 = await fetch("/api/admin/connections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: d.id, credentialId: c.credentialId, notes: c.notes ?? undefined, options: c.options ?? undefined }),
+        });
+        if (!cr2.ok) throw new Error(`Failed to copy connection ${c.name}`);
+      }
+      for (const sub of list.filter(f => f.parentId === src.id)) await cloneRecursive(sub, d.id, sub.name);
+    }
+    try {
+      await cloneRecursive(folder, folder.parentId, `${folder.name} (copy)`);
+      toast.success("Folder cloned");
+    } catch (e: unknown) {
+      toast.error((e as Error).message || "Clone failed");
+    }
+    load();
+  }
+
   async function handleDelete(id: number) {
     setDeleteError("");
     const r = await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
@@ -111,9 +143,10 @@ export default function FoldersPage() {
             <span className="text-sm truncate ml-1">{f.name}</span>
             {cred && <span className={`text-xs truncate ml-1.5 ${muted}`}>({cred.name})</span>}
           </div>
-          <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => { setDeleteId(f.id); setDeleteError(""); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+          <div className="flex items-center gap-1 shrink-0">
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Edit" onClick={() => openEdit(f)}><Pencil className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Clone" onClick={() => handleClone(f)}><Copy className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Delete" onClick={() => { setDeleteId(f.id); setDeleteError(""); }}><Trash2 className="h-3 w-3 text-destructive" /></Button>
           </div>
         </div>
         {isOpen && subs.map(s => renderFolder(s, depth + 1))}

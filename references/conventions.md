@@ -79,13 +79,19 @@ MySQL + Drizzle ORM. Table prefix: `webapp_`. Auto-migrated on startup. AES-256-
 
 ## UltraVNC DSM Proxy (server.js)
 
-Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling -noremotecursor` (+ `-password`, `-user`). `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
+Viewer args are fixed: `-dsmplugin <plugin> -notoolbar -directx -autoscaling -noremotecursor -noemulate3` (+ `-password`, `-user`). `-noemulate3`: UltraVNC holds left/right presses on a `WM_TIMER` for middle-button emulation; timers are the lowest-priority message and can starve on a busy UI thread. `-directx` is mandatory under Wine (GDI path livelocks in `WM_SIZE`); never `-fullscreen`. No xdotool/dialog automation — the status window closes itself once the viewer window is created. Never guess UltraVNC registry keys or window titles; verify against the UltraVNC source first.
 
 Relay x11vnc: `-wait 1 -defer 1 -nocursor` with XDAMAGE (no `-noxdamage`). Wine prefix: `Direct3D\renderer=gdi` set headless in `ensureWinePrefix`. guacd gets `cursor: 'local'` for DSM sessions.
 
 Session lifecycle: a relay belongs to exactly one WebSocket — start only if the socket is open, stop if it closed during startup, stop on its `close`. One relay per connection id (newest wins; the older socket is closed). Displays come from `allocDisplay()` (synchronous reservation) and are released with their lock/socket files. Every change here must be verified with the E2E harness in `references/steps.md` (processes and `/tmp/.X*-lock` must be 0 after sessions end).
 
 Service worker: reload on `controllerchange` only when the page already had a controller — a first claim must not reload (it reopens remote sessions).
+
+Logging: never log per browser message on the relay hot path (stdout to a pipe is synchronous in Node); guacd runs at `-L info`. Each DSM session logs one line per 10 s (`DSM id=N: frames/s, browser round trip p50/max, CPU% viewer/x11vnc/Xvfb, load`) — round trip = guacd `sync` relayed → browser `sync` ack, i.e. network + browser; high CPU% = relay saturated; both low while the user sees lag = delay is between the viewer and the UltraVNC server.
+
+## Admin UI
+
+Folder edit/clone/delete live only on the Folders page (always visible, never hover-only); the Connections page folder tree is for navigation and drag-and-drop only. DSM connections carry a `DSM` badge next to the protocol badge. The version is rendered with `versionBadge` from `ui-conventions.ts` everywhere it appears.
 
 ## MCP GitHub Tools (vs curl)
 

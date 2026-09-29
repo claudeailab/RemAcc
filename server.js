@@ -103,7 +103,7 @@ class SshSession {
 // ---------------------------------------------------------------------------
 function startGuacd() {
   log('Starting guacd...');
-  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'debug'], {
+  const guacd = spawn('guacd', ['-f', '-b', '127.0.0.1', '-l', '4822', '-L', 'info'], {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   guacd.stdout?.on('data', d => process.stdout.write('[guacd] ' + d));
@@ -273,7 +273,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   dsmByConn.get(connId)?.stop();
   const display = allocDisplay();
   const procs = [];
-  const session = { display, port: 0, stopped: false };
+  const session = { display, port: 0, stopped: false, procs };
   session.stop = () => {
     if (session.stopped) return;
     session.stopped = true;
@@ -319,7 +319,9 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     // -autoscaling: fit any remote resolution into the Xvfb screen at a uniform ratio.
     // -noremotecursor: the server does not paint its cursor and the viewer draws none — a painted
     // cursor lags behind the browser's pointer and shows up as a second mouse.
-    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling', '-noremotecursor'];
+    // -noemulate3: button presses are sent at once instead of being held on a timer for
+    // left+right middle-button emulation (the browser sends real middle clicks).
+    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-autoscaling', '-noremotecursor', '-noemulate3'];
     if (password) wineArgs.push('-password', password);
     if (username) wineArgs.push('-user', username);
 
@@ -335,6 +337,39 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   }
   log(`DSM proxy id=${connId}: display=:${display} port=${session.port}`);
   return session;
+}
+
+// One log line per 10 s for a DSM session, to locate delays: frames/s and the browser round trip
+// (guacd sync -> browser ack) cover network + browser; CPU% covers the relay processes.
+function startDsmDiag(connId, session) {
+  const fs = require('fs');
+  const os = require('os');
+  const sent = new Map(); // guacd frame timestamp -> ms when relayed to the browser
+  let frames = 0;
+  let lags = [];
+  const ticks = pid => {
+    try { const f = fs.readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1].split(' '); return +f[11] + +f[12]; } catch { return 0; }
+  };
+  let prev = session.procs.map(p => ticks(p.pid));
+  const timer = setInterval(() => {
+    const now = session.procs.map(p => ticks(p.pid));
+    const cpu = now.map((t, i) => Math.round((t - (prev[i] ?? 0)) / 10)); // 100 ticks/s over 10 s -> %
+    prev = now;
+    lags.sort((a, b) => a - b);
+    const p50 = lags.length ? lags[lags.length >> 1] : '-';
+    const max = lags.length ? lags[lags.length - 1] : '-';
+    const cutoff = Date.now() - 30000;
+    for (const [ts, t] of sent) if (t < cutoff) sent.delete(ts);
+    log(`DSM id=${connId}: ${(frames / 10).toFixed(1)} frames/s, browser round trip p50 ${p50} ms max ${max} ms, ` +
+        `CPU% viewer ${cpu[2] ?? '-'} x11vnc ${cpu[1] ?? '-'} Xvfb ${cpu[0] ?? '-'}, load ${os.loadavg()[0].toFixed(1)} on ${os.cpus().length} cores`);
+    frames = 0;
+    lags = [];
+  }, 10000);
+  return {
+    frameSent(ts) { frames++; if (sent.size < 500) sent.set(ts, Date.now()); },
+    frameAcked(ts) { const t = sent.get(ts); if (t !== undefined) { lags.push(Date.now() - t); sent.delete(ts); } },
+    stop() { clearInterval(timer); },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -470,6 +505,8 @@ async function handleGuac(wsConn, req, id, protocol) {
   const tcp = new net.Socket();
   let buf = '';
   let streaming = false;
+  const diag = dsm ? startDsmDiag(id, dsm) : null;
+  if (diag) wsConn.once('close', diag.stop);
 
   tcp.on('error', e => {
     err(`WS ${protocol} id=${id}: guacd TCP error: ${e.message}`);
@@ -503,6 +540,7 @@ async function handleGuac(wsConn, req, id, protocol) {
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
       } else if (streaming) {
+        if (opcode === 'sync') diag?.frameSent(parts[1]);
         if (wsConn.readyState === 1) wsConn.send(instr);
       }
     }
@@ -513,8 +551,11 @@ async function handleGuac(wsConn, req, id, protocol) {
   wsConn.on('message', data => {
     if (!streaming) return;
     const str = data.toString();
-    log(`WS ${protocol} id=${id}: ← browser: ${str.slice(0, 200)}`);
-    try { const p = guacParse(str); if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) { log(`WS ${protocol} id=${id}: dropped 0x0 size`); return; } } catch {}
+    try {
+      const p = guacParse(str);
+      if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
+      if (p[0] === 'sync') diag?.frameAcked(p[1]);
+    } catch {}
     tcp.write(str);
   });
   wsConn.on('close', async () => {

@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
 import type { PlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
+import { versionBadge } from "@/lib/ui-conventions";
 import version from "../../../version.json";
 
 interface NavItem { href: string; label: string; icon: React.ElementType; exact?: boolean }
@@ -96,7 +97,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
           <div className="flex flex-col min-w-0">
             <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
             {platform.title && <span className="text-xs text-muted-foreground truncate leading-tight">{platform.title}</span>}
-            <span className="text-xs text-foreground/60 font-mono font-semibold leading-tight">v{version.version}</span>
+            <span className={`${versionBadge} mt-1`}>v{version.version}</span>
           </div>
         </div>
 
@@ -153,9 +154,9 @@ export default function AdminSidebar({ user, features, platform }: Props) {
             />
             <span hidden className="text-primary text-[10px] font-bold absolute">{platform.name.slice(0, 1).toUpperCase()}</span>
           </div>
-          <div className="flex items-baseline gap-1.5 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
             <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
-            <span className="text-xs text-foreground/60 font-mono font-semibold shrink-0">v{version.version}</span>
+            <span className={versionBadge}>v{version.version}</span>
           </div>
         </div>
         <button

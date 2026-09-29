@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getPlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
 import UserNavbarClient from "./UserNavbarClient";
+import { versionBadge } from "@/lib/ui-conventions";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -29,9 +30,7 @@ export default async function UserNavbar() {
           />
         </div>
         <span className="font-bold text-base tracking-tight text-foreground truncate">{platform.name}</span>
-        {version && (
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0">v{version}</span>
-        )}
+        {version && <span className={versionBadge}>v{version}</span>}
       </Link>
       <UserNavbarClient />
     </header>

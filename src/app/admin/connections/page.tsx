@@ -25,6 +25,12 @@ const PROTO_BADGE: Record<string, string> = {
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
 };
 
+const DSM_BADGE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
+
+function isDsm(c: Connection): boolean {
+  try { return !!(c.options && JSON.parse(c.options).dsmPlugin); } catch { return false; }
+}
+
 const PAGE_SIZE = 50;
 const UNASSIGNED = -1; // sentinel for "no folder"
 
@@ -32,16 +38,12 @@ const UNASSIGNED = -1; // sentinel for "no folder"
 
 function FolderTree({
   folders, connections, selected, onSelect, onDrop,
-  onCloneFolder, onEditFolder, onDeleteFolder,
 }: {
   folders: FolderRow[];
   connections: Connection[];
   selected: number | null;
   onSelect: (id: number | null) => void;
   onDrop: (connectionId: number, folderId: number | null) => void;
-  onCloneFolder: (folder: FolderRow) => void;
-  onEditFolder: (folder: FolderRow) => void;
-  onDeleteFolder: (folder: FolderRow) => void;
 }) {
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [dragOver, setDragOver] = useState<number | null>(undefined as unknown as null);
@@ -93,12 +95,7 @@ function FolderTree({
           </button>
           {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
           <span className="truncate flex-1">{f.name}</span>
-          {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0 mr-0.5">{count}</span>}
-          <div className="flex items-center gap-0 shrink-0" onClick={e => e.stopPropagation()}>
-            <button type="button" className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/40 hover:text-foreground" onClick={() => onEditFolder(f)}><Pencil className="h-2.5 w-2.5" /></button>
-            <button type="button" className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/40 hover:text-foreground" onClick={() => onCloneFolder(f)}><Copy className="h-2.5 w-2.5" /></button>
-            <button type="button" className="h-5 w-5 flex items-center justify-center rounded hover:bg-muted/60 text-muted-foreground/40 hover:text-destructive" onClick={() => onDeleteFolder(f)}><Trash2 className="h-2.5 w-2.5" /></button>
-          </div>
+          {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{count}</span>}
         </div>
         {isOpen && children.map(c => renderFolder(c, depth + 1))}
       </div>
@@ -167,9 +164,6 @@ export default function ConnectionsPage() {
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
   const shadowEnabled = shadow.sessionId > 0;
   const [dsmPlugin, setDsmPlugin] = useState(false);
-  const [deleteFolderId, setDeleteFolderId] = useState<number | null>(null);
-  const [editFolder, setEditFolder] = useState<FolderRow | null>(null);
-  const [editFolderName, setEditFolderName] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -281,55 +275,6 @@ export default function ConnectionsPage() {
     }
   }
 
-  async function handleCloneFolder(folder: FolderRow) {
-    async function cloneRecursive(srcId: number, destParentId: number | null, name: string) {
-      const r = await fetch("/api/admin/folders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, parentId: destParentId }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error ?? "Failed to create folder");
-      const newId: number = d.id;
-      const conns = list.filter(c => c.folderId === srcId);
-      for (const c of conns) {
-        await fetch("/api/admin/connections", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: newId, credentialId: c.credentialId, notes: c.notes ?? undefined, options: c.options ?? undefined }),
-        });
-      }
-      for (const sf of folders.filter(f => f.parentId === srcId)) {
-        await cloneRecursive(sf.id, newId, sf.name);
-      }
-    }
-    try {
-      await cloneRecursive(folder.id, folder.parentId, `${folder.name} (copy)`);
-      toast.success("Folder cloned");
-      load();
-    } catch (e: unknown) { toast.error((e as Error).message ?? "Clone failed"); }
-  }
-
-  function openEditFolder(folder: FolderRow) { setEditFolder(folder); setEditFolderName(folder.name); }
-
-  async function handleEditFolder() {
-    if (!editFolder || !editFolderName.trim()) return;
-    const r = await fetch("/api/admin/folders", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editFolder.id, name: editFolderName.trim() }) });
-    if (!r.ok) { toast.error("Rename failed"); return; }
-    toast.success("Folder renamed");
-    setEditFolder(null);
-    load();
-  }
-
-  async function handleDeleteFolder(id: number) {
-    const r = await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
-    const d = await r.json();
-    if (!r.ok) { toast.error(d.error ?? "Delete failed"); return; }
-    toast.success("Folder deleted");
-    setDeleteFolderId(null);
-    load();
-  }
-
   function folderName(folderId: number | null): string {
     if (!folderId) return "";
     return folders.find(f => f.id === folderId)?.name ?? "";
@@ -376,9 +321,6 @@ export default function ConnectionsPage() {
               selected={selectedFolder}
               onSelect={handleSelectFolder}
               onDrop={handleDrop}
-              onCloneFolder={handleCloneFolder}
-              onEditFolder={openEditFolder}
-              onDeleteFolder={f => setDeleteFolderId(f.id)}
             />
           </div>
 
@@ -433,7 +375,10 @@ export default function ConnectionsPage() {
                               {c.host}{c.port ? `:${c.port}` : ""}
                             </td>
                             <td className="px-3 py-1.5">
-                              <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+                              <div className="flex items-center gap-1">
+                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+                                {isDsm(c) && <span title="UltraVNC DSM encryption" className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${DSM_BADGE}`}>DSM</span>}
+                              </div>
                             </td>
                             <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
                             <td className="px-2 py-1.5">
@@ -588,30 +533,6 @@ export default function ConnectionsPage() {
           </DialogContent>
         </Dialog>
 
-        <Dialog open={editFolder !== null} onOpenChange={v => { if (!v) setEditFolder(null); }}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Rename Folder</DialogTitle></DialogHeader>
-            <div className="flex flex-col gap-1.5">
-              <Label>Name</Label>
-              <Input value={editFolderName} onChange={e => setEditFolderName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") handleEditFolder(); }} />
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditFolder(null)}>Cancel</Button>
-              <Button onClick={handleEditFolder} disabled={!editFolderName.trim()}>Rename</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={deleteFolderId !== null} onOpenChange={() => setDeleteFolderId(null)}>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Delete Folder</DialogTitle></DialogHeader>
-            <p className="text-sm">Are you sure? The folder must be empty to delete it.</p>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteFolderId(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => deleteFolderId && handleDeleteFolder(deleteFolderId)}>Delete</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </div>
   );
