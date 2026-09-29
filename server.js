@@ -279,10 +279,18 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
   const wineEnv    = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: '' };
 
-  // No -fullscreen and no WM: Wine renders in GDI/windowed mode to X11 natively.
-  // openbox was found to block Wine's window painting. The viewer window appears
-  // on the Xvfb display and x11vnc captures it directly.
-  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar'];
+  // Force Wine DirectDraw to use GDI renderer so fullscreen Wine windows are
+  // captured by x11vnc. Without this, Wine switches to a DirectDraw path that
+  // bypasses the X11 framebuffer and x11vnc sees only black.
+  await new Promise(resolve => {
+    const r = spawn('wine', ['reg', 'add', 'HKCU\\Software\\Wine\\DirectDraw', '/v', 'DirectDrawRenderer', '/t', 'REG_SZ', '/d', 'gdi', '/f'],
+      { env: wineEnv, stdio: 'ignore' });
+    r.on('exit', resolve); r.on('error', resolve);
+  });
+
+  // -fullscreen causes the connection-info dialog to auto-dismiss once the first
+  // framebuffer update arrives. GDI renderer makes this visible to x11vnc.
+  const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-fullscreen', '-notoolbar'];
   if (password) wineArgs.push('-password', password);
   if (username) wineArgs.push('-user', username);
 
