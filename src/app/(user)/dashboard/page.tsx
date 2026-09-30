@@ -234,6 +234,9 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const screenRef = useRef(screen);
   const rescaleRef = useRef<() => void>(() => {});
   const clientRef = useRef<any>(null);
+  const tunnelRef = useRef<any>(null);
+  // UltraVNC (DSM) sessions: the server announces that it can switch the remote's monitor
+  const [canSwitchMonitor, setCanSwitchMonitor] = useState(false);
 
   function sendCtrlAltDel() {
     const c = clientRef.current;
@@ -272,6 +275,12 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       tunnelRef = tunnel;
       client = new Guac.Client(tunnel);
       clientRef.current = client;
+      tunnelRef.current = tunnel;
+      const handleInstruction = tunnel.oninstruction;
+      tunnel.oninstruction = (opcode: string, params: string[]) => {
+        if (opcode === "remacc-monitor-switch") setCanSwitchMonitor(true);
+        else handleInstruction(opcode, params);
+      };
 
       const display = client.getDisplay();
       const displayEl: HTMLElement = display.getElement();
@@ -401,6 +410,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (client)   { try { client.disconnect(); } catch {} }
       client = null;
       clientRef.current = null;
+      tunnelRef.current = null;
     };
   }, [session.id, session.protocol]);
 
@@ -426,6 +436,15 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
           >
             Ctrl+Alt+Del
           </button>
+          {canSwitchMonitor && (
+            <button
+              type="button" title="Ask the remote computer for its next screen (primary, other screens, all screens)"
+              onClick={() => { try { tunnelRef.current?.sendMessage("remacc-monitor-switch"); } catch {} }}
+              className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
+            >
+              Switch screen
+            </button>
+          )}
           {screens > 1 && (
             <div className="flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur">
               {Array.from({ length: screens }, (_, i) => (

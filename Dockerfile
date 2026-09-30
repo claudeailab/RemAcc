@@ -1,4 +1,11 @@
 # syntax=docker/dockerfile:1
+# UltraVNC monitor-switch helper (Windows exe, run under Wine); built natively on the build host
+FROM --platform=$BUILDPLATFORM ubuntu:24.04 AS winhelper
+RUN apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 \
+    && rm -rf /var/lib/apt/lists/*
+COPY tools/uvnc-switch.c /src/
+RUN x86_64-w64-mingw32-gcc -municode -O2 -s -Wall -o /src/uvnc-switch.exe /src/uvnc-switch.c
+
 # Next.js is pre-built on the CI runner; this image just packages the output.
 FROM ubuntu:24.04 AS runner
 WORKDIR /app
@@ -33,6 +40,7 @@ COPY --chown=appuser:nodejs .next/static ./.next/static
 
 # Use custom server.js (WebSocket SSH/RDP/VNC proxy on same port as Next.js).
 COPY --chown=appuser:nodejs server.js ./server.js
+COPY --from=winhelper --chown=appuser:nodejs /src/uvnc-switch.exe ./uvnc-switch.exe
 
 # Reinstall bcrypt for the target architecture.
 # standalone bundles the amd64 build-machine binary; replace with the correct arch.

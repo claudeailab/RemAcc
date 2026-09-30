@@ -259,6 +259,46 @@ function ensureWinePrefix() {
   return _winePrefixReady;
 }
 
+// mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
+function dsmWineEnv(display) {
+  return { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
+}
+
+// UltraVNC's "Select full desktop / switch monitor": the viewer asks the server for its next
+// monitor (primary -> ... -> all). The helper presses it in this session's viewer, then the relay
+// follows the viewer window's new size so the browser receives the new screen.
+const UVNC_SWITCH_EXE = require('path').join(__dirname, 'uvnc-switch.exe');
+async function switchDsmMonitor(connId, session) {
+  if (session.switching || session.stopped) return;
+  session.switching = true;
+  try {
+    const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
+    const before = await findViewerWindow(session.display, 640, 400).catch(() => null);
+    const code = await new Promise(resolve => {
+      const p = spawn('wine', [UVNC_SWITCH_EXE, session.exeName], { env: dsmWineEnv(session.display), stdio: 'ignore' });
+      p.on('exit', resolve);
+      p.on('error', () => resolve(-1));
+    });
+    if (code !== 0) { err(`DSM id=${connId}: monitor switch helper exited ${code}`); return; }
+    // Same-size monitors keep the window geometry; a size change settles within a few frames
+    let prev = before;
+    for (const start = Date.now(); Date.now() - start < 8000 && !session.stopped;) {
+      await sleep(300);
+      const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
+      if (win && same(win, prev) && !same(win, before)) {
+        const clip = clipRect(win);
+        spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
+        log(`DSM id=${connId}: switched monitor, relay now ${clip}`);
+        return;
+      }
+      prev = win;
+    }
+    log(`DSM id=${connId}: switched monitor, size unchanged`);
+  } finally {
+    session.switching = false;
+  }
+}
+
 async function startDsmProxy(connId, host, vncPort, username, password) {
   const fs = require('fs');
   const path = require('path');
@@ -274,11 +314,14 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   dsmByConn.get(connId)?.stop();
   const display = allocDisplay();
   const procs = [];
-  const session = { display, port: 0, stopped: false, procs, remote: { host, port: vncPort } };
+  // Own hard link of the viewer per session: the monitor-switch helper finds this viewer by exe name
+  const exeName = `remacc-viewer-${display}.exe`;
+  const session = { display, port: 0, stopped: false, procs, exeName, remote: { host, port: vncPort } };
   session.stop = () => {
     if (session.stopped) return;
     session.stopped = true;
     for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
+    fs.rmSync(path.join(UVNC_DIR, exeName), { force: true });
     removeDisplayFiles(display);
     dsmDisplays.delete(display);
     if (dsmByConn.get(connId) === session) dsmByConn.delete(connId);
@@ -300,9 +343,11 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     await waitForX(display);
     alive();
 
-    const viewerPath = path.join(UVNC_DIR, manifest.uvnc_viewer);
-    // mono=d;gecko=d: prevent Wine from showing Mono/.NET and Gecko install dialogs
-    const wineEnv = { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
+    const viewerPath = path.join(UVNC_DIR, exeName);
+    fs.rmSync(viewerPath, { force: true });
+    try { fs.linkSync(path.join(UVNC_DIR, manifest.uvnc_viewer), viewerPath); }
+    catch { fs.copyFileSync(path.join(UVNC_DIR, manifest.uvnc_viewer), viewerPath); }
+    const wineEnv = dsmWineEnv(display);
 
     // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
     // the window in an endless loop, so the viewer never requests a frame. The DirectX path skips it.
@@ -346,7 +391,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   return session;
 }
 
-// Largest viewable vncviewer.exe window at least minW x minH, excluding the connection status
+// Largest viewable viewer window (any .exe class — each session has its own display) at least minW x minH, excluding the connection status
 // dialog. At 1:1 the viewer's main window has exactly the remote framebuffer's size.
 async function findViewerWindow(display, minW, minH) {
   const { execFile } = require('child_process');
@@ -354,7 +399,7 @@ async function findViewerWindow(display, minW, minH) {
     execFile('xwininfo', args, { env: { ...process.env, DISPLAY: `:${display}` } }, (e, out) => e ? reject(e) : resolve(out)));
   let best = null;
   for (const line of (await xwininfo(['-root', '-tree'])).split('\n')) {
-    const m = line.match(/^\s+(0x[0-9a-f]+) (?:"(.*)"|\(has no name\)): \("vncviewer\.exe" [^)]*\)\s+(\d+)x(\d+)\+(-?\d+)\+(-?\d+)/);
+    const m = line.match(/^\s+(0x[0-9a-f]+) (?:"(.*)"|\(has no name\)): \("[^"]+\.exe" [^)]*\)\s+(\d+)x(\d+)\+(-?\d+)\+(-?\d+)/);
     if (!m) continue;
     const [, id, name = '', w, h, x, y] = m;
     if (name.startsWith('UltraVNC Viewer Status') || +w < minW || +h < minH) continue;
@@ -684,6 +729,7 @@ async function handleGuac(wsConn, req, id, protocol) {
         log(`WS ${protocol} id=${id}: guacd ready`);
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
+        if (dsm && wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitor-switch']));
       } else if (streaming) {
         if (opcode === 'sync') diag?.frameSent(parts[1]);
         else if (opcode === 'img') diag?.imageSent();
@@ -700,6 +746,7 @@ async function handleGuac(wsConn, req, id, protocol) {
     try {
       const p = guacParse(str);
       if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
+      if (p[0] === 'remacc-monitor-switch') { if (dsm) switchDsmMonitor(id, dsm).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`)); return; }
       if (p[0] === 'sync') diag?.frameAcked(p[1]);
       else diag?.input(p);
     } catch {}
