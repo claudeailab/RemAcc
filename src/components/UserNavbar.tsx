@@ -44,6 +44,8 @@ export default async function UserNavbar() {
         </div>
       </Link>
       <div className="flex items-center gap-2 min-w-0 ml-3">
+        {user && <UserIdentity user={user} compact className="max-w-[40vw]" />}
+        <UserNavbarClient />
         <a
           href="https://gd.mcd.cy/tickets/new"
           target="_blank"
@@ -54,8 +56,6 @@ export default async function UserNavbar() {
         >
           <MessageSquarePlus className="h-4 w-4" />
         </a>
-        {user && <UserIdentity user={user} compact className="max-w-[40vw]" />}
-        <UserNavbarClient />
       </div>
     </header>
   );

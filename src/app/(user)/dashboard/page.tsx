@@ -426,7 +426,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
       {status === "connected" && (
         <div
-          className="absolute right-2 top-2 z-10 flex gap-2"
+          className="absolute right-2 top-2 z-10 flex flex-col gap-1.5 items-end"
           onMouseDown={e => e.stopPropagation()}
           onMouseUp={e => e.stopPropagation()}
         >
