@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe, ExternalLink,
+  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe, ArrowLeft, RotateCw,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
 
@@ -159,50 +159,7 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Web Panel — iframe embedding
-// ---------------------------------------------------------------------------
-function proxiedUrl(session: Session) {
-  let rest = "/";
-  try {
-    const u = new URL(/^https?:\/\//i.test(session.url ?? "") ? session.url! : `http://${session.url}`);
-    rest = u.pathname + u.search + u.hash;
-  } catch {}
-  return `/webproxy/${session.id}${rest}`;
-}
-
-function WebPanel({ session, active }: { session: Session; active: boolean }) {
-  const src = proxiedUrl(session);
-  return (
-    <div
-      className="absolute inset-0 flex flex-col"
-      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
-    >
-      <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-background/80 backdrop-blur shrink-0">
-        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        <span className={`text-xs truncate flex-1 ${muted}`}>{session.url}</span>
-        <a
-          href={src}
-          target="_blank"
-          rel="noopener"
-          className="shrink-0"
-          title="Open in browser tab"
-        >
-          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
-        </a>
-      </div>
-      <iframe
-        src={src}
-        className="flex-1 w-full border-0 bg-white"
-        allow="fullscreen"
-        // No allow-top-navigation*: proxied pages are same-origin and would otherwise frame-bust out of RemAcc
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock"
-      />
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Guacamole Panel — RDP + VNC in-browser via guacd
+// Guacamole Panel — RDP, VNC and web (server-side browser) via guacd
 // ---------------------------------------------------------------------------
 // Fewest equal side-by-side monitors whose aspect ratio is a real monitor's (5:4 … 16:9);
 // a single ultrawide (21:9) matches none and stays one screen
@@ -215,6 +172,8 @@ function monitorCount(w: number, h: number) {
 }
 
 const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
+const BROWSER_BACK = [0xffe9, 0xff51];           // Alt_L, Left
+const BROWSER_RELOAD = [0xffc2];                 // F5
 
 function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -238,11 +197,13 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   // UltraVNC (DSM) sessions: the server announces that it can switch the remote's monitor
   const [canSwitchMonitor, setCanSwitchMonitor] = useState(false);
 
-  function sendCtrlAltDel() {
+  const isWeb = session.protocol === "web";
+
+  function sendKeys(keys: number[]) {
     const c = clientRef.current;
     if (!c) return;
-    CTRL_ALT_DEL.forEach(k => c.sendKeyEvent(1, k));
-    [...CTRL_ALT_DEL].reverse().forEach(k => c.sendKeyEvent(0, k));
+    keys.forEach(k => c.sendKeyEvent(1, k));
+    [...keys].reverse().forEach(k => c.sendKeyEvent(0, k));
   }
 
   function chooseScreen(i: number) {
@@ -267,9 +228,10 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (cancelled || !containerRef.current) return;
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const wsPath = session.protocol === "rdp"
-        ? `/ws/rdp/${session.id}`
-        : `/ws/vnc/${session.id}`;
+      // Web: the server-side browser gets this panel's size, so pages render 1:1
+      const wsPath = session.protocol === "web"
+        ? `/ws/web/${session.id}?w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
+        : `/ws/${session.protocol === "rdp" ? "rdp" : "vnc"}/${session.id}`;
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
       clientRef.current = client;
@@ -418,68 +380,88 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 
   return (
     <div
-      className="absolute inset-0 overflow-hidden bg-black"
+      className="absolute inset-0 flex flex-col overflow-hidden bg-black"
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
-      {status === "connected" && (
-        <div
-          className="absolute right-2 top-2 z-10 flex flex-col gap-1.5 items-end"
-          onMouseDown={e => e.stopPropagation()}
-          onMouseUp={e => e.stopPropagation()}
-        >
+      {isWeb && (
+        <div className="flex items-center gap-1 px-2 py-1 border-b bg-background shrink-0">
           <button
-            type="button" title="Send Ctrl+Alt+Del to the remote computer" onClick={sendCtrlAltDel}
-            className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
+            type="button" title="Back" aria-label="Back" onClick={() => sendKeys(BROWSER_BACK)} disabled={status !== "connected"}
+            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-40"
           >
-            Ctrl+Alt+Del
+            <ArrowLeft className="h-4 w-4" />
           </button>
-          {canSwitchMonitor && (
+          <button
+            type="button" title="Reload" aria-label="Reload" onClick={() => sendKeys(BROWSER_RELOAD)} disabled={status !== "connected"}
+            className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors disabled:opacity-40"
+          >
+            <RotateCw className="h-4 w-4" />
+          </button>
+          <Globe className="h-3.5 w-3.5 ml-1 text-muted-foreground shrink-0" />
+          <span className={`text-xs truncate ${muted}`}>{session.url}</span>
+        </div>
+      )}
+      <div className="flex-1 min-h-0 relative">
+        <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
+        {status === "connected" && !isWeb && (
+          <div
+            className="absolute right-2 top-2 z-10 flex flex-col gap-1.5 items-end"
+            onMouseDown={e => e.stopPropagation()}
+            onMouseUp={e => e.stopPropagation()}
+          >
             <button
-              type="button" title="Ask the remote computer for its next screen (primary, other screens, all screens)"
-              onClick={() => { try { tunnelRef.current?.sendMessage("remacc-monitor-switch"); } catch {} }}
+              type="button" title="Send Ctrl+Alt+Del to the remote computer" onClick={() => sendKeys(CTRL_ALT_DEL)}
               className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
             >
-              Switch screen
+              Ctrl+Alt+Del
             </button>
-          )}
-          {screens > 1 && (
-            <div className="flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur">
-              {Array.from({ length: screens }, (_, i) => (
-                <button
-                  key={i} type="button" title={`Screen ${i + 1}`} onClick={() => chooseScreen(i)}
-                  className={`px-3 py-1.5 transition-colors ${screen === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-                >
-                  {i + 1}
-                </button>
-              ))}
+            {canSwitchMonitor && (
               <button
-                type="button" title="All screens" onClick={() => chooseScreen(-1)}
-                className={`px-3 py-1.5 transition-colors ${screen === -1 || screen >= screens ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                type="button" title="Ask the remote computer for its next screen (primary, other screens, all screens)"
+                onClick={() => { try { tunnelRef.current?.sendMessage("remacc-monitor-switch"); } catch {} }}
+                className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
               >
-                All
+                Switch screen
               </button>
-            </div>
-          )}
-        </div>
-      )}
-      {status !== "connected" && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="flex flex-col items-center gap-2 text-center px-6">
-            {status === "connecting" ? (
-              <>
-                <Loader2 className="h-6 w-6 animate-spin text-white/60" />
-                <p className="text-sm text-white/60">Connecting…</p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-red-400 font-medium">Connection failed</p>
-                {errorMsg && <p className="text-xs text-white/40 max-w-xs">{errorMsg}</p>}
-              </>
+            )}
+            {screens > 1 && (
+              <div className="flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur">
+                {Array.from({ length: screens }, (_, i) => (
+                  <button
+                    key={i} type="button" title={`Screen ${i + 1}`} onClick={() => chooseScreen(i)}
+                    className={`px-3 py-1.5 transition-colors ${screen === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                  >
+                    {i + 1}
+                  </button>
+                ))}
+                <button
+                  type="button" title="All screens" onClick={() => chooseScreen(-1)}
+                  className={`px-3 py-1.5 transition-colors ${screen === -1 || screen >= screens ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                >
+                  All
+                </button>
+              </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+        {status !== "connected" && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="flex flex-col items-center gap-2 text-center px-6">
+              {status === "connecting" ? (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin text-white/60" />
+                  <p className="text-sm text-white/60">Connecting…</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-red-400 font-medium">Connection failed</p>
+                  {errorMsg && <p className="text-xs text-white/40 max-w-xs">{errorMsg}</p>}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -583,14 +565,6 @@ export default function DashboardPage() {
       return;
     }
 
-    if (conn.protocol === "web") {
-      const key = `s${++sessionCounter}`;
-      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol, url: conn.host }]);
-      setActiveKey(key);
-      setSidebarOpen(false);
-      return;
-    }
-
     setConnecting(conn.id);
     setSidebarOpen(false);
     try {
@@ -598,7 +572,7 @@ export default function DashboardPage() {
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Connection failed"); return; }
       const key = `s${++sessionCounter}`;
-      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol }]);
+      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol, ...(conn.protocol === "web" ? { url: conn.host } : {}) }]);
       setActiveKey(key);
     } finally { setConnecting(null); }
   }
@@ -788,8 +762,6 @@ export default function DashboardPage() {
             sessions.map(s =>
               s.protocol === "ssh" ? (
                 <SshPanel key={s.key} session={s} active={s.key === activeKey} />
-              ) : s.protocol === "web" ? (
-                <WebPanel key={s.key} session={s} active={s.key === activeKey} />
               ) : (
                 <GuacPanel key={s.key} session={s} active={s.key === activeKey} />
               )

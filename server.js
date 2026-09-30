@@ -180,15 +180,15 @@ const UVNC_DIR = '/tmp/uvnc';
 const WINE_PREFIX = '/tmp/uvnc-wine';
 // Room for multi-monitor remotes at 1:1; x11vnc exports only the viewer window's rectangle
 const SCREEN_W = 7680, SCREEN_H = 2160;
-const dsmDisplays = new Set();  // X displays owned by running or starting DSM proxies
+const xDisplays = new Set();  // X displays owned by running or starting DSM relays and web browsers
 const dsmByConn = new Map();    // connId -> session; one relay per connection, latest wins
 
 // Displays 50-149 belong to this process, so lock/socket files of a display not in
-// dsmDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
+// xDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
 function allocDisplay() {
   for (let d = 50; d < 150; d++) {
-    if (dsmDisplays.has(d)) continue;
-    dsmDisplays.add(d);
+    if (xDisplays.has(d)) continue;
+    xDisplays.add(d);
     removeDisplayFiles(d);
     return d;
   }
@@ -345,7 +345,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
     fs.rmSync(path.join(UVNC_DIR, exeName), { force: true });
     removeDisplayFiles(display);
-    dsmDisplays.delete(display);
+    xDisplays.delete(display);
     if (dsmByConn.get(connId) === session) dsmByConn.delete(connId);
     session.onStop?.();
     log(`DSM proxy id=${connId}: display=:${display} stopped`);
@@ -658,6 +658,9 @@ async function handleGuac(wsConn, req, id, protocol) {
       'normalize-clipboard': (s.normalizeClipboard ?? true) ? 'true' : 'false',
       'resize-method': s.resizeMethod ?? 'display-update',
     };
+  } else if (protocol === 'web') {
+    // cursor 'local': x11vnc sends Chromium's cursor shapes (pointer, hand, text) to the browser
+    base = { ...VNC_DEFAULTS, 'color-depth': '24', cursor: 'local' };
   } else {
     const s = proto?.vnc ?? {};
     base = {
@@ -694,15 +697,36 @@ async function handleGuac(wsConn, req, id, protocol) {
     base.cursor = 'local'; // the relay paints no cursor; 'remote' would add guacd's position dot
     log(`WS VNC id=${id}: using DSM proxy on 127.0.0.1:${dsm.port}`);
   }
+  let web = null;
+  if (protocol === 'web') {
+    if (wsConn.readyState !== 1) return;
+    const { width, height } = webSize(req);
+    try {
+      web = await startWebBrowser(id, webUrl(details.host), width, height);
+    } catch (e) {
+      err(`WS WEB id=${id}: browser failed: ${e.message}`);
+      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', 'Browser error: ' + e.message, '514']));
+      try { wsConn.close(1011); } catch {}
+      return;
+    }
+    if (wsConn.readyState !== 1) { web.stop(); return; }
+    wsConn.once('close', web.stop);
+    web.onStop = () => { try { wsConn.close(); } catch {} };
+    guacHost = '127.0.0.1';
+    guacPort = String(web.port);
+    base.width = String(width);
+    base.height = String(height);
+  }
+  const relay = dsm ?? web;
 
   const shadow = details.options?.shadow ?? {};
   const params = {
     ...base,
     hostname: guacHost,
     port: guacPort,
-    username: details.credential?.username ?? '',
-    password: details.credential?.password ?? '',
-    ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
+    username: web ? '' : details.credential?.username ?? '',
+    password: web ? '' : details.credential?.password ?? '',
+    ...(details.credential?.domain && !web ? { domain: details.credential.domain } : {}),
     // RDP shadow options (passed through to guacd/FreeRDP if supported)
     ...(shadow.sessionId > 0 ? {
       'shadow': String(shadow.sessionId),
@@ -782,7 +806,7 @@ async function handleGuac(wsConn, req, id, protocol) {
   wsConn.on('close', async () => {
     if (!streaming) { try { tcp.destroy(); } catch {} return; }
     const grace = await getSessionGrace();
-    if (grace > 0 && !tcp.destroyed && !dsm) {
+    if (grace > 0 && !tcp.destroyed && !relay) {
       tcp.removeAllListeners('data');
       tcp.on('data', () => {}); // drain silently while parked
       storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
@@ -793,7 +817,7 @@ async function handleGuac(wsConn, req, id, protocol) {
 
   tcp.connect(4822, '127.0.0.1', () => {
     log(`WS ${protocol} id=${id}: connected to guacd`);
-    tcp.write(guacEncode(['select', protocol]));
+    tcp.write(guacEncode(['select', web ? 'vnc' : protocol]));
   });
 }
 
@@ -894,207 +918,88 @@ async function handleSSH(wsConn, req, id) {
 }
 
 // ---------------------------------------------------------------------------
-// Web connection reverse proxy: the browser only talks to RemAcc, which reaches the
-// internal site — browsers block public pages from loading private-network addresses
+// Web connections: a server-side Chromium on its own Xvfb display, streamed to the browser
+// like VNC. Sites render exactly as in a normal browser (redirects, TLS, cookies, JS, framing).
 // ---------------------------------------------------------------------------
-const https = require('https');
-const { http: fr_http, https: fr_https } = require('follow-redirects');
-const zlib = require('zlib');
-const WEB_PREFIX = /^\/webproxy\/(\d+)(\/.*)?$/;
-const HOP_HEADERS = ['connection', 'keep-alive', 'proxy-connection', 'te', 'trailer', 'transfer-encoding', 'upgrade'];
-const DROP_RESPONSE_HEADERS = ['x-frame-options', 'content-security-policy', 'content-security-policy-report-only', 'strict-transport-security', 'referrer-policy'];
-const webTargets = new Map(); // `${id}|${sessionToken}` -> { url, expires }
-const webOrigins = new Map(); // id -> origin the site redirected to on the same host (e.g. http -> https)
-const REWRITE_TYPES = /^(text\/(html|css|javascript|xml|plain)|application\/(javascript|x-javascript|json|xml|xhtml\+xml))\b/i;
+const CHROME = '/usr/local/bin/remacc-chrome';
+const webByConn = new Map(); // connId -> session; one browser per connection, latest wins
 
-function readCookies(header) {
-  const out = [];
-  for (const part of (header ?? '').split(';')) {
-    const i = part.indexOf('=');
-    if (i > 0) out.push([part.slice(0, i).trim(), part.slice(i + 1).trim()]);
-  }
-  return out;
+function webUrl(host) {
+  return /^https?:\/\//i.test(host) ? host : `http://${host}`;
 }
 
-// Target URL of a web connection the requesting user may open, or null
-async function webTarget(req, id) {
-  const token = readCookies(req.headers.cookie).find(([k]) => k === 'webapp-session')?.[1];
-  if (!token) return null;
-  const key = `${id}|${token}`;
-  const hit = webTargets.get(key);
-  let url = hit && hit.expires > Date.now() ? hit.url : null;
-  if (!url) {
-    const r = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, { headers: { cookie: `webapp-session=${token}` } });
-    if (!r.ok) return null;
-    const d = await r.json();
-    if (d.protocol !== 'web') return null;
-    try { url = new URL(/^https?:\/\//i.test(d.host) ? d.host : `http://${d.host}`); } catch { return null; }
-    if (webTargets.size > 1000) webTargets.clear();
-    webTargets.set(key, { url, expires: Date.now() + 60000 });
-  }
-  const moved = webOrigins.get(id);
-  return moved && moved.hostname === url.hostname ? moved : url;
+// Browser size = the RemAcc panel size, so pages render 1:1
+function webSize(req) {
+  const q = new URL(req.url ?? '/', 'http://x').searchParams;
+  const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || d));
+  return { width: clamp(q.get('w'), 640, 3840, 1280), height: clamp(q.get('h'), 480, 2160, 800) };
 }
 
-// Absolute URLs to the site (any scheme, default or current port, also JSON-escaped) -> proxy prefix
-function siteUrlPattern(target) {
-  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const ports = ['', ':80', ':443', ...(target.port ? [':' + target.port] : [])].map(esc).join('|');
-  return new RegExp(String.raw`(?:https?:)?(?:\/\/|\\\/\\\/)` + esc(target.hostname) + `(?:${ports})(?![\\w.:-])`, 'gi');
-}
+async function startWebBrowser(connId, url, width, height) {
+  const fs = require('fs');
+  webByConn.get(connId)?.stop();
+  const display = allocDisplay();
+  const profile = `/tmp/remacc-web-${display}`;
+  const procs = [];
+  const session = { display, port: 0, stopped: false };
+  session.stop = () => {
+    if (session.stopped) return;
+    session.stopped = true;
+    // Own process groups: Chromium's renderer/GPU/zygote children die with it
+    for (const p of procs) { try { process.kill(-p.pid, 'SIGKILL'); } catch {} }
+    fs.rmSync(profile, { recursive: true, force: true });
+    removeDisplayFiles(display);
+    xDisplays.delete(display);
+    if (webByConn.get(connId) === session) webByConn.delete(connId);
+    session.onStop?.();
+    log(`WEB id=${connId}: display=:${display} stopped`);
+  };
+  webByConn.set(connId, session);
+  const alive = () => { if (session.stopped) throw new Error('browser session superseded'); };
+  const run = (cmd, args, env) => {
+    const p = spawn(cmd, args, { stdio: 'ignore', detached: true, ...(env ? { env } : {}) });
+    procs.push(p);
+    p.on('error', e => err(`WEB id=${connId}: ${cmd} error: ${e.message}`));
+    return p;
+  };
 
-// Connection id of the proxied page that issued this request (root-relative URLs like /login)
-function webProxyReferer(req) {
   try {
-    const m = new URL(req.headers.referer ?? '').pathname.match(WEB_PREFIX);
-    return m ? +m[1] : null;
-  } catch { return null; }
-}
+    session.port = await findFreePort();
+    alive();
+    run('Xvfb', [`:${display}`, '-screen', '0', `${width}x${height}x24`, '-nolisten', 'tcp']);
+    await waitForX(display);
+    alive();
 
-function toUpstreamHeaders(req, id, target, keepUpgrade) {
-  const h = {};
-  for (const [k, v] of Object.entries(req.headers)) {
-    if (k.startsWith('x-forwarded-') || k === 'x-real-ip') continue;
-    if (!keepUpgrade && HOP_HEADERS.includes(k)) continue;
-    h[k] = v;
-  }
-  h.host = target.host;
-  // Only the site's own cookies go upstream — never the RemAcc session
-  const prefix = `rwp${id}_`;
-  const cookies = readCookies(req.headers.cookie).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => `${k.slice(prefix.length)}=${v}`);
-  if (cookies.length) h.cookie = cookies.join('; '); else delete h.cookie;
-  if (h.origin) h.origin = target.origin;
-  if (h.referer) {
-    try {
-      const u = new URL(h.referer);
-      const m = u.pathname.match(WEB_PREFIX);
-      h.referer = target.origin + (m ? (m[2] ?? '/') : u.pathname) + u.search;
-    } catch { delete h.referer; }
-  }
-  return h;
-}
+    fs.rmSync(profile, { recursive: true, force: true });
+    fs.mkdirSync(profile, { recursive: true });
+    // Minimal env: the browser must never see RemAcc's secrets
+    const chrome = run(CHROME, [
+      '--kiosk', `--window-position=0,0`, `--window-size=${width},${height}`,
+      `--user-data-dir=${profile}`,
+      '--ignore-certificate-errors', // internal sites commonly use self-signed certificates
+      '--no-sandbox',                // containers lack the user namespaces Chromium's sandbox needs
+      '--test-type',                 // no "unsupported command-line flag" infobar
+      '--no-first-run', '--no-default-browser-check', '--noerrdialogs', '--disable-session-crashed-bubble',
+      '--disable-dev-shm-usage', '--disable-gpu', '--force-device-scale-factor=1', '--password-store=basic',
+      '--disable-sync', '--disable-background-networking', '--disable-component-update', '--disable-extensions',
+      url,
+    ], { DISPLAY: `:${display}`, HOME: profile, PATH: '/usr/bin:/bin', LANG: 'en_US.UTF-8' });
+    chrome.on('exit', code => { if (!session.stopped) { log(`WEB id=${connId}: browser exited (${code})`); session.stop(); } });
 
-function fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure) {
-  const h = {};
-  for (const [k, v] of Object.entries(upRes.headers)) {
-    if (!HOP_HEADERS.includes(k) && !DROP_RESPONSE_HEADERS.includes(k)) h[k] = v;
+    run('x11vnc', [
+      '-display', `:${display}`, '-rfbport', String(session.port),
+      '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+      '-wait', '1', '-defer', '1',
+      '-noprimary', // only explicit copies (Ctrl+C) reach the user's clipboard, not every selection
+    ]);
+    await waitForPort(session.port);
+    alive();
+    log(`WEB id=${connId}: display=:${display} port=${session.port} ${width}x${height} ${url}`);
+  } catch (e) {
+    session.stop();
+    throw e;
   }
-  if (h.location) {
-    try {
-      const u = new URL(h.location, upstreamUrl);
-      if (u.hostname === target.hostname) {
-        if (u.origin !== target.origin) webOrigins.set(id, new URL(u.origin));
-        h.location = `/webproxy/${id}${u.pathname}${u.search}${u.hash}`;
-      }
-    } catch {}
-  }
-  if (h['set-cookie']) {
-    h['set-cookie'] = h['set-cookie'].map(c => {
-      const [pair, ...attrs] = c.split(';');
-      const keep = attrs.map(a => a.trim()).filter(a => a && !/^(domain|path|secure|samesite)\b/i.test(a));
-      return [`rwp${id}_${pair.trim()}`, ...keep, 'Path=/', 'SameSite=Lax', ...(secure ? ['Secure'] : [])].join('; ');
-    });
-  }
-  h['referrer-policy'] = 'same-origin';
-  return h;
-}
-
-async function handleWebProxy(req, res, id, pathAndQuery) {
-  const target = await webTarget(req, id);
-  if (!target) {
-    err(`WEB id=${id}: no target (auth or config issue) for ${req.method} ${pathAndQuery}`);
-    res.writeHead(403, { 'content-type': 'text/plain' }); res.end('Access denied'); return;
-  }
-  const upstreamUrl = new URL(pathAndQuery, target.origin);
-  log(`WEB id=${id}: ${req.method} ${upstreamUrl}`);
-  // GET/HEAD: follow redirects server-side (handles http→https upgrades and multi-hop chains)
-  // POST/PUT/etc: maxRedirects=0 so the browser handles POST-Redirect-GET correctly
-  const isIdempotent = req.method === 'GET' || req.method === 'HEAD';
-  const mod = upstreamUrl.protocol === 'https:' ? fr_https : fr_http;
-  const secure = req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
-  await new Promise(resolve => {
-    res.once('close', resolve);
-    const up = mod.request(upstreamUrl, {
-      method: req.method,
-      headers: toUpstreamHeaders(req, id, target, false),
-      rejectUnauthorized: false, // internal sites commonly use self-signed certificates
-      timeout: 30000,
-      maxRedirects: isIdempotent ? 10 : 0,
-      beforeRedirect: (options, { responseUrl }) => {
-        // Keep headers in sync with each hop's target
-        const hopUrl = new URL(options.href ?? responseUrl);
-        if (hopUrl.hostname === target.hostname && hopUrl.origin !== target.origin) {
-          webOrigins.set(id, new URL(hopUrl.origin));
-          log(`WEB id=${id}: following redirect to ${hopUrl.origin}`);
-        }
-        options.headers = toUpstreamHeaders(req, id, target, false);
-        options.headers.host = hopUrl.host;
-      },
-    }, upRes => {
-      // If follow-redirects settled on a different origin, persist it
-      if (upRes.responseUrl) {
-        try {
-          const finalUrl = new URL(upRes.responseUrl);
-          if (finalUrl.hostname === target.hostname && finalUrl.origin !== target.origin) {
-            webOrigins.set(id, new URL(finalUrl.origin));
-          }
-        } catch {}
-      }
-      const status = upRes.statusCode ?? 502;
-      if (status >= 400) log(`WEB id=${id}: upstream ${status} for ${upstreamUrl}`);
-      const headers = fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure);
-      if (headers.location) log(`WEB id=${id}: redirect ${status} -> ${headers.location}`);
-      const enc = (upRes.headers['content-encoding'] ?? 'identity').toLowerCase();
-      const decoder = { identity: null, gzip: zlib.createGunzip, 'x-gzip': zlib.createGunzip, deflate: zlib.createUnzip, br: zlib.createBrotliDecompress }[enc];
-      if (req.method === 'HEAD' || status === 204 || status === 304 || decoder === undefined || !REWRITE_TYPES.test(upRes.headers['content-type'] ?? '')) {
-        res.writeHead(status, headers);
-        upRes.pipe(res);
-        return;
-      }
-      const body = decoder ? upRes.pipe(decoder()) : upRes;
-      const chunks = [];
-      body.on('data', c => chunks.push(c));
-      body.on('error', e => { err(`WEB id=${id}: body decode error: ${e.message}`); res.destroy(); });
-      body.on('end', () => {
-        // latin1 round-trips every byte, so non-UTF-8 pages survive; the pattern is ASCII-only
-        const out = Buffer.from(Buffer.concat(chunks).toString('latin1').replace(siteUrlPattern(target), `/webproxy/${id}`), 'latin1');
-        delete headers['content-encoding'];
-        headers['content-length'] = out.length;
-        res.writeHead(status, headers);
-        res.end(out);
-      });
-    });
-    up.on('timeout', () => up.destroy(new Error('timed out')));
-    up.on('error', e => {
-      err(`WEB id=${id}: upstream error for ${upstreamUrl}: ${e.message}`);
-      if (res.headersSent) { res.destroy(); return; }
-      const msg = `RemAcc cannot reach ${target.origin}: ${e.message}`;
-      res.writeHead(502, { 'content-type': 'text/html' });
-      res.end(`<!doctype html><html><body style="font:14px/1.6 system-ui,sans-serif;padding:2rem;color:#c00"><b>Connection error</b><br>${msg}</body></html>`);
-    });
-    req.pipe(up);
-  });
-}
-
-async function handleWebProxyUpgrade(req, socket, id, head, pathAndQuery) {
-  const target = await webTarget(req, id).catch(() => null);
-  if (!target) { socket.destroy(); return; }
-  const upstreamUrl = new URL(pathAndQuery, target.origin);
-  const mod = upstreamUrl.protocol === 'https:' ? https : http;
-  const up = mod.request(upstreamUrl, { method: 'GET', headers: toUpstreamHeaders(req, id, target, true), rejectUnauthorized: false });
-  up.on('upgrade', (upRes, upSocket, upHead) => {
-    const lines = ['HTTP/1.1 101 Switching Protocols'];
-    for (let i = 0; i < upRes.rawHeaders.length; i += 2) lines.push(`${upRes.rawHeaders[i]}: ${upRes.rawHeaders[i + 1]}`);
-    socket.write(lines.join('\r\n') + '\r\n\r\n');
-    if (upHead?.length) socket.write(upHead);
-    if (head?.length) upSocket.write(head);
-    upSocket.on('error', () => socket.destroy());
-    socket.on('error', () => upSocket.destroy());
-    upSocket.pipe(socket).pipe(upSocket);
-  });
-  up.on('response', r => { r.resume(); socket.end(`HTTP/1.1 ${r.statusCode} ${r.statusMessage}\r\n\r\n`); });
-  up.on('error', () => socket.destroy());
-  up.end();
+  return session;
 }
 
 // ---------------------------------------------------------------------------
@@ -1182,19 +1087,6 @@ async function main() {
     const start = Date.now();
     const urlPath = (req.url ?? '/').split('?')[0];
     try {
-      const mWeb = urlPath.match(WEB_PREFIX);
-      if (mWeb) return await handleWebProxy(req, res, +mWeb[1], req.url.slice(`/webproxy/${mWeb[1]}`.length) || '/');
-      const refId = webProxyReferer(req);
-      if (refId) {
-        // A proxied page navigating to a root-relative URL: move the frame back under its prefix
-        const dest = req.headers['sec-fetch-dest'];
-        if (dest === 'document' || dest === 'iframe') {
-          res.writeHead(307, { location: `/webproxy/${refId}${req.url}` });
-          res.end();
-          return;
-        }
-        return await handleWebProxy(req, res, refId, req.url);
-      }
       // Serve /_next/static/ directly from disk — bypass Next.js handler
       if (urlPath.startsWith('/_next/static/')) {
         const rel = urlPath.slice('/_next/static'.length);
@@ -1225,11 +1117,11 @@ async function main() {
     const mSsh = path.match(/^\/ws\/ssh\/(\d+)$/);
     const mRdp = path.match(/^\/ws\/rdp\/(\d+)$/);
     const mVnc = path.match(/^\/ws\/vnc\/(\d+)$/);
-    const mWeb = path.match(WEB_PREFIX);
-    if (mWeb) handleWebProxyUpgrade(req, socket, +mWeb[1], head, url.slice(`/webproxy/${mWeb[1]}`.length) || '/');
-    else if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
+    const mWeb = path.match(/^\/ws\/web\/(\d+)$/);
+    if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
     else if (mRdp) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mRdp[1], 10), 'rdp'));
     else if (mVnc) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mVnc[1], 10), 'vnc'));
+    else if (mWeb) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mWeb[1], 10), 'web'));
     else { log(`WS upgrade rejected: ${url}`); socket.destroy(); }
   });
 
