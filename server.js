@@ -311,7 +311,9 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     // cursor lags behind the browser's pointer and shows up as a second mouse.
     // -noemulate3: button presses are sent at once instead of being held on a timer for
     // left+right middle-button emulation (the browser sends real middle clicks).
-    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-noremotecursor', '-noemulate3'];
+    // -quality 3: a command-line launch uses Ultra2 at JPEG quality 80; 30 sends ~57% fewer bytes
+    // per screen change with text still sharp (2 smudges it) — the VNC server link is the bottleneck.
+    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-noremotecursor', '-noemulate3', '-quality', '3'];
     if (password) wineArgs.push('-password', password);
     if (username) wineArgs.push('-user', username);
 
