@@ -43,6 +43,28 @@ function isAncestor(folders: FolderRow[], ancestorId: number, targetId: number):
 
 type DragItem = { kind: "folder"; id: number } | { kind: "conn"; id: number };
 
+// Returns folders in DFS order with their depth, excluding `excludeId` and its descendants
+function flattenFolders(all: FolderRow[], excludeId?: number): { id: number; name: string; depth: number }[] {
+  const excluded = new Set<number>();
+  if (excludeId !== undefined) {
+    const queue = [excludeId];
+    while (queue.length) {
+      const cur = queue.shift()!;
+      excluded.add(cur);
+      all.filter(f => f.parentId === cur).forEach(f => queue.push(f.id));
+    }
+  }
+  const result: { id: number; name: string; depth: number }[] = [];
+  function visit(parentId: number | null, depth: number) {
+    all
+      .filter(f => f.parentId === parentId && !excluded.has(f.id))
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .forEach(f => { result.push({ id: f.id, name: f.name, depth }); visit(f.id, depth + 1); });
+  }
+  visit(null, 0);
+  return result;
+}
+
 const DRAG_HANDLE = (
   <svg className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/50 cursor-grab transition-colors" width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
     <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
@@ -406,8 +428,10 @@ export default function ConnectionsPage() {
                   <SelectTrigger><SelectValue placeholder="None (root)" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None (root)</SelectItem>
-                    {folders.filter(f => f.id !== folderForm.id).map(f => (
-                      <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
+                    {flattenFolders(folders, folderForm.id || undefined).map(({ id, name, depth }) => (
+                      <SelectItem key={id} value={String(id)}>
+                        {"  ".repeat(depth)}{depth > 0 ? "└ " : ""}{name}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -474,7 +498,11 @@ export default function ConnectionsPage() {
                   <SelectTrigger><SelectValue placeholder="No folder" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No folder</SelectItem>
-                    {folders.map(f => <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>)}
+                    {flattenFolders(folders).map(({ id, name, depth }) => (
+                      <SelectItem key={id} value={String(id)}>
+                        {"  ".repeat(depth)}{depth > 0 ? "└ " : ""}{name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
