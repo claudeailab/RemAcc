@@ -824,10 +824,13 @@ async function handleSSH(wsConn, req, id) {
 // internal site — browsers block public pages from loading private-network addresses
 // ---------------------------------------------------------------------------
 const https = require('https');
+const zlib = require('zlib');
 const WEB_PREFIX = /^\/webproxy\/(\d+)(\/.*)?$/;
 const HOP_HEADERS = ['connection', 'keep-alive', 'proxy-connection', 'te', 'trailer', 'transfer-encoding', 'upgrade'];
 const DROP_RESPONSE_HEADERS = ['x-frame-options', 'content-security-policy', 'content-security-policy-report-only', 'strict-transport-security', 'referrer-policy'];
 const webTargets = new Map(); // `${id}|${sessionToken}` -> { url, expires }
+const webOrigins = new Map(); // id -> origin the site redirected to on the same host (e.g. http -> https)
+const REWRITE_TYPES = /^(text\/(html|css|javascript|xml|plain)|application\/(javascript|x-javascript|json|xml|xhtml\+xml))\b/i;
 
 function readCookies(header) {
   const out = [];
@@ -844,16 +847,25 @@ async function webTarget(req, id) {
   if (!token) return null;
   const key = `${id}|${token}`;
   const hit = webTargets.get(key);
-  if (hit && hit.expires > Date.now()) return hit.url;
-  const r = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, { headers: { cookie: `webapp-session=${token}` } });
-  if (!r.ok) return null;
-  const d = await r.json();
-  if (d.protocol !== 'web') return null;
-  let url;
-  try { url = new URL(/^https?:\/\//i.test(d.host) ? d.host : `http://${d.host}`); } catch { return null; }
-  if (webTargets.size > 1000) webTargets.clear();
-  webTargets.set(key, { url, expires: Date.now() + 60000 });
-  return url;
+  let url = hit && hit.expires > Date.now() ? hit.url : null;
+  if (!url) {
+    const r = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, { headers: { cookie: `webapp-session=${token}` } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (d.protocol !== 'web') return null;
+    try { url = new URL(/^https?:\/\//i.test(d.host) ? d.host : `http://${d.host}`); } catch { return null; }
+    if (webTargets.size > 1000) webTargets.clear();
+    webTargets.set(key, { url, expires: Date.now() + 60000 });
+  }
+  const moved = webOrigins.get(id);
+  return moved && moved.hostname === url.hostname ? moved : url;
+}
+
+// Absolute URLs to the site (any scheme, default or current port, also JSON-escaped) -> proxy prefix
+function siteUrlPattern(target) {
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const ports = ['', ':80', ':443', ...(target.port ? [':' + target.port] : [])].map(esc).join('|');
+  return new RegExp(String.raw`(?:https?:)?(?:\/\/|\\\/\\\/)` + esc(target.hostname) + `(?:${ports})(?![\\w.:-])`, 'gi');
 }
 
 // Connection id of the proxied page that issued this request (root-relative URLs like /login)
@@ -895,7 +907,10 @@ function fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure) {
   if (h.location) {
     try {
       const u = new URL(h.location, upstreamUrl);
-      if (u.origin === target.origin) h.location = `/webproxy/${id}${u.pathname}${u.search}${u.hash}`;
+      if (u.hostname === target.hostname) {
+        if (u.origin !== target.origin) webOrigins.set(id, new URL(u.origin));
+        h.location = `/webproxy/${id}${u.pathname}${u.search}${u.hash}`;
+      }
     } catch {}
   }
   if (h['set-cookie']) {
@@ -923,8 +938,27 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
       rejectUnauthorized: false, // internal sites commonly use self-signed certificates
       timeout: 30000,
     }, upRes => {
-      res.writeHead(upRes.statusCode ?? 502, fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure));
-      upRes.pipe(res);
+      const status = upRes.statusCode ?? 502;
+      const headers = fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure);
+      const enc = (upRes.headers['content-encoding'] ?? 'identity').toLowerCase();
+      const decoder = { identity: null, gzip: zlib.createGunzip, 'x-gzip': zlib.createGunzip, deflate: zlib.createUnzip, br: zlib.createBrotliDecompress }[enc];
+      if (req.method === 'HEAD' || status === 204 || status === 304 || decoder === undefined || !REWRITE_TYPES.test(upRes.headers['content-type'] ?? '')) {
+        res.writeHead(status, headers);
+        upRes.pipe(res);
+        return;
+      }
+      const body = decoder ? upRes.pipe(decoder()) : upRes;
+      const chunks = [];
+      body.on('data', c => chunks.push(c));
+      body.on('error', () => res.destroy());
+      body.on('end', () => {
+        // latin1 round-trips every byte, so non-UTF-8 pages survive; the pattern is ASCII-only
+        const out = Buffer.from(Buffer.concat(chunks).toString('latin1').replace(siteUrlPattern(target), `/webproxy/${id}`), 'latin1');
+        delete headers['content-encoding'];
+        headers['content-length'] = out.length;
+        res.writeHead(status, headers);
+        res.end(out);
+      });
     });
     up.on('timeout', () => up.destroy(new Error('timed out')));
     up.on('error', e => {
