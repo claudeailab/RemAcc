@@ -275,7 +275,7 @@ async function switchDsmMonitor(connId, session) {
     const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
     const before = await findViewerWindow(session.display, 640, 400).catch(() => null);
     const code = await new Promise(resolve => {
-      const p = spawn('wine', [UVNC_SWITCH_EXE, session.exeName], { env: dsmWineEnv(session.display), stdio: 'ignore' });
+      const p = spawn('wine', [UVNC_SWITCH_EXE], { env: dsmWineEnv(session.display), stdio: 'ignore' });
       p.on('exit', resolve);
       p.on('error', () => resolve(-1));
     });
