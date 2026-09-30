@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,15 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import {
-  Loader2, Plus, Pencil, Trash2, Copy, Search, ChevronLeft, ChevronRight,
-  Folder, FolderOpen, ChevronRight as Chevron, Monitor,
+  Loader2, Plus, Pencil, Trash2, Copy, ChevronRight,
+  Folder, FolderOpen, Monitor, FolderPlus, Globe,
 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
-interface ShadowOptions { sessionId: number; control: boolean; noConsent: boolean }
+interface FolderRow { id: number; name: string; parentId: number | null; credentialId: number | null }
 interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null; notes: string | null; options: string | null }
-interface FolderRow { id: number; name: string; parentId: number | null }
 interface Credential { id: number; name: string; username: string }
+interface ShadowOptions { sessionId: number; control: boolean; noConsent: boolean }
 
 const PROTO_BADGE: Record<string, string> = {
   rdp: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
@@ -25,423 +25,440 @@ const PROTO_BADGE: Record<string, string> = {
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
   web: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
 };
-
 const DSM_BADGE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
 
-function isDsm(c: Connection): boolean {
+function isDsm(c: Connection) {
   try { return !!(c.options && JSON.parse(c.options).dsmPlugin); } catch { return false; }
 }
 
-const PAGE_SIZE = 50;
-const UNASSIGNED = -1; // sentinel for "no folder"
-
-// ── Folder tree ───────────────────────────────────────────────────────────────
-
-function FolderTree({
-  folders, connections, selected, onSelect, onDrop,
-}: {
-  folders: FolderRow[];
-  connections: Connection[];
-  selected: number | null;
-  onSelect: (id: number | null) => void;
-  onDrop: (connectionId: number, folderId: number | null) => void;
-}) {
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
-  const [dragOver, setDragOver] = useState<number | null>(undefined as unknown as null);
-
-  function toggle(id: number) {
-    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+// Is `ancestorId` an ancestor of `targetId` in the folder tree?
+function isAncestor(folders: FolderRow[], ancestorId: number, targetId: number): boolean {
+  let cur: number | null = targetId;
+  while (cur !== null) {
+    if (cur === ancestorId) return true;
+    cur = folders.find(f => f.id === cur)?.parentId ?? null;
   }
-
-  function handleDragOver(e: React.DragEvent, folderId: number | null) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setDragOver(folderId ?? UNASSIGNED);
-  }
-
-  function handleDrop(e: React.DragEvent, folderId: number | null) {
-    e.preventDefault();
-    setDragOver(null);
-    const id = Number(e.dataTransfer.getData("connectionId"));
-    if (id) onDrop(id, folderId);
-  }
-
-  function renderFolder(f: FolderRow, depth = 0): React.ReactNode {
-    const isOpen = expanded.has(f.id);
-    const isActive = selected === f.id;
-    const isDragTarget = dragOver === f.id;
-    const count = connections.filter(c => c.folderId === f.id).length;
-    const children = folders.filter(sf => sf.parentId === f.id);
-    return (
-      <div key={f.id}>
-        <div
-          style={{ paddingLeft: 8 + depth * 14 }}
-          className={`group flex items-center gap-1.5 py-1 pr-2 rounded cursor-pointer select-none text-sm transition-colors
-            ${isActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}
-            ${isDragTarget ? "ring-1 ring-primary bg-primary/10" : ""}`}
-          onClick={() => onSelect(isActive ? null : f.id)}
-          onDragOver={e => handleDragOver(e, f.id)}
-          onDragLeave={() => setDragOver(null)}
-          onDrop={e => handleDrop(e, f.id)}
-        >
-          <button
-            type="button"
-            className="shrink-0 p-0.5"
-            onClick={e => { e.stopPropagation(); if (children.length > 0) toggle(f.id); }}
-          >
-            {children.length > 0
-              ? <Chevron className={`h-3 w-3 transition-transform ${isOpen ? "rotate-90" : ""}`} />
-              : <span className="w-3" />
-            }
-          </button>
-          {isOpen ? <FolderOpen className="h-3.5 w-3.5 shrink-0 text-primary" /> : <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />}
-          <span className="truncate flex-1">{f.name}</span>
-          {count > 0 && <span className="text-[10px] text-muted-foreground shrink-0">{count}</span>}
-        </div>
-        {isOpen && children.map(c => renderFolder(c, depth + 1))}
-      </div>
-    );
-  }
-
-  const rootFolders = folders.filter(f => !f.parentId);
-  const unassignedCount = connections.filter(c => !c.folderId).length;
-  const isAllActive = selected === null;
-  const isUnassignedActive = selected === UNASSIGNED;
-  const isDragAll = dragOver === null;
-  const isDragUnassigned = dragOver === UNASSIGNED;
-
-  return (
-    <div className="flex flex-col gap-0.5 p-1 text-sm">
-      {/* All */}
-      <div
-        className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer select-none transition-colors
-          ${isAllActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}`}
-        onClick={() => onSelect(null)}
-      >
-        <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="flex-1">All connections</span>
-        <span className="text-[10px] text-muted-foreground">{connections.length}</span>
-      </div>
-
-      {/* Unassigned */}
-      <div
-        className={`flex items-center gap-1.5 py-1 px-2 rounded cursor-pointer select-none transition-colors
-          ${isUnassignedActive ? "bg-primary/10 text-primary font-medium" : "hover:bg-secondary/60"}
-          ${isDragUnassigned ? "ring-1 ring-primary bg-primary/10" : ""}`}
-        onClick={() => onSelect(UNASSIGNED)}
-        onDragOver={e => handleDragOver(e, null)}
-        onDragLeave={() => setDragOver(null)}
-        onDrop={e => handleDrop(e, null)}
-      >
-        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <span className="flex-1 text-muted-foreground">Unassigned</span>
-        {unassignedCount > 0 && <span className="text-[10px] text-muted-foreground">{unassignedCount}</span>}
-      </div>
-
-      {rootFolders.length > 0 && (
-        <div className="mt-1 border-t pt-1">
-          {rootFolders.map(f => renderFolder(f))}
-        </div>
-      )}
-    </div>
-  );
+  return false;
 }
 
-// ── Page ──────────────────────────────────────────────────────────────────────
+type DragItem = { kind: "folder"; id: number } | { kind: "conn"; id: number };
+
+const DRAG_HANDLE = (
+  <svg className="h-3 w-3 shrink-0 text-muted-foreground/25 group-hover:text-muted-foreground/50 cursor-grab transition-colors" width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
+    <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+    <circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/>
+    <circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
+  </svg>
+);
 
 export default function ConnectionsPage() {
-  const [list, setList] = useState<Connection[]>([]);
   const [folders, setFolders] = useState<FolderRow[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [loading, setLoading] = useState(true);
-  const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
-  const [selectedFolder, setSelectedFolder] = useState<number | null>(null);
-  const [draggingId, setDraggingId] = useState<number | null>(null);
-  const [form, setForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "", notes: "" });
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+
+  // Drag / drop
+  const [dragging, setDragging] = useState<DragItem | null>(null);
+  const [dropTarget, setDropTarget] = useState<number | "root" | null>(null);
+
+  // Delete dialog
+  const [deleteTarget, setDeleteTarget] = useState<{ kind: "folder" | "conn"; id: number; name: string } | null>(null);
+
+  // Folder dialog
+  const [folderDialog, setFolderDialog] = useState(false);
+  const [folderSaving, setFolderSaving] = useState(false);
+  const [folderForm, setFolderForm] = useState({ id: 0, name: "", parentId: "", credentialId: "" });
+
+  // Connection dialog
+  const [connDialog, setConnDialog] = useState(false);
+  const [connSaving, setConnSaving] = useState(false);
+  const [connForm, setConnForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "" });
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
-  const shadowEnabled = shadow.sessionId > 0;
   const [dsmPlugin, setDsmPlugin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cr, fr, cdr] = await Promise.all([
-        fetch("/api/admin/connections"),
+      const [fr, cr, cdr] = await Promise.all([
         fetch("/api/admin/folders"),
+        fetch("/api/admin/connections"),
         fetch("/api/admin/credentials"),
       ]);
-      const [cd, fd, cdd] = await Promise.all([cr.json(), fr.json(), cdr.json()]);
-      setList(cd.connections ?? []);
+      const [fd, cd, cdd] = await Promise.all([fr.json(), cr.json(), cdr.json()]);
       setFolders(fd.folders ?? []);
+      setConnections(cd.connections ?? []);
       setCredentials(cdd.credentials ?? []);
     } finally { setLoading(false); }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  function openNew() {
-    setForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: selectedFolder && selectedFolder !== UNASSIGNED ? String(selectedFolder) : "", credentialId: "", notes: "" });
-    setShadow({ sessionId: 0, control: true, noConsent: true });
-    setDsmPlugin(false);
-    setDialogOpen(true);
+  function toggle(id: number) {
+    setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
-  function openEdit(c: Connection) {
-    setForm({
-      id: c.id, name: c.name, host: c.host,
-      port: c.port?.toString() ?? "", protocol: c.protocol,
-      folderId: c.folderId?.toString() ?? "",
-      credentialId: c.credentialId?.toString() ?? "",
-      notes: c.notes ?? "",
-    });
+  // ── Folder CRUD ─────────────────────────────────────────────────────────────
+
+  function openNewFolder(parentId?: number) {
+    setFolderForm({ id: 0, name: "", parentId: parentId ? String(parentId) : "", credentialId: "" });
+    setFolderDialog(true);
+  }
+  function openEditFolder(f: FolderRow) {
+    setFolderForm({ id: f.id, name: f.name, parentId: f.parentId?.toString() ?? "", credentialId: f.credentialId?.toString() ?? "" });
+    setFolderDialog(true);
+  }
+  async function saveFolder() {
+    setFolderSaving(true);
+    try {
+      const method = folderForm.id ? "PUT" : "POST";
+      const r = await fetch("/api/admin/folders", {
+        method, headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(folderForm.id ? { id: folderForm.id } : {}),
+          name: folderForm.name,
+          parentId: folderForm.parentId ? Number(folderForm.parentId) : null,
+          credentialId: folderForm.credentialId ? Number(folderForm.credentialId) : null,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
+      toast.success(folderForm.id ? "Folder updated" : "Folder created");
+      setFolderDialog(false);
+      load();
+    } finally { setFolderSaving(false); }
+  }
+
+  async function cloneFolder(f: FolderRow) {
+    async function cloneRec(src: FolderRow, destParentId: number | null, name: string) {
+      const r = await fetch("/api/admin/folders", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, parentId: destParentId, credentialId: src.credentialId }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? "Failed");
+      for (const c of connections.filter(c => c.folderId === src.id)) {
+        await fetch("/api/admin/connections", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: d.id, credentialId: c.credentialId, notes: c.notes ?? undefined, options: c.options ?? undefined }),
+        });
+      }
+      for (const sub of folders.filter(sf => sf.parentId === src.id)) await cloneRec(sub, d.id, sub.name);
+    }
+    try { await cloneRec(f, f.parentId, `${f.name} (copy)`); toast.success("Folder cloned"); }
+    catch (e: unknown) { toast.error((e as Error).message || "Clone failed"); }
+    load();
+  }
+
+  async function deleteFolder(id: number) {
+    const r = await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
+    if (!r.ok) { toast.error("Delete failed"); return; }
+    toast.success("Folder deleted");
+    setDeleteTarget(null);
+    load();
+  }
+
+  // ── Connection CRUD ──────────────────────────────────────────────────────────
+
+  function openNewConn(folderId?: number) {
+    setConnForm({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: folderId ? String(folderId) : "", credentialId: "" });
+    setShadow({ sessionId: 0, control: true, noConsent: true });
+    setDsmPlugin(false);
+    setConnDialog(true);
+  }
+  function openEditConn(c: Connection) {
+    setConnForm({ id: c.id, name: c.name, host: c.host, port: c.port?.toString() ?? "", protocol: c.protocol, folderId: c.folderId?.toString() ?? "", credentialId: c.credentialId?.toString() ?? "" });
     let opts: Record<string, unknown> = {};
     try { if (c.options) opts = JSON.parse(c.options); } catch {}
     const s = (opts.shadow ?? {}) as Partial<ShadowOptions>;
     setShadow({ sessionId: s.sessionId ?? 0, control: s.control ?? true, noConsent: s.noConsent ?? true });
     setDsmPlugin(!!(opts.dsmPlugin));
-    setDialogOpen(true);
+    setConnDialog(true);
   }
-
-  async function handleSave() {
-    setSaving(true);
+  async function saveConn() {
+    setConnSaving(true);
     try {
-      const method = form.id ? "PUT" : "POST";
       const opts: Record<string, unknown> = {};
-      if (form.protocol === "rdp" && shadow.sessionId > 0) {
-        opts.shadow = { sessionId: shadow.sessionId, control: shadow.control, noConsent: shadow.noConsent };
-      }
-      if (form.protocol === "vnc" && dsmPlugin) {
-        opts.dsmPlugin = true;
-      }
-      const payload = {
-        ...(form.id ? { id: form.id } : {}),
-        name: form.name, host: form.host,
-        port: form.protocol === "web" ? null : (form.port ? Number(form.port) : null),
-        protocol: form.protocol,
-        folderId: form.folderId ? Number(form.folderId) : null,
-        credentialId: form.credentialId ? Number(form.credentialId) : null,
-        notes: form.notes || undefined,
-        options: Object.keys(opts).length > 0 ? JSON.stringify(opts) : undefined,
-      };
-      const r = await fetch("/api/admin/connections", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      if (connForm.protocol === "rdp" && shadow.sessionId > 0) opts.shadow = shadow;
+      if (connForm.protocol === "vnc" && dsmPlugin) opts.dsmPlugin = true;
+      const r = await fetch("/api/admin/connections", {
+        method: connForm.id ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(connForm.id ? { id: connForm.id } : {}),
+          name: connForm.name, host: connForm.host,
+          port: connForm.protocol === "web" ? null : (connForm.port ? Number(connForm.port) : null),
+          protocol: connForm.protocol,
+          folderId: connForm.folderId ? Number(connForm.folderId) : null,
+          credentialId: connForm.protocol === "web" ? null : (connForm.credentialId ? Number(connForm.credentialId) : null),
+          options: Object.keys(opts).length > 0 ? JSON.stringify(opts) : undefined,
+        }),
+      });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Save failed"); return; }
-      toast.success(form.id ? "Connection updated" : "Connection created");
-      setDialogOpen(false);
+      toast.success(connForm.id ? "Connection updated" : "Connection created");
+      setConnDialog(false);
       load();
-    } finally { setSaving(false); }
+    } finally { setConnSaving(false); }
   }
 
-  async function handleClone(c: Connection) {
+  async function cloneConn(c: Connection) {
     const r = await fetch("/api/admin/connections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: `${c.name} (copy)`,
-        host: c.host, port: c.port, protocol: c.protocol,
-        folderId: c.folderId, credentialId: c.credentialId,
-        notes: c.notes ?? undefined, options: c.options ?? undefined,
-      }),
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: `${c.name} (copy)`, host: c.host, port: c.port, protocol: c.protocol, folderId: c.folderId, credentialId: c.credentialId, options: c.options ?? undefined }),
     });
     if (!r.ok) { toast.error("Clone failed"); return; }
     toast.success("Connection cloned");
     load();
   }
 
-  async function handleDelete(id: number) {
+  async function deleteConn(id: number) {
     const r = await fetch(`/api/admin/connections?id=${id}`, { method: "DELETE" });
     if (!r.ok) { toast.error("Delete failed"); return; }
     toast.success("Connection deleted");
-    setDeleteId(null);
+    setDeleteTarget(null);
     load();
   }
 
-  async function handleDrop(connectionId: number, folderId: number | null) {
-    const conn = list.find(c => c.id === connectionId);
-    if (!conn || conn.folderId === folderId) return;
-    // Optimistic update
-    setList(prev => prev.map(c => c.id === connectionId ? { ...c, folderId } : c));
-    const r = await fetch("/api/admin/connections", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: connectionId, name: conn.name, host: conn.host, port: conn.port, protocol: conn.protocol, folderId, credentialId: conn.credentialId, options: conn.options }),
-    });
-    if (!r.ok) {
-      toast.error("Move failed");
-      setList(prev => prev.map(c => c.id === connectionId ? { ...c, folderId: conn.folderId } : c));
+  // ── Drag / drop ──────────────────────────────────────────────────────────────
+
+  async function commitDrop(target: number | "root") {
+    if (!dragging) return;
+    const newParent = target === "root" ? null : target;
+    setDragging(null);
+    setDropTarget(null);
+
+    if (dragging.kind === "conn") {
+      const c = connections.find(c => c.id === dragging.id);
+      if (!c || c.folderId === newParent) return;
+      setConnections(prev => prev.map(x => x.id === dragging.id ? { ...x, folderId: newParent } : x));
+      const r = await fetch("/api/admin/connections", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: c.id, name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: newParent, credentialId: c.credentialId, options: c.options }),
+      });
+      if (!r.ok) { toast.error("Move failed"); load(); }
+    } else {
+      const f = folders.find(f => f.id === dragging.id);
+      if (!f || f.parentId === newParent) return;
+      if (target !== "root" && (target === dragging.id || isAncestor(folders, dragging.id, target))) return;
+      const r = await fetch("/api/admin/folders", {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: f.id, name: f.name, parentId: newParent, credentialId: f.credentialId }),
+      });
+      if (!r.ok) { toast.error("Move failed"); return; }
+      load();
     }
   }
 
-  function folderName(folderId: number | null): string {
-    if (!folderId) return "";
-    return folders.find(f => f.id === folderId)?.name ?? "";
+  // ── Tree rendering ───────────────────────────────────────────────────────────
+
+  function renderConn(c: Connection, depth: number) {
+    const dim = dragging?.kind === "conn" && dragging.id === c.id;
+    return (
+      <div
+        key={c.id}
+        draggable
+        onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "conn", id: c.id }); }}
+        onDragEnd={() => { setDragging(null); setDropTarget(null); }}
+        style={{ paddingLeft: depth * 16 + 8 }}
+        className={`flex items-center gap-1.5 py-1 pr-2 rounded group hover:bg-secondary/40 transition-colors ${dim ? "opacity-40" : ""}`}
+      >
+        {DRAG_HANDLE}
+        {c.protocol === "web"
+          ? <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          : <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        }
+        <span className="text-sm truncate flex-1">{c.name}</span>
+        <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+        {isDsm(c) && <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${DSM_BADGE}`}>DSM</span>}
+        <span className={`text-xs truncate max-w-[140px] hidden sm:block ${muted}`}>{c.host}{c.port ? `:${c.port}` : ""}</span>
+        <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditConn(c)}><Pencil className="h-3 w-3" /></Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneConn(c)}><Copy className="h-3 w-3" /></Button>
+          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "conn", id: c.id, name: c.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+        </div>
+      </div>
+    );
   }
 
-  const filtered = useMemo(() => {
-    let items = list;
-    if (selectedFolder === UNASSIGNED) items = items.filter(c => !c.folderId);
-    else if (selectedFolder !== null) {
-      const allDescendants = new Set<number>();
-      const addDescendants = (id: number) => {
-        allDescendants.add(id);
-        folders.filter(f => f.parentId === id).forEach(f => addDescendants(f.id));
-      };
-      addDescendants(selectedFolder);
-      items = items.filter(c => c.folderId !== null && allDescendants.has(c.folderId));
-    }
-    const q = search.trim().toLowerCase();
-    if (q) items = items.filter(c => c.name.toLowerCase().includes(q) || c.host.toLowerCase().includes(q) || c.protocol.includes(q));
-    return items;
-  }, [list, selectedFolder, search, folders]);
+  function renderFolder(f: FolderRow, depth = 0): React.ReactNode {
+    const isOpen = expanded.has(f.id);
+    const subs = folders.filter(sf => sf.parentId === f.id);
+    const folderConns = connections.filter(c => c.folderId === f.id);
+    const cred = credentials.find(c => c.id === f.credentialId);
+    const dim = dragging?.kind === "folder" && dragging.id === f.id;
+    const isDropTarget = dropTarget === f.id;
+    const canReceiveDrop = dragging !== null && !(
+      dragging.kind === "folder" && (dragging.id === f.id || isAncestor(folders, dragging.id, f.id))
+    );
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+    return (
+      <div key={f.id}>
+        <div
+          draggable
+          onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "folder", id: f.id }); }}
+          onDragEnd={() => { setDragging(null); setDropTarget(null); }}
+          onDragOver={e => { if (canReceiveDrop) { e.preventDefault(); setDropTarget(f.id); } }}
+          onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === f.id ? null : prev); }}
+          onDrop={e => { e.preventDefault(); commitDrop(f.id); }}
+          style={{ paddingLeft: depth * 16 + 8 }}
+          className={`flex items-center gap-1 py-1 pr-2 rounded group transition-colors
+            ${dim ? "opacity-40" : ""}
+            ${isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-secondary/50"}`}
+        >
+          {DRAG_HANDLE}
+          <button
+            type="button"
+            className="p-0.5 shrink-0"
+            style={{ visibility: subs.length > 0 || folderConns.length > 0 ? "visible" : "hidden" }}
+            onClick={() => toggle(f.id)}
+          >
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
+          </button>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
+            onClick={() => toggle(f.id)}
+          >
+            {isOpen
+              ? <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
+              : <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            }
+            <span className="text-sm font-medium truncate">{f.name}</span>
+            {cred && <span className={`text-xs truncate ${muted}`}>({cred.name})</span>}
+            {(subs.length + folderConns.length) > 0 && (
+              <span className={`text-[10px] shrink-0 ${muted}`}>{subs.length + folderConns.length}</span>
+            )}
+          </button>
+          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Add connection here" onClick={() => { openNewConn(f.id); if (!isOpen) toggle(f.id); }}><Plus className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" title="Add subfolder" onClick={() => openNewFolder(f.id)}><FolderPlus className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditFolder(f)}><Pencil className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneFolder(f)}><Copy className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "folder", id: f.id, name: f.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+          </div>
+        </div>
+        {isOpen && (
+          <div>
+            {subs.map(s => renderFolder(s, depth + 1))}
+            {folderConns.map(c => renderConn(c, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
-  function handleSearch(v: string) { setSearch(v); setPage(1); }
-  function handleSelectFolder(id: number | null) { setSelectedFolder(id); setPage(1); setSearch(""); }
+  const rootFolders = folders.filter(f => !f.parentId);
+  const unassigned = connections.filter(c => !c.folderId);
+  const shadowEnabled = shadow.sessionId > 0;
+  const empty = folders.length === 0 && connections.length === 0;
 
   return (
     <div className={pageWrapper}>
       <div className={pageInner}>
         <div className="flex items-center justify-between mb-4">
           <h1 className={pageTitle}>Connections</h1>
-          <Button onClick={openNew} size="sm"><Plus className="h-4 w-4 mr-1" />Add</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => openNewFolder()}>
+              <FolderPlus className="h-4 w-4 mr-1" />Add Folder
+            </Button>
+            <Button size="sm" onClick={() => openNewConn()}>
+              <Plus className="h-4 w-4 mr-1" />Add Connection
+            </Button>
+          </div>
         </div>
 
-        <div className="flex gap-4">
-          {/* Folder tree */}
-          <div className="w-44 shrink-0 rounded-lg border overflow-hidden self-start">
-            <FolderTree
-              folders={folders}
-              connections={list}
-              selected={selectedFolder}
-              onSelect={handleSelectFolder}
-              onDrop={handleDrop}
-            />
-          </div>
-
-          {/* Connections table */}
-          <div className="flex-1 min-w-0">
-            <div className="relative mb-3">
-              <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-              <Input className="pl-8 h-8 text-sm" placeholder="Search…" value={search} onChange={e => handleSearch(e.target.value)} />
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
+        ) : empty ? (
+          <p className={`text-center py-12 text-sm ${muted}`}>No connections yet.</p>
+        ) : (
+          <div className="rounded-lg border">
+            <div className="py-1">
+              {rootFolders.map(f => renderFolder(f))}
+              {unassigned.map(c => renderConn(c, 0))}
             </div>
-
-            {loading ? (
-              <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
-            ) : filtered.length === 0 ? (
-              <p className={`text-center py-12 text-sm ${muted}`}>{search ? "No matches." : "No connections here."}</p>
-            ) : (
-              <>
-                <div className="rounded-lg border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b bg-muted/40">
-                        <th className="w-4 px-2 py-1.5" />
-                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground">Name</th>
-                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground hidden sm:table-cell">Host</th>
-                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground">Proto</th>
-                        <th className="text-left px-3 py-1.5 font-medium text-xs text-muted-foreground hidden md:table-cell">Folder</th>
-                        <th className="px-2 py-1.5 w-14" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paged.map((c, i) => {
-                        const fn = folderName(c.folderId);
-                        const isDragging = draggingId === c.id;
-                        return (
-                          <tr
-                            key={c.id}
-                            draggable
-                            onDragStart={e => { e.dataTransfer.setData("connectionId", String(c.id)); setDraggingId(c.id); }}
-                            onDragEnd={() => setDraggingId(null)}
-                            className={`border-b last:border-0 hover:bg-muted/20 transition-colors group cursor-grab active:cursor-grabbing
-                              ${isDragging ? "opacity-40" : ""}
-                              ${i % 2 === 0 ? "" : "bg-muted/5"}`}
-                          >
-                            <td className="px-2 py-1.5 text-muted-foreground/30 group-hover:text-muted-foreground/60">
-                              <svg width="8" height="12" viewBox="0 0 8 12" fill="currentColor">
-                                <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
-                                <circle cx="2" cy="6" r="1.2"/><circle cx="6" cy="6" r="1.2"/>
-                                <circle cx="2" cy="10" r="1.2"/><circle cx="6" cy="10" r="1.2"/>
-                              </svg>
-                            </td>
-                            <td className="px-3 py-1.5 font-medium truncate max-w-[140px]">{c.name}</td>
-                            <td className={`px-3 py-1.5 font-mono text-xs truncate max-w-[160px] hidden sm:table-cell ${muted}`}>
-                              {c.host}{c.port ? `:${c.port}` : ""}
-                            </td>
-                            <td className="px-3 py-1.5">
-                              <div className="flex items-center gap-1">
-                                <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
-                                {isDsm(c) && <span title="UltraVNC DSM encryption" className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${DSM_BADGE}`}>DSM</span>}
-                              </div>
-                            </td>
-                            <td className={`px-3 py-1.5 text-xs truncate max-w-[120px] hidden md:table-cell ${muted}`}>{fn}</td>
-                            <td className="px-2 py-1.5">
-                              <div className="flex items-center gap-0.5">
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleClone(c)}><Copy className="h-3 w-3" /></Button>
-                                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-3 text-xs text-muted-foreground">
-                    <span>{filtered.length} total · page {currentPage} of {totalPages}</span>
-                    <div className="flex items-center gap-1">
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === 1} onClick={() => setPage(p => p - 1)}>
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button size="icon" variant="ghost" className="h-7 w-7" disabled={currentPage === totalPages} onClick={() => setPage(p => p + 1)}>
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-              </>
+            {dragging && (
+              <div
+                onDragOver={e => { e.preventDefault(); setDropTarget("root"); }}
+                onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === "root" ? null : prev); }}
+                onDrop={e => { e.preventDefault(); commitDrop("root"); }}
+                className={`border-t py-2 px-4 text-xs text-center select-none transition-colors ${dropTarget === "root" ? "bg-primary/10 text-primary" : `${muted}`}`}
+              >
+                Drop here to remove from folder
+              </div>
             )}
           </div>
-        </div>
+        )}
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        {/* ── Folder dialog ─────────────────────────────────────────────── */}
+        <Dialog open={folderDialog} onOpenChange={setFolderDialog}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{form.id ? "Edit Connection" : "Add Connection"}</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>{folderForm.id ? "Edit Folder" : "Add Folder"}</DialogTitle></DialogHeader>
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <Label>Name</Label>
-                <Input placeholder="e.g. Web Server 01" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+                <Input value={folderForm.name} onChange={e => setFolderForm(f => ({ ...f, name: e.target.value }))} onKeyDown={e => { if (e.key === "Enter") saveFolder(); }} autoFocus />
               </div>
-              {form.protocol === "web" ? (
+              <div className="flex flex-col gap-1.5">
+                <Label>Parent Folder <span className={muted}>(optional)</span></Label>
+                <Select value={folderForm.parentId || "none"} onValueChange={v => setFolderForm(f => ({ ...f, parentId: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="None (root)" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None (root)</SelectItem>
+                    {folders.filter(f => f.id !== folderForm.id).map(f => (
+                      <SelectItem key={f.id} value={String(f.id)}>{f.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Credential <span className={muted}>(inherited by connections)</span></Label>
+                <Select value={folderForm.credentialId || "none"} onValueChange={v => setFolderForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
+                  <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setFolderDialog(false)}>Cancel</Button>
+              <Button onClick={saveFolder} disabled={folderSaving}>{folderSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Connection dialog ─────────────────────────────────────────── */}
+        <Dialog open={connDialog} onOpenChange={setConnDialog}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>{connForm.id ? "Edit Connection" : "Add Connection"}</DialogTitle></DialogHeader>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <Label>Name</Label>
+                <Input placeholder="e.g. Web Server 01" value={connForm.name} onChange={e => setConnForm(f => ({ ...f, name: e.target.value }))} autoFocus />
+              </div>
+              {connForm.protocol === "web" ? (
                 <div className="flex flex-col gap-1.5">
                   <Label>URL</Label>
-                  <Input placeholder="https://example.com" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
+                  <Input placeholder="https://example.com" value={connForm.host} onChange={e => setConnForm(f => ({ ...f, host: e.target.value }))} />
                 </div>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   <div className="col-span-2 flex flex-col gap-1.5">
                     <Label>Host / IP</Label>
-                    <Input placeholder="192.168.1.10" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
+                    <Input placeholder="192.168.1.10" value={connForm.host} onChange={e => setConnForm(f => ({ ...f, host: e.target.value }))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <Label>Port <span className={muted}>(optional)</span></Label>
-                    <Input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+                    <Input type="number" value={connForm.port} onChange={e => setConnForm(f => ({ ...f, port: e.target.value }))} />
                   </div>
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
                 <Label>Protocol</Label>
-                <Select value={form.protocol} onValueChange={v => setForm(f => ({ ...f, protocol: v }))}>
+                <Select value={connForm.protocol} onValueChange={v => setConnForm(f => ({ ...f, protocol: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="rdp">RDP</SelectItem>
@@ -453,7 +470,7 @@ export default function ConnectionsPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label>Folder <span className={muted}>(optional)</span></Label>
-                <Select value={form.folderId || "none"} onValueChange={v => setForm(f => ({ ...f, folderId: v === "none" ? "" : v }))}>
+                <Select value={connForm.folderId || "none"} onValueChange={v => setConnForm(f => ({ ...f, folderId: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue placeholder="No folder" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">No folder</SelectItem>
@@ -461,10 +478,10 @@ export default function ConnectionsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {form.protocol !== "web" && (
+              {connForm.protocol !== "web" && (
                 <div className="flex flex-col gap-1.5">
                   <Label>Credential <span className={muted}>(overrides folder)</span></Label>
-                  <Select value={form.credentialId || "none"} onValueChange={v => setForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
+                  <Select value={connForm.credentialId || "none"} onValueChange={v => setConnForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
                     <SelectTrigger><SelectValue placeholder="Inherit from folder" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">Inherit from folder</SelectItem>
@@ -473,46 +490,31 @@ export default function ConnectionsPage() {
                   </Select>
                 </div>
               )}
-
-              {form.protocol === "rdp" && (
+              {connForm.protocol === "rdp" && (
                 <div className="rounded-lg border p-3 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Shadow Session</p>
-                    <Switch
-                      checked={shadowEnabled}
-                      onCheckedChange={v => setShadow(s => ({ ...s, sessionId: v ? 1 : 0 }))}
-                    />
+                    <Switch checked={shadowEnabled} onCheckedChange={v => setShadow(s => ({ ...s, sessionId: v ? 1 : 0 }))} />
                   </div>
                   {shadowEnabled && (
                     <div className="space-y-3">
                       <div className="flex flex-col gap-1.5">
                         <Label>Session ID</Label>
-                        <Input
-                          type="number" min={1} max={9999} className="w-28"
-                          value={shadow.sessionId}
-                          onChange={e => setShadow(s => ({ ...s, sessionId: Math.max(1, parseInt(e.target.value) || 1) }))}
-                        />
+                        <Input type="number" min={1} max={9999} className="w-28" value={shadow.sessionId} onChange={e => setShadow(s => ({ ...s, sessionId: Math.max(1, parseInt(e.target.value) || 1) }))} />
                       </div>
                       <div className="flex items-center justify-between">
-                        <div>
-                          <Label>Control</Label>
-                          <p className={`text-xs ${muted}`}>Take control of the session (not view-only)</p>
-                        </div>
+                        <div><Label>Control</Label><p className={`text-xs ${muted}`}>Take control of the session (not view-only)</p></div>
                         <Switch checked={shadow.control} onCheckedChange={v => setShadow(s => ({ ...s, control: v }))} />
                       </div>
                       <div className="flex items-center justify-between">
-                        <div>
-                          <Label>No Consent Prompt</Label>
-                          <p className={`text-xs ${muted}`}>Shadow without asking the remote user</p>
-                        </div>
+                        <div><Label>No Consent Prompt</Label><p className={`text-xs ${muted}`}>Shadow without asking the remote user</p></div>
                         <Switch checked={shadow.noConsent} onCheckedChange={v => setShadow(s => ({ ...s, noConsent: v }))} />
                       </div>
                     </div>
                   )}
                 </div>
               )}
-
-              {form.protocol === "vnc" && (
+              {connForm.protocol === "vnc" && (
                 <div className="rounded-lg border p-3">
                   <div className="flex items-center justify-between">
                     <div>
@@ -525,25 +527,32 @@ export default function ConnectionsPage() {
               )}
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-              </Button>
+              <Button variant="outline" onClick={() => setConnDialog(false)}>Cancel</Button>
+              <Button onClick={saveConn} disabled={connSaving}>{connSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
-        <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        {/* ── Delete dialog ─────────────────────────────────────────────── */}
+        <Dialog open={deleteTarget !== null} onOpenChange={() => setDeleteTarget(null)}>
           <DialogContent>
-            <DialogHeader><DialogTitle>Delete Connection</DialogTitle></DialogHeader>
-            <p className="text-sm">Are you sure? This cannot be undone.</p>
+            <DialogHeader>
+              <DialogTitle>Delete {deleteTarget?.kind === "folder" ? "Folder" : "Connection"}</DialogTitle>
+            </DialogHeader>
+            {deleteTarget?.kind === "folder" ? (
+              <p className="text-sm">Delete <strong>{deleteTarget.name}</strong>? All subfolders will be deleted. Connections inside will be moved to the root level.</p>
+            ) : (
+              <p className="text-sm">Delete <strong>{deleteTarget?.name}</strong>? This cannot be undone.</p>
+            )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-              <Button variant="destructive" onClick={() => deleteId && handleDelete(deleteId)}>Delete</Button>
+              <Button variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</Button>
+              <Button variant="destructive" onClick={() => {
+                if (!deleteTarget) return;
+                deleteTarget.kind === "folder" ? deleteFolder(deleteTarget.id) : deleteConn(deleteTarget.id);
+              }}>Delete</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
       </div>
     </div>
   );

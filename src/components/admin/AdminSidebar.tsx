@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles, Bell, ClipboardList, Monitor, Folder, KeyRound, Timer, Sliders } from "lucide-react";
+import { LayoutDashboard, Settings, Users, CreditCard, Mail, Bot, SlidersHorizontal, Menu, X, LogOut, Sparkles, Bell, ClipboardList, Monitor, KeyRound, Timer, Sliders } from "lucide-react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { cn } from "@/lib/utils";
 import type { Features } from "@/lib/features";
@@ -34,7 +34,6 @@ export default function AdminSidebar({ user, features, platform }: Props) {
   const allNavItems: NavItem[] = [
     { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
     { href: "/admin/connections", label: "Connections", icon: Monitor },
-    { href: "/admin/folders", label: "Folders", icon: Folder },
     { href: "/admin/credentials", label: "Credentials", icon: KeyRound },
     { href: "/admin/settings", label: "Settings", icon: SlidersHorizontal },
     ...(features.audit ? [{ href: "/admin/audit", label: "Audit", icon: ClipboardList }] : []),
@@ -70,7 +69,6 @@ export default function AdminSidebar({ user, features, platform }: Props) {
   const managementItems: NavItem[] = [
     { href: "/admin/connections", label: "Connections", icon: Monitor },
     { href: "/admin/credentials", label: "Credentials", icon: KeyRound },
-    { href: "/admin/folders", label: "Folders", icon: Folder },
     { href: "/admin/protocol-settings", label: "Protocols", icon: Sliders },
     { href: "/admin/connection-settings", label: "Session", icon: Timer },
   ];
