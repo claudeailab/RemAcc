@@ -194,6 +194,8 @@ function WebPanel({ session, active }: { session: Session; active: boolean }) {
         src={src}
         className="flex-1 w-full border-0 bg-white"
         allow="fullscreen"
+        // No allow-top-navigation*: proxied pages are same-origin and would otherwise frame-bust out of RemAcc
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads allow-pointer-lock"
       />
     </div>
   );
