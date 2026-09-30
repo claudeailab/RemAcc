@@ -256,7 +256,7 @@ export default function ConnectionsPage() {
       setConnections(prev => prev.map(x => x.id === dragging.id ? { ...x, folderId: newParent } : x));
       const r = await fetch("/api/admin/connections", {
         method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: c.id, name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: newParent, credentialId: c.credentialId, options: c.options }),
+        body: JSON.stringify({ id: c.id, name: c.name, host: c.host, port: c.port, protocol: c.protocol, folderId: newParent, credentialId: c.credentialId, options: c.options ?? undefined }),
       });
       if (!r.ok) { toast.error("Move failed"); load(); }
     } else {
