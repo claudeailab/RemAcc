@@ -820,6 +820,144 @@ async function handleSSH(wsConn, req, id) {
 }
 
 // ---------------------------------------------------------------------------
+// Web connection reverse proxy: the browser only talks to RemAcc, which reaches the
+// internal site — browsers block public pages from loading private-network addresses
+// ---------------------------------------------------------------------------
+const https = require('https');
+const WEB_PREFIX = /^\/webproxy\/(\d+)(\/.*)?$/;
+const HOP_HEADERS = ['connection', 'keep-alive', 'proxy-connection', 'te', 'trailer', 'transfer-encoding', 'upgrade'];
+const DROP_RESPONSE_HEADERS = ['x-frame-options', 'content-security-policy', 'content-security-policy-report-only', 'strict-transport-security', 'referrer-policy'];
+const webTargets = new Map(); // `${id}|${sessionToken}` -> { url, expires }
+
+function readCookies(header) {
+  const out = [];
+  for (const part of (header ?? '').split(';')) {
+    const i = part.indexOf('=');
+    if (i > 0) out.push([part.slice(0, i).trim(), part.slice(i + 1).trim()]);
+  }
+  return out;
+}
+
+// Target URL of a web connection the requesting user may open, or null
+async function webTarget(req, id) {
+  const token = readCookies(req.headers.cookie).find(([k]) => k === 'webapp-session')?.[1];
+  if (!token) return null;
+  const key = `${id}|${token}`;
+  const hit = webTargets.get(key);
+  if (hit && hit.expires > Date.now()) return hit.url;
+  const r = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, { headers: { cookie: `webapp-session=${token}` } });
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (d.protocol !== 'web') return null;
+  let url;
+  try { url = new URL(/^https?:\/\//i.test(d.host) ? d.host : `http://${d.host}`); } catch { return null; }
+  if (webTargets.size > 1000) webTargets.clear();
+  webTargets.set(key, { url, expires: Date.now() + 60000 });
+  return url;
+}
+
+// Connection id of the proxied page that issued this request (root-relative URLs like /login)
+function webProxyReferer(req) {
+  try {
+    const m = new URL(req.headers.referer ?? '').pathname.match(WEB_PREFIX);
+    return m ? +m[1] : null;
+  } catch { return null; }
+}
+
+function toUpstreamHeaders(req, id, target, keepUpgrade) {
+  const h = {};
+  for (const [k, v] of Object.entries(req.headers)) {
+    if (k.startsWith('x-forwarded-') || k === 'x-real-ip') continue;
+    if (!keepUpgrade && HOP_HEADERS.includes(k)) continue;
+    h[k] = v;
+  }
+  h.host = target.host;
+  // Only the site's own cookies go upstream — never the RemAcc session
+  const prefix = `rwp${id}_`;
+  const cookies = readCookies(req.headers.cookie).filter(([k]) => k.startsWith(prefix)).map(([k, v]) => `${k.slice(prefix.length)}=${v}`);
+  if (cookies.length) h.cookie = cookies.join('; '); else delete h.cookie;
+  if (h.origin) h.origin = target.origin;
+  if (h.referer) {
+    try {
+      const u = new URL(h.referer);
+      const m = u.pathname.match(WEB_PREFIX);
+      h.referer = target.origin + (m ? (m[2] ?? '/') : u.pathname) + u.search;
+    } catch { delete h.referer; }
+  }
+  return h;
+}
+
+function fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure) {
+  const h = {};
+  for (const [k, v] of Object.entries(upRes.headers)) {
+    if (!HOP_HEADERS.includes(k) && !DROP_RESPONSE_HEADERS.includes(k)) h[k] = v;
+  }
+  if (h.location) {
+    try {
+      const u = new URL(h.location, upstreamUrl);
+      if (u.origin === target.origin) h.location = `/webproxy/${id}${u.pathname}${u.search}${u.hash}`;
+    } catch {}
+  }
+  if (h['set-cookie']) {
+    h['set-cookie'] = h['set-cookie'].map(c => {
+      const [pair, ...attrs] = c.split(';');
+      const keep = attrs.map(a => a.trim()).filter(a => a && !/^(domain|path|secure|samesite)\b/i.test(a));
+      return [`rwp${id}_${pair.trim()}`, ...keep, 'Path=/', 'SameSite=Lax', ...(secure ? ['Secure'] : [])].join('; ');
+    });
+  }
+  h['referrer-policy'] = 'same-origin';
+  return h;
+}
+
+async function handleWebProxy(req, res, id, pathAndQuery) {
+  const target = await webTarget(req, id);
+  if (!target) { res.writeHead(403, { 'content-type': 'text/plain' }); res.end('Access denied'); return; }
+  const upstreamUrl = new URL(pathAndQuery, target.origin);
+  const mod = upstreamUrl.protocol === 'https:' ? https : http;
+  const secure = req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
+  await new Promise(resolve => {
+    res.once('close', resolve);
+    const up = mod.request(upstreamUrl, {
+      method: req.method,
+      headers: toUpstreamHeaders(req, id, target, false),
+      rejectUnauthorized: false, // internal sites commonly use self-signed certificates
+      timeout: 30000,
+    }, upRes => {
+      res.writeHead(upRes.statusCode ?? 502, fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure));
+      upRes.pipe(res);
+    });
+    up.on('timeout', () => up.destroy(new Error('timed out')));
+    up.on('error', e => {
+      if (res.headersSent) { res.destroy(); return; }
+      res.writeHead(502, { 'content-type': 'text/plain' });
+      res.end(`RemAcc cannot reach ${target.origin}: ${e.message}`);
+    });
+    req.pipe(up);
+  });
+}
+
+async function handleWebProxyUpgrade(req, socket, id, head, pathAndQuery) {
+  const target = await webTarget(req, id).catch(() => null);
+  if (!target) { socket.destroy(); return; }
+  const upstreamUrl = new URL(pathAndQuery, target.origin);
+  const mod = upstreamUrl.protocol === 'https:' ? https : http;
+  const up = mod.request(upstreamUrl, { method: 'GET', headers: toUpstreamHeaders(req, id, target, true), rejectUnauthorized: false });
+  up.on('upgrade', (upRes, upSocket, upHead) => {
+    const lines = ['HTTP/1.1 101 Switching Protocols'];
+    for (let i = 0; i < upRes.rawHeaders.length; i += 2) lines.push(`${upRes.rawHeaders[i]}: ${upRes.rawHeaders[i + 1]}`);
+    socket.write(lines.join('\r\n') + '\r\n\r\n');
+    if (upHead?.length) socket.write(upHead);
+    if (head?.length) upSocket.write(head);
+    upSocket.on('error', () => socket.destroy());
+    socket.on('error', () => upSocket.destroy());
+    upSocket.pipe(socket).pipe(upSocket);
+  });
+  up.on('response', r => { r.resume(); socket.end(`HTTP/1.1 ${r.statusCode} ${r.statusMessage}\r\n\r\n`); });
+  up.on('error', () => socket.destroy());
+  up.end();
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -904,6 +1042,19 @@ async function main() {
     const start = Date.now();
     const urlPath = (req.url ?? '/').split('?')[0];
     try {
+      const mWeb = urlPath.match(WEB_PREFIX);
+      if (mWeb) return await handleWebProxy(req, res, +mWeb[1], req.url.slice(`/webproxy/${mWeb[1]}`.length) || '/');
+      const refId = webProxyReferer(req);
+      if (refId) {
+        // A proxied page navigating to a root-relative URL: move the frame back under its prefix
+        const dest = req.headers['sec-fetch-dest'];
+        if (dest === 'document' || dest === 'iframe') {
+          res.writeHead(307, { location: `/webproxy/${refId}${req.url}` });
+          res.end();
+          return;
+        }
+        return await handleWebProxy(req, res, refId, req.url);
+      }
       // Serve /_next/static/ directly from disk — bypass Next.js handler
       if (urlPath.startsWith('/_next/static/')) {
         const rel = urlPath.slice('/_next/static'.length);
@@ -934,7 +1085,9 @@ async function main() {
     const mSsh = path.match(/^\/ws\/ssh\/(\d+)$/);
     const mRdp = path.match(/^\/ws\/rdp\/(\d+)$/);
     const mVnc = path.match(/^\/ws\/vnc\/(\d+)$/);
-    if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
+    const mWeb = path.match(WEB_PREFIX);
+    if (mWeb) handleWebProxyUpgrade(req, socket, +mWeb[1], head, url.slice(`/webproxy/${mWeb[1]}`.length) || '/');
+    else if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
     else if (mRdp) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mRdp[1], 10), 'rdp'));
     else if (mVnc) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mVnc[1], 10), 'vnc'));
     else { log(`WS upgrade rejected: ${url}`); socket.destroy(); }

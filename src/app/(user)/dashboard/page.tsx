@@ -161,7 +161,17 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 // ---------------------------------------------------------------------------
 // Web Panel — iframe embedding
 // ---------------------------------------------------------------------------
+function proxiedUrl(session: Session) {
+  let rest = "/";
+  try {
+    const u = new URL(/^https?:\/\//i.test(session.url ?? "") ? session.url! : `http://${session.url}`);
+    rest = u.pathname + u.search + u.hash;
+  } catch {}
+  return `/webproxy/${session.id}${rest}`;
+}
+
 function WebPanel({ session, active }: { session: Session; active: boolean }) {
+  const src = proxiedUrl(session);
   return (
     <div
       className="absolute inset-0 flex flex-col"
@@ -171,9 +181,9 @@ function WebPanel({ session, active }: { session: Session; active: boolean }) {
         <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         <span className={`text-xs truncate flex-1 ${muted}`}>{session.url}</span>
         <a
-          href={session.url}
+          href={src}
           target="_blank"
-          rel="noopener noreferrer"
+          rel="noopener"
           className="shrink-0"
           title="Open in browser tab"
         >
@@ -181,10 +191,9 @@ function WebPanel({ session, active }: { session: Session; active: boolean }) {
         </a>
       </div>
       <iframe
-        src={session.url}
+        src={src}
         className="flex-1 w-full border-0 bg-white"
         allow="fullscreen"
-        referrerPolicy="no-referrer"
       />
     </div>
   );

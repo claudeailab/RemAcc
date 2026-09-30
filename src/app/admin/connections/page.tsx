@@ -373,19 +373,16 @@ export default function ConnectionsPage() {
 
   function resolveCredential(c: Connection): { cred: Credential; via: "direct" | "folder" } | null {
     if (c.protocol === "web") return null;
-    if (c.credentialId) {
-      const cred = credentials.find(x => x.id === c.credentialId);
-      return cred ? { cred, via: "direct" } : null;
-    }
-    if (!c.folderId) return null;
+    const own = credentials.find(x => x.id === c.credentialId);
+    if (own) return { cred: own, via: "direct" };
+    const seen = new Set<number>();
     let folderId: number | null = c.folderId;
-    while (folderId !== null) {
+    while (folderId !== null && !seen.has(folderId)) {
+      seen.add(folderId);
       const folder = folders.find(f => f.id === folderId);
       if (!folder) break;
-      if (folder.credentialId) {
-        const cred = credentials.find(x => x.id === folder.credentialId);
-        return cred ? { cred, via: "folder" } : null;
-      }
+      const cred = credentials.find(x => x.id === folder.credentialId);
+      if (cred) return { cred, via: "folder" };
       folderId = folder.parentId ?? null;
     }
     return null;

@@ -61,7 +61,8 @@ export async function PATCH(req: NextRequest) {
     db.select({ id: credentials.id, name: credentials.name }).from(credentials),
   ]);
   const credByName = new Map(allCredentials.map(c => [c.name.toLowerCase(), c.id]));
-  const toUpdate = allFolders.filter(f => !f.credentialId && credByName.has(f.name.toLowerCase()));
+  const credIds = new Set(allCredentials.map(c => c.id));
+  const toUpdate = allFolders.filter(f => !(f.credentialId && credIds.has(f.credentialId)) && credByName.has(f.name.toLowerCase()));
   for (const f of toUpdate) {
     await db.update(folders).set({ credentialId: credByName.get(f.name.toLowerCase())! }).where(eq(folders.id, f.id));
   }

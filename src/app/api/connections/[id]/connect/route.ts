@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { connections, folders, credentials, users, permission_groups } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { decrypt } from "@/lib/encryption";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -26,25 +26,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const [conn] = await db.select().from(connections).where(eq(connections.id, id)).limit(1);
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Resolve credential: connection's own, then walk folder ancestors until found
-  let credId = conn.credentialId ?? null;
-  if (!credId && conn.folderId) {
+  // Resolve credential: connection's own, then each folder ancestor; IDs of deleted credentials are skipped
+  const candidates: number[] = [];
+  if (conn.credentialId) candidates.push(conn.credentialId);
+  if (conn.folderId) {
     const allFolders = await db.select({ id: folders.id, parentId: folders.parentId, credentialId: folders.credentialId }).from(folders);
+    const seen = new Set<number>();
     let folderId: number | null = conn.folderId;
-    while (folderId !== null && !credId) {
+    while (folderId !== null && !seen.has(folderId)) {
+      seen.add(folderId);
       const folder = allFolders.find(f => f.id === folderId);
       if (!folder) break;
-      if (folder.credentialId) { credId = folder.credentialId; break; }
+      if (folder.credentialId) candidates.push(folder.credentialId);
       folderId = folder.parentId ?? null;
     }
   }
 
   let cred: { username: string; password: string; domain: string | null } | null = null;
-  if (credId) {
-    const [row] = await db.select().from(credentials).where(eq(credentials.id, credId)).limit(1);
-    if (row) {
-      cred = { username: row.username, password: decrypt(row.password), domain: row.domain ?? null };
-    }
+  if (candidates.length) {
+    const rows = await db.select().from(credentials).where(inArray(credentials.id, candidates));
+    const row = candidates.map(id => rows.find(r => r.id === id)).find(Boolean);
+    if (row) cred = { username: row.username, password: decrypt(row.password), domain: row.domain ?? null };
   }
 
   const defaultPort = conn.protocol === "rdp" ? 3389 : conn.protocol === "ssh" ? 22 : 5900;

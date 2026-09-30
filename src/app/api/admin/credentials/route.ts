@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { credentials } from "@/lib/db/schema";
+import { credentials, connections, folders } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { encrypt, decrypt } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
@@ -63,6 +63,8 @@ export async function DELETE(req: NextRequest) {
   const admin = await requireAdmin();
   const id = Number(new URL(req.url).searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  await db.update(connections).set({ credentialId: null }).where(eq(connections.credentialId, id));
+  await db.update(folders).set({ credentialId: null }).where(eq(folders.credentialId, id));
   await db.delete(credentials).where(eq(credentials.id, id));
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   await logAudit({ userEmail: admin.email, action: "delete", resource: "credential", detail: `id=${id}`, ip });

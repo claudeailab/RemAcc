@@ -102,3 +102,11 @@ Folder edit/clone/delete live only on the Folders page (always visible, never ho
 ## MCP GitHub Tools (vs curl)
 
 Always prefer `mcp__github__*` tools over curl for GitHub API calls — the MCP server is not subject to CCR proxy restrictions. Use curl only for GHCR registry API (`ghcr.io/v2/...`) or non-Actions GitHub REST reads.
+
+## Credential Resolution
+
+Connection's own credential, else nearest folder ancestor with a credential. Ids that no longer exist in `credentials` are skipped, never terminal. Server (`/api/connections/[id]/connect`) and admin UI (`resolveCredential`) must stay identical.
+
+## Web Connections
+
+Always framed through `/webproxy/{connId}/{path}` (server.js), never the raw URL: auth via the connect API (web protocol only, cached 60 s per session), upstream TLS not verified, `X-Frame-Options`/CSP/HSTS dropped, `Location` rewritten under the prefix, upstream cookies renamed `rwp{id}_…` with `Path=/` and only those forwarded (never `webapp-session`). Root-relative requests are routed by `Referer` under `/webproxy/{id}/` (frame navigations get a 307 back under the prefix). WebSocket upgrades on the prefix are piped. Absolute URLs to the target origin inside page content are not rewritten.
