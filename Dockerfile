@@ -49,9 +49,9 @@ RUN --mount=type=cache,target=/root/.npm \
     cp -r /tmp/bcrypt-pkg/node_modules/bcrypt /app/node_modules/bcrypt && \
     rm -rf /tmp/bcrypt-pkg
 
-# Install ws and ssh2 for the WebSocket proxies.
+# Install ws, ssh2, and follow-redirects for the WebSocket proxies and web proxy.
 RUN --mount=type=cache,target=/root/.npm \
-    npm install --prefix /tmp/extra-pkg --no-save --no-audit --no-fund ws ssh2 && \
+    npm install --prefix /tmp/extra-pkg --no-save --no-audit --no-fund ws ssh2 follow-redirects && \
     cp -r /tmp/extra-pkg/node_modules/. /app/node_modules/ && \
     rm -rf /tmp/extra-pkg
 
