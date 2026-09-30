@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Switch } from "@/components/ui/switch";
 import {
   Loader2, Plus, Pencil, Trash2, Copy, ChevronRight,
-  Folder, FolderOpen, Monitor, FolderPlus, Globe,
+  Folder, FolderOpen, Monitor, FolderPlus, Globe, Upload, Download,
 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
@@ -101,6 +101,37 @@ export default function ConnectionsPage() {
   const [connForm, setConnForm] = useState({ id: 0, name: "", host: "", port: "", protocol: "rdp", folderId: "", credentialId: "" });
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
   const [dsmPlugin, setDsmPlugin] = useState(false);
+
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = "";
+    setImporting(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const r = await fetch("/api/admin/import", { method: "POST", body: form });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Import failed"); return; }
+      toast.success(`Imported ${d.created} connections, skipped ${d.skipped} duplicates`);
+      load();
+    } finally { setImporting(false); }
+  }
+
+  async function handleExport() {
+    const r = await fetch("/api/admin/export");
+    if (!r.ok) { toast.error("Export failed"); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "connections.xlsx";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -384,6 +415,13 @@ export default function ConnectionsPage() {
         <div className="flex items-center justify-between mb-4">
           <h1 className={pageTitle}>Connections</h1>
           <div className="flex items-center gap-2">
+            <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleImport} />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()} disabled={importing}>
+              {importing ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}Import
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleExport}>
+              <Download className="h-4 w-4 mr-1" />Export
+            </Button>
             {editMode ? (
               <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setDragging(null); setDropTarget(null); }}>
                 Done
