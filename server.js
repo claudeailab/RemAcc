@@ -630,16 +630,18 @@ async function handleGuac(wsConn, req, id, protocol) {
     });
     if (!res.ok) {
       err(`WS ${protocol} id=${id}: connect API returned ${res.status}`);
-      wsConn.send(guacEncode(['error', 'Access denied', '0']));
+      wsConn.send(guacEncode(['error', `Access denied (${res.status})`, '769']));
       wsConn.close(1008);
       return;
     }
     details = await res.json();
   } catch (e) {
     err(`WS ${protocol} id=${id}: connect API error: ${e.message}`);
+    wsConn.send(guacEncode(['error', `RemAcc could not load the connection: ${e.message}`, '512']));
     wsConn.close(1011);
     return;
   }
+  log(`WS ${protocol} id=${id}: user=${details.user} target=${details.host}:${details.port}`);
 
   const proto = await getProtoSettings();
   let base;
@@ -737,7 +739,11 @@ async function handleGuac(wsConn, req, id, protocol) {
       const parts = guacParse(instr);
       const opcode = parts[0];
 
-      if (opcode === 'args') {
+      if (opcode === 'error') {
+        // Also during the handshake (before `ready`), so the user sees why guacd gave up
+        err(`WS ${protocol} id=${id} user=${details.user}: guacd error ${parts[2]}: ${parts[1]}`);
+        if (wsConn.readyState === 1) wsConn.send(instr);
+      } else if (opcode === 'args') {
         // Guacamole protocol requires: size + audio + video + image BEFORE connect
         const w = params.width || '1280';
         const h = params.height || '800';
@@ -765,7 +771,10 @@ async function handleGuac(wsConn, req, id, protocol) {
     }
   });
 
-  tcp.on('close', () => { try { wsConn.close(); } catch {} });
+  tcp.on('close', () => {
+    if (wsConn.readyState === 1) log(`WS ${protocol} id=${id} user=${details.user}: guacd closed the connection${streaming ? '' : ' during the handshake'}`);
+    try { wsConn.close(); } catch {}
+  });
 
   wsConn.on('message', data => {
     if (!streaming) return;

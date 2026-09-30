@@ -60,5 +60,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     protocol: conn.protocol,
     credential: cred,
     options,
+    user: user.email,
   });
 }

@@ -172,6 +172,23 @@ function monitorCount(w: number, h: number) {
 
 const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
 
+// guacd sends only "Aborted. See logs." for upstream failures; its status code says what happened
+const GUAC_STATUS_TEXT: Record<number, string> = {
+  0x0200: "The connection was closed by the server.",
+  0x0202: "The remote computer did not respond.",
+  0x0203: "The remote computer reported an error.",
+  0x0207: "The remote computer refused the connection or could not be reached. If someone else is connected to it, it may allow only one viewer at a time.",
+  0x0208: "The remote computer is busy or refused the connection.",
+  0x0209: "Another session took over this connection.",
+  0x0301: "The remote computer rejected the credentials.",
+  0x0303: "Access to the remote computer was denied.",
+};
+
+function guacErrorText(err: any) {
+  const msg = err?.message && err.message !== "Aborted. See logs." ? err.message : "";
+  return msg || GUAC_STATUS_TEXT[err?.code] || (err?.code ? `Connection failed (code ${err.code})` : "");
+}
+
 function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(active);
@@ -331,19 +348,20 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       keyboard.onkeydown = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(1, keysym); };
       keyboard.onkeyup   = (keysym: number) => { if (activeRef.current && client) client.sendKeyEvent(0, keysym); };
 
+      // The first error is the cause (e.g. the VNC server's reason); the socket closing after it must not replace it
       tunnel.onerror = (err: any) => {
         console.error("[Guac tunnel]", err);
         setStatus("error");
-        setErrorMsg(err?.message ?? "Tunnel error");
+        setErrorMsg(prev => prev || guacErrorText(err) || GUAC_STATUS_TEXT[0x0200]);
       };
       client.onerror = (err: any) => {
         console.error("[Guac client]", err);
         setStatus("error");
-        setErrorMsg(err?.message ?? String(err?.code ?? "Connection failed"));
+        setErrorMsg(prev => prev || guacErrorText(err) || "Connection failed");
       };
       client.onstatechange = (state: number) => {
         if (state === 3) setStatus("connected");
-        if (state === 5) { setStatus("error"); setErrorMsg("Disconnected"); }
+        if (state === 5) { setStatus("error"); setErrorMsg(prev => prev || "Disconnected"); }
       };
 
       keepalive = setInterval(() => {

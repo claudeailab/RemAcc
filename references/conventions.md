@@ -107,6 +107,10 @@ Always prefer `mcp__github__*` tools over curl for GitHub API calls — the MCP 
 
 Connection's own credential, else nearest folder ancestor with a credential. Ids that no longer exist in `credentials` are skipped, never terminal. Server (`/api/connections/[id]/connect`) and admin UI (`resolveCredential`) must stay identical.
 
+## Connection Errors (RDP/VNC)
+
+`GuacPanel` keeps the first error (`setErrorMsg(prev => prev || …)`): the socket closing after a guacd `error` must not replace it with a generic tunnel message. guacd sends only "Aborted. See logs." for upstream failures, so `guacErrorText` maps the status code (`GUAC_STATUS_TEXT`, e.g. 519 = refused/unreachable). `server.js` forwards guacd `error` instructions also during the handshake, logs them with the user (`user=` from the connect API), and logs when guacd closes the connection. Server-generated errors carry a real message and status code (`Access denied (403)` = 769), never code 0.
+
 ## Azure AD Sign-in
 
 `/login` shows "Sign in with Microsoft" (link to `/api/auth/azure`, no username) only when `/api/platform` returns `azureLogin: true` = M365 enabled (`m365_enabled` ≠ "false") and client id, secret and tenant all set. `/api/o365/callback` matches the id token's `oid` to `users.azureOid` and refuses unknown (`not_provisioned`), disabled (`disabled`) and group-less/permission-less users before creating a session. Typing an Azure user's username in the form still redirects to the same flow with `login_hint`.
