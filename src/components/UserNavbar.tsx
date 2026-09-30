@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getPlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
 import UserNavbarClient from "./UserNavbarClient";
+import UserIdentity from "./UserIdentity";
+import { getUser } from "@/lib/auth";
 import { versionBadge } from "@/lib/ui-conventions";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -15,6 +17,7 @@ function getVersion() {
 export default async function UserNavbar() {
   const platform = await getPlatformInfo();
   const version = getVersion();
+  const user = await getUser();
   return (
     <header className="sidebar-panel fixed top-0 inset-x-0 z-40 h-14 flex items-center justify-between px-4 border-b">
       <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
@@ -39,7 +42,10 @@ export default async function UserNavbar() {
           )}
         </div>
       </Link>
-      <UserNavbarClient />
+      <div className="flex items-center gap-2 min-w-0 ml-3">
+        {user && <UserIdentity user={user} compact className="max-w-[40vw]" />}
+        <UserNavbarClient />
+      </div>
     </header>
   );
 }

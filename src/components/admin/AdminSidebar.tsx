@@ -11,18 +11,13 @@ import type { PlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
 import { versionBadge } from "@/lib/ui-conventions";
 import version from "../../../version.json";
+import UserIdentity from "@/components/UserIdentity";
 
 interface NavItem { href: string; label: string; icon: React.ElementType; exact?: boolean }
 interface Props {
   user: { email: string; displayName?: string | null };
   features: Features;
   platform: PlatformInfo;
-}
-
-function initials(str: string) {
-  const parts = str.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  return str.slice(0, 2).toUpperCase();
 }
 
 export default function AdminSidebar({ user, features, platform }: Props) {
@@ -116,15 +111,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
         </nav>
 
         <div className="p-3 border-t space-y-1">
-          <div className="flex items-center gap-2.5 px-2 py-2 rounded-md cursor-default">
-            <div
-              className="h-7 w-7 rounded-full flex items-center justify-center text-primary text-[10px] font-bold shrink-0"
-              style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
-            >
-              {initials(user.displayName ?? user.email)}
-            </div>
-            <span className="text-xs text-foreground/70 truncate">{user.displayName ?? user.email}</span>
-          </div>
+          <UserIdentity user={user} className="px-2 py-2 cursor-default" />
           <button
             type="button"
             onClick={handleLogout}
@@ -210,15 +197,7 @@ export default function AdminSidebar({ user, features, platform }: Props) {
 
             {/* User + logout */}
             <div className="p-3 border-t shrink-0 space-y-1">
-              <div className="flex items-center gap-2.5 px-2 py-2 rounded-md">
-                <div
-                  className="h-8 w-8 rounded-full flex items-center justify-center text-primary text-[10px] font-bold shrink-0"
-                  style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}
-                >
-                  {initials(user.displayName ?? user.email)}
-                </div>
-                <span className="text-xs text-foreground/70 truncate">{user.displayName ?? user.email}</span>
-              </div>
+              <UserIdentity user={user} className="px-2 py-2" />
               <button
                 type="button"
                 onClick={handleLogout}

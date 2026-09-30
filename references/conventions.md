@@ -97,7 +97,7 @@ Remote monitors are inferred as equal side-by-side screens: `n = round(width / h
 
 ## Admin UI
 
-Folder edit/clone/delete live only on the Folders page (always visible, never hover-only); the Connections page folder tree is for navigation and drag-and-drop only. DSM connections carry a `DSM` badge next to the protocol badge. The version is rendered with `versionBadge` from `ui-conventions.ts` everywhere it appears.
+Folder edit/clone/delete live only on the Folders page (always visible, never hover-only); the Connections page folder tree is for navigation and drag-and-drop only. DSM connections carry a `DSM` badge next to the protocol badge. The version is rendered with `versionBadge` from `ui-conventions.ts` everywhere it appears. The signed-in user is shown with `components/UserIdentity.tsx` (initials avatar, display name, email underneath when it differs; full identity in the tooltip) in the dashboard header next to Log out (`compact`: avatar only below `sm`) and in the admin sidebar and mobile drawer footers — never hand-rolled markup.
 
 ## MCP GitHub Tools (vs curl)
 
