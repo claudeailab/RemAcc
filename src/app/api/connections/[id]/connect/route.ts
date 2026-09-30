@@ -26,15 +26,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const [conn] = await db.select().from(connections).where(eq(connections.id, id)).limit(1);
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Resolve credential: connection's own, then folder's, then null
+  // Resolve credential: connection's own, then walk folder ancestors until found
   let credId = conn.credentialId ?? null;
   if (!credId && conn.folderId) {
-    const [folder] = await db.select().from(folders).where(eq(folders.id, conn.folderId)).limit(1);
-    if (folder?.credentialId) credId = folder.credentialId;
-    // Walk up parent folders if still not resolved
-    if (!credId && folder?.parentId) {
-      const [parent] = await db.select().from(folders).where(eq(folders.id, folder.parentId)).limit(1);
-      if (parent?.credentialId) credId = parent.credentialId;
+    const allFolders = await db.select({ id: folders.id, parentId: folders.parentId, credentialId: folders.credentialId }).from(folders);
+    let folderId: number | null = conn.folderId;
+    while (folderId !== null && !credId) {
+      const folder = allFolders.find(f => f.id === folderId);
+      if (!folder) break;
+      if (folder.credentialId) { credId = folder.credentialId; break; }
+      folderId = folder.parentId ?? null;
     }
   }
 

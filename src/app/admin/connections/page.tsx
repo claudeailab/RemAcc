@@ -357,11 +357,34 @@ export default function ConnectionsPage() {
     }
   }
 
+  // ── Credential resolution (mirrors server-side logic) ───────────────────────
+
+  function resolveCredential(c: Connection): { cred: Credential; via: "direct" | "folder" } | null {
+    if (c.protocol === "web") return null;
+    if (c.credentialId) {
+      const cred = credentials.find(x => x.id === c.credentialId);
+      return cred ? { cred, via: "direct" } : null;
+    }
+    if (!c.folderId) return null;
+    let folderId: number | null = c.folderId;
+    while (folderId !== null) {
+      const folder = folders.find(f => f.id === folderId);
+      if (!folder) break;
+      if (folder.credentialId) {
+        const cred = credentials.find(x => x.id === folder.credentialId);
+        return cred ? { cred, via: "folder" } : null;
+      }
+      folderId = folder.parentId ?? null;
+    }
+    return null;
+  }
+
   // ── Tree rendering ───────────────────────────────────────────────────────────
 
   function renderConn(c: Connection, depth: number) {
     const dim = dragging?.kind === "conn" && dragging.id === c.id;
     const checked = selectedConns.has(c.id);
+    const resolved = resolveCredential(c);
     return (
       <div
         key={c.id}
@@ -388,6 +411,13 @@ export default function ConnectionsPage() {
         <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
         {isDsm(c) && <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${DSM_BADGE}`}>DSM</span>}
         <span className={`text-xs truncate max-w-[140px] hidden sm:block ${muted}`}>{c.host}{c.port ? `:${c.port}` : ""}</span>
+        {c.protocol !== "web" && (
+          resolved
+            ? <span className={`text-xs truncate max-w-[100px] hidden md:block ${resolved.via === "folder" ? "text-muted-foreground/60 italic" : muted}`} title={resolved.via === "folder" ? `Inherited from folder` : undefined}>
+                {resolved.via === "folder" ? `↑ ${resolved.cred.name}` : resolved.cred.name}
+              </span>
+            : <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive shrink-0 hidden md:block">no cred</span>
+        )}
         {!editMode && (
           <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={e => e.stopPropagation()}>
             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditConn(c)}><Pencil className="h-3 w-3" /></Button>
