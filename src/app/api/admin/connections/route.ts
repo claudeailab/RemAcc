@@ -10,7 +10,7 @@ const createSchema = z.object({
   name: z.string().min(1),
   host: z.string().min(1),
   port: z.number().int().positive().nullable().optional(),
-  protocol: z.enum(["rdp", "vnc", "ssh"]),
+  protocol: z.enum(["rdp", "vnc", "ssh", "web"]),
   folderId: z.number().int().positive().nullable().optional(),
   credentialId: z.number().int().positive().nullable().optional(),
   notes: z.string().optional(),
