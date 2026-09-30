@@ -31,17 +31,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        iproute2 \
     && rm -rf /var/lib/apt/lists/*
 
-# Chromium for web connections (Chrome for Testing via Playwright: amd64 + arm64, with its libs and fonts)
-ARG PLAYWRIGHT_VERSION=1.63.0
-RUN --mount=type=cache,target=/root/.npm \
-    PLAYWRIGHT_BROWSERS_PATH=/opt/chrome npx -y playwright@${PLAYWRIGHT_VERSION} install --with-deps --no-shell chromium \
-    && ln -s "$(find /opt/chrome -type f -name chrome -path '*/chrome-linux*/chrome' | head -1)" /usr/local/bin/remacc-chrome \
-    && /usr/local/bin/remacc-chrome --version \
-    && rm -rf /var/lib/apt/lists/*
-# Locks the browser down (no file://, devtools, downloads); path depends on the build's branding
-COPY tools/chrome-policy.json /etc/opt/chrome_for_testing/policies/managed/remacc.json
-COPY tools/chrome-policy.json /etc/chromium/policies/managed/remacc.json
-
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
 
 # Pre-built output uploaded by the build-app CI job

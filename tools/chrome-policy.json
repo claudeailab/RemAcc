@@ -1,9 +1,0 @@
-{
-  "URLBlocklist": ["file://*", "chrome://*", "view-source:*", "devtools://*"],
-  "DeveloperToolsAvailability": 2,
-  "DownloadRestrictions": 3,
-  "PasswordManagerEnabled": false,
-  "TranslateEnabled": false,
-  "BrowserSignin": 0,
-  "SyncDisabled": true
-}
