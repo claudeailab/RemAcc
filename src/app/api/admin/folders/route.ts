@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { folders, connections } from "@/lib/db/schema";
-import { eq, inArray, isNull, or } from "drizzle-orm";
+import { folders, connections, credentials } from "@/lib/db/schema";
+import { eq, inArray, isNull } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
@@ -47,6 +47,27 @@ export async function PUT(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   await logAudit({ userEmail: admin.email, action: "update", resource: "folder", detail: `id=${id}`, ip });
   return NextResponse.json({ ok: true });
+}
+
+// PATCH ?action=match-credentials — assign credentials to all unset folders whose names match a credential (case-insensitive)
+export async function PATCH(req: NextRequest) {
+  const admin = await requireAdmin();
+  const url = new URL(req.url);
+  if (url.searchParams.get("action") !== "match-credentials") {
+    return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+  }
+  const [allFolders, allCredentials] = await Promise.all([
+    db.select({ id: folders.id, name: folders.name, credentialId: folders.credentialId }).from(folders),
+    db.select({ id: credentials.id, name: credentials.name }).from(credentials),
+  ]);
+  const credByName = new Map(allCredentials.map(c => [c.name.toLowerCase(), c.id]));
+  const toUpdate = allFolders.filter(f => !f.credentialId && credByName.has(f.name.toLowerCase()));
+  for (const f of toUpdate) {
+    await db.update(folders).set({ credentialId: credByName.get(f.name.toLowerCase())! }).where(eq(folders.id, f.id));
+  }
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+  await logAudit({ userEmail: admin.email, action: "update", resource: "folder", detail: `match-credentials: updated=${toUpdate.length}`, ip });
+  return NextResponse.json({ ok: true, updated: toUpdate.length });
 }
 
 export async function DELETE(req: NextRequest) {

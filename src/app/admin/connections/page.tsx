@@ -109,7 +109,19 @@ export default function ConnectionsPage() {
   const [bulkConfirm, setBulkConfirm] = useState(false);
 
   const [importing, setImporting] = useState(false);
+  const [matching, setMatching] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  async function handleMatchCredentials() {
+    setMatching(true);
+    try {
+      const r = await fetch("/api/admin/folders?action=match-credentials", { method: "PATCH" });
+      const d = await r.json();
+      if (!r.ok) { toast.error(d.error ?? "Failed"); return; }
+      toast.success(`Matched credentials to ${d.updated} folder${d.updated === 1 ? "" : "s"}`);
+      load();
+    } finally { setMatching(false); }
+  }
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -525,6 +537,9 @@ export default function ConnectionsPage() {
             </Button>
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-1" />Export
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleMatchCredentials} disabled={matching} title="Assign credentials to all folders whose names match a credential name">
+              {matching ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Check className="h-4 w-4 mr-1" />}Match Creds
             </Button>
             {editMode ? (
               <>
