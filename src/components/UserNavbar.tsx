@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MessageSquarePlus } from "lucide-react";
 import { getPlatformInfo } from "@/lib/platform";
 import { iconUrl } from "@/lib/platform-shared";
 import UserNavbarClient from "./UserNavbarClient";
@@ -43,6 +44,16 @@ export default async function UserNavbar() {
         </div>
       </Link>
       <div className="flex items-center gap-2 min-w-0 ml-3">
+        <a
+          href="https://gd.mcd.cy/tickets/new"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Report a bug or suggest an improvement"
+          aria-label="Report a bug or suggest an improvement"
+          className="h-8 w-8 flex items-center justify-center rounded-md text-muted-foreground/70 hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+        </a>
         {user && <UserIdentity user={user} compact className="max-w-[40vw]" />}
         <UserNavbarClient />
       </div>

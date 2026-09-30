@@ -204,6 +204,18 @@ function WebPanel({ session, active }: { session: Session; active: boolean }) {
 // ---------------------------------------------------------------------------
 // Guacamole Panel — RDP + VNC in-browser via guacd
 // ---------------------------------------------------------------------------
+// Fewest equal side-by-side monitors whose aspect ratio is a real monitor's (5:4 … 16:9);
+// a single ultrawide (21:9) matches none and stays one screen
+function monitorCount(w: number, h: number) {
+  for (let n = 1; n <= 4; n++) {
+    const r = w / n / h;
+    if (r >= 1.2 && r <= 1.85) return n;
+  }
+  return 1;
+}
+
+const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
+
 function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(active);
@@ -221,6 +233,14 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const screensRef = useRef(1);
   const screenRef = useRef(screen);
   const rescaleRef = useRef<() => void>(() => {});
+  const clientRef = useRef<any>(null);
+
+  function sendCtrlAltDel() {
+    const c = clientRef.current;
+    if (!c) return;
+    CTRL_ALT_DEL.forEach(k => c.sendKeyEvent(1, k));
+    [...CTRL_ALT_DEL].reverse().forEach(k => c.sendKeyEvent(0, k));
+  }
 
   function chooseScreen(i: number) {
     setScreen(i);
@@ -251,6 +271,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       tunnelRef = tunnel;
       client = new Guac.Client(tunnel);
+      clientRef.current = client;
 
       const display = client.getDisplay();
       const displayEl: HTMLElement = display.getElement();
@@ -273,7 +294,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        const n = Math.max(1, Math.round(dw / dh / (16 / 9)));
+        const n = monitorCount(dw, dh);
         if (n !== screensRef.current) { screensRef.current = n; setScreens(n); }
         const { x0, vw } = visibleRange();
         const scale = Math.min(cw / vw, ch / dh);
@@ -379,6 +400,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (keyboard) { try { keyboard.reset(); } catch {} }
       if (client)   { try { client.disconnect(); } catch {} }
       client = null;
+      clientRef.current = null;
     };
   }, [session.id, session.protocol]);
 
@@ -392,26 +414,36 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
       <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
-      {status === "connected" && screens > 1 && (
+      {status === "connected" && (
         <div
-          className="absolute right-2 top-2 z-10 flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur"
+          className="absolute right-2 top-2 z-10 flex gap-2"
           onMouseDown={e => e.stopPropagation()}
           onMouseUp={e => e.stopPropagation()}
         >
-          {Array.from({ length: screens }, (_, i) => (
-            <button
-              key={i} type="button" title={`Screen ${i + 1}`} onClick={() => chooseScreen(i)}
-              className={`px-3 py-1.5 transition-colors ${screen === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
-            >
-              {i + 1}
-            </button>
-          ))}
           <button
-            type="button" title="All screens" onClick={() => chooseScreen(-1)}
-            className={`px-3 py-1.5 transition-colors ${screen === -1 || screen >= screens ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+            type="button" title="Send Ctrl+Alt+Del to the remote computer" onClick={sendCtrlAltDel}
+            className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
           >
-            All
+            Ctrl+Alt+Del
           </button>
+          {screens > 1 && (
+            <div className="flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur">
+              {Array.from({ length: screens }, (_, i) => (
+                <button
+                  key={i} type="button" title={`Screen ${i + 1}`} onClick={() => chooseScreen(i)}
+                  className={`px-3 py-1.5 transition-colors ${screen === i ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+              <button
+                type="button" title="All screens" onClick={() => chooseScreen(-1)}
+                className={`px-3 py-1.5 transition-colors ${screen === -1 || screen >= screens ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+              >
+                All
+              </button>
+            </div>
+          )}
         </div>
       )}
       {status !== "connected" && (

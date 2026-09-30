@@ -93,7 +93,7 @@ UltraVNC viewer facts (verified in source, 1.8.2.4 and main): a command-line lau
 
 ## Multi-monitor Sessions (dashboard GuacPanel)
 
-Remote monitors are inferred as equal side-by-side screens: `n = round(width / height / (16/9))`. When `n > 1` a `1 | 2 | … | All` toolbar crops the display to one monitor (CSS `left` offset + `clip-path`, pointer clamped to that monitor) and the choice is stored per connection in `localStorage` (`remacc_screen_<id>`, default screen 1). Same code for plain VNC and DSM, because the DSM relay exports the remote at native size.
+The session toolbar (top-right of GuacPanel) always has `Ctrl+Alt+Del` when connected. Remote monitors are inferred as equal side-by-side screens: `monitorCount` picks the fewest `n` (1–4) with `width / n / height` in 1.2–1.85 (5:4 … 16:9); none → 1 (single ultrawide). When `n > 1` a `1 | 2 | … | All` toolbar crops the display to one monitor (CSS `left` offset + `clip-path`, pointer clamped to that monitor) and the choice is stored per connection in `localStorage` (`remacc_screen_<id>`, default screen 1). Same code for plain VNC and DSM, because the DSM relay exports the remote at native size.
 
 ## Admin UI
 
