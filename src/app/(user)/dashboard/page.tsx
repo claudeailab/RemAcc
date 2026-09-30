@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal,
+  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
 
@@ -19,12 +19,14 @@ interface Session {
   id: number;
   name: string;
   protocol: string;
+  url?: string;
 }
 
 const PROTO_BADGE: Record<string, string> = {
   rdp: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   vnc: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  web: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
 };
 
 // ---------------------------------------------------------------------------
@@ -151,6 +153,26 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       <div
         ref={containerRef}
         style={{ width: "100%", height: "100%", padding: "8px", boxSizing: "border-box" }}
+      />
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Web Panel — website in an iframe
+// ---------------------------------------------------------------------------
+function WebPanel({ session, active }: { session: Session; active: boolean }) {
+  return (
+    <div
+      className="absolute inset-0"
+      style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
+    >
+      <iframe
+        src={session.url}
+        className="w-full h-full border-0"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
+        referrerPolicy="no-referrer"
+        title={session.name}
       />
     </div>
   );
@@ -477,6 +499,14 @@ export default function DashboardPage() {
       return;
     }
 
+    if (conn.protocol === "web") {
+      const key = `s${++sessionCounter}`;
+      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol, url: conn.host }]);
+      setActiveKey(key);
+      setSidebarOpen(false);
+      return;
+    }
+
     setConnecting(conn.id);
     setSidebarOpen(false);
     try {
@@ -614,7 +644,7 @@ export default function DashboardPage() {
                 activeKey === s.key ? "bg-secondary font-medium" : "hover:bg-secondary/60 text-muted-foreground"
               }`}
             >
-              {s.protocol === "ssh" ? <Terminal className="h-3 w-3 shrink-0" /> : <Monitor className="h-3 w-3 shrink-0" />}
+              {s.protocol === "ssh" ? <Terminal className="h-3 w-3 shrink-0" /> : s.protocol === "web" ? <Globe className="h-3 w-3 shrink-0" /> : <Monitor className="h-3 w-3 shrink-0" />}
               <span>{s.name}</span>
               <span className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded ${PROTO_BADGE[s.protocol] ?? ""}`}>{s.protocol}</span>
               <span
@@ -675,6 +705,8 @@ export default function DashboardPage() {
             sessions.map(s =>
               s.protocol === "ssh" ? (
                 <SshPanel key={s.key} session={s} active={s.key === activeKey} />
+              ) : s.protocol === "web" ? (
+                <WebPanel key={s.key} session={s} active={s.key === activeKey} />
               ) : (
                 <GuacPanel key={s.key} session={s} active={s.key === activeKey} />
               )

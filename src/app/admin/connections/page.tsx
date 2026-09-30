@@ -23,6 +23,7 @@ const PROTO_BADGE: Record<string, string> = {
   rdp: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300",
   vnc: "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300",
   ssh: "bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300",
+  web: "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300",
 };
 
 const DSM_BADGE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
@@ -219,7 +220,7 @@ export default function ConnectionsPage() {
       const payload = {
         ...(form.id ? { id: form.id } : {}),
         name: form.name, host: form.host,
-        port: form.port ? Number(form.port) : null,
+        port: form.protocol === "web" ? null : (form.port ? Number(form.port) : null),
         protocol: form.protocol,
         folderId: form.folderId ? Number(form.folderId) : null,
         credentialId: form.credentialId ? Number(form.credentialId) : null,
@@ -421,16 +422,23 @@ export default function ConnectionsPage() {
                 <Label>Name</Label>
                 <Input placeholder="e.g. Web Server 01" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
               </div>
-              <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2 flex flex-col gap-1.5">
-                  <Label>Host / IP</Label>
-                  <Input placeholder="192.168.1.10" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
-                </div>
+              {form.protocol === "web" ? (
                 <div className="flex flex-col gap-1.5">
-                  <Label>Port <span className={muted}>(optional)</span></Label>
-                  <Input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+                  <Label>URL</Label>
+                  <Input placeholder="https://example.com" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
                 </div>
-              </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2 flex flex-col gap-1.5">
+                    <Label>Host / IP</Label>
+                    <Input placeholder="192.168.1.10" value={form.host} onChange={e => setForm(f => ({ ...f, host: e.target.value }))} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label>Port <span className={muted}>(optional)</span></Label>
+                    <Input type="number" value={form.port} onChange={e => setForm(f => ({ ...f, port: e.target.value }))} />
+                  </div>
+                </div>
+              )}
               <div className="flex flex-col gap-1.5">
                 <Label>Protocol</Label>
                 <Select value={form.protocol} onValueChange={v => setForm(f => ({ ...f, protocol: v }))}>
@@ -439,6 +447,7 @@ export default function ConnectionsPage() {
                     <SelectItem value="rdp">RDP</SelectItem>
                     <SelectItem value="vnc">VNC</SelectItem>
                     <SelectItem value="ssh">SSH</SelectItem>
+                    <SelectItem value="web">Web</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -452,16 +461,18 @@ export default function ConnectionsPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Credential <span className={muted}>(overrides folder)</span></Label>
-                <Select value={form.credentialId || "none"} onValueChange={v => setForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
-                  <SelectTrigger><SelectValue placeholder="Inherit from folder" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Inherit from folder</SelectItem>
-                    {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+              {form.protocol !== "web" && (
+                <div className="flex flex-col gap-1.5">
+                  <Label>Credential <span className={muted}>(overrides folder)</span></Label>
+                  <Select value={form.credentialId || "none"} onValueChange={v => setForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
+                    <SelectTrigger><SelectValue placeholder="Inherit from folder" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Inherit from folder</SelectItem>
+                      {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
 
               {form.protocol === "rdp" && (
                 <div className="rounded-lg border p-3 space-y-3">
