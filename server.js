@@ -264,39 +264,56 @@ function dsmWineEnv(display) {
   return { ...process.env, DISPLAY: `:${display}`, WINEPREFIX: WINE_PREFIX, WINEDEBUG: '-all', WINEDLLOVERRIDES: 'mono=d;gecko=d' };
 }
 
-// UltraVNC's "Select full desktop / switch monitor": the viewer asks the server for its next
-// monitor (primary -> ... -> all). The helper presses it in this session's viewer, then the relay
-// follows the viewer window's new size so the browser receives the new screen.
+// Runs the Windows helper (tools/uvnc-switch.c) against this session's viewer -> { code, out }
 const UVNC_SWITCH_EXE = require('path').join(__dirname, 'uvnc-switch.exe');
+function uvncHelper(session, mode) {
+  return new Promise(resolve => {
+    let out = '';
+    const p = spawn('wine', [UVNC_SWITCH_EXE, session.exeName, mode], { env: dsmWineEnv(session.display), stdio: ['ignore', 'pipe', 'ignore'] });
+    p.stdout.on('data', d => { out += d; });
+    p.on('exit', code => resolve({ code, out: out.trim() }));
+    p.on('error', () => resolve({ code: -1, out: '' }));
+  });
+}
+
+// Monitors the remote UltraVNC server reports (rfbMonitorInfo); 0 when it never reports them
+async function dsmMonitorCount(connId, session) {
+  for (const start = Date.now(); Date.now() - start < 15000 && !session.stopped; await sleep(1000)) {
+    const { code, out } = await uvncHelper(session, 'count');
+    if (code === 0 && +out > 0) return +out;
+  }
+  return 0;
+}
+
+// UltraVNC's "Select full desktop / switch monitor": the viewer asks the server for its next
+// monitor; the viewer window takes the new size and followViewerWindow moves the relay with it.
 async function switchDsmMonitor(connId, session) {
-  if (session.switching || session.stopped) return;
-  session.switching = true;
-  try {
-    const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
-    const before = await findViewerWindow(session.display, 640, 400).catch(() => null);
-    const code = await new Promise(resolve => {
-      const p = spawn('wine', [UVNC_SWITCH_EXE], { env: dsmWineEnv(session.display), stdio: 'ignore' });
-      p.on('exit', resolve);
-      p.on('error', () => resolve(-1));
-    });
-    if (code !== 0) { err(`DSM id=${connId}: monitor switch helper exited ${code}`); return; }
-    // Same-size monitors keep the window geometry; a size change settles within a few frames
-    let prev = before;
-    for (const start = Date.now(); Date.now() - start < 8000 && !session.stopped;) {
-      await sleep(300);
+  const { code } = await uvncHelper(session, 'switch');
+  if (code !== 0) err(`DSM id=${connId}: monitor switch helper exited ${code}`);
+  else log(`DSM id=${connId}: monitor switch requested`);
+}
+
+// Keep the relay on the viewer window for the whole session: its size changes when the remote
+// switches monitors or changes resolution, however long the remote takes
+function followViewerWindow(connId, session) {
+  const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
+  let prev = null, busy = false;
+  session.follow = setInterval(async () => {
+    if (busy || session.stopped) return;
+    busy = true;
+    try {
       const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
-      if (win && same(win, prev) && !same(win, before)) {
+      if (win && same(win, prev)) {
         const clip = clipRect(win);
-        spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
-        log(`DSM id=${connId}: switched monitor, relay now ${clip}`);
-        return;
+        if (clip !== session.clip) {
+          session.clip = clip;
+          spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
+          log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
+        }
       }
       prev = win;
-    }
-    log(`DSM id=${connId}: switched monitor, size unchanged`);
-  } finally {
-    session.switching = false;
-  }
+    } finally { busy = false; }
+  }, 1000);
 }
 
 async function startDsmProxy(connId, host, vncPort, username, password) {
@@ -314,12 +331,14 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   dsmByConn.get(connId)?.stop();
   const display = allocDisplay();
   const procs = [];
-  // Own hard link of the viewer per session: the monitor-switch helper finds this viewer by exe name
+  // Own copy of the viewer per session: the monitor-switch helper finds this viewer by exe name.
+  // Not a hard link: Wine names every link of one file after the first one it opened.
   const exeName = `remacc-viewer-${display}.exe`;
   const session = { display, port: 0, stopped: false, procs, exeName, remote: { host, port: vncPort } };
   session.stop = () => {
     if (session.stopped) return;
     session.stopped = true;
+    clearInterval(session.follow);
     for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
     fs.rmSync(path.join(UVNC_DIR, exeName), { force: true });
     removeDisplayFiles(display);
@@ -345,8 +364,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
 
     const viewerPath = path.join(UVNC_DIR, exeName);
     fs.rmSync(viewerPath, { force: true });
-    try { fs.linkSync(path.join(UVNC_DIR, manifest.uvnc_viewer), viewerPath); }
-    catch { fs.copyFileSync(path.join(UVNC_DIR, manifest.uvnc_viewer), viewerPath); }
+    fs.copyFileSync(path.join(UVNC_DIR, manifest.uvnc_viewer), viewerPath);
     const wineEnv = dsmWineEnv(display);
 
     // -directx: under Wine the GDI path's WM_SIZE handler (Scrollbar_RecalculateSize) resizes
@@ -384,6 +402,8 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     await waitForPort(session.port);
     alive();
     log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip}`);
+    session.clip = clip;
+    followViewerWindow(connId, session);
   } catch (e) {
     session.stop();
     throw e;
@@ -729,7 +749,11 @@ async function handleGuac(wsConn, req, id, protocol) {
         log(`WS ${protocol} id=${id}: guacd ready`);
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
-        if (dsm && wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitor-switch']));
+        if (dsm) dsmMonitorCount(id, dsm).then(n => {
+          log(`DSM id=${id}: ${n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
+          // Unknown count (older UltraVNC server): offer the button rather than hide a working feature
+          if ((n === 0 || n > 1) && wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitor-switch']));
+        });
       } else if (streaming) {
         if (opcode === 'sync') diag?.frameSent(parts[1]);
         else if (opcode === 'img') diag?.imageSent();
