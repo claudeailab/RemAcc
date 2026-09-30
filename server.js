@@ -277,11 +277,14 @@ function uvncHelper(session, mode) {
 }
 
 // Monitors the remote UltraVNC server reports (rfbMonitorInfo); 0 when it never reports them
+// null when the helper cannot query this session's viewer at all
 async function dsmMonitorCount(connId, session) {
+  let last = null;
   for (const start = Date.now(); Date.now() - start < 15000 && !session.stopped; await sleep(1000)) {
-    const { code, out } = await uvncHelper(session, 'count');
-    if (code === 0 && +out > 0) return +out;
+    last = await uvncHelper(session, 'count');
+    if (last.code === 0 && +last.out > 0) return +last.out;
   }
+  if (last && last.code !== 0) { err(`DSM id=${connId}: monitor count helper exited ${last.code}`); return null; }
   return 0;
 }
 
@@ -750,7 +753,7 @@ async function handleGuac(wsConn, req, id, protocol) {
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
         if (dsm) dsmMonitorCount(id, dsm).then(n => {
-          log(`DSM id=${id}: ${n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
+          if (n !== null) log(`DSM id=${id}: ${n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
           // Unknown count (older UltraVNC server): offer the button rather than hide a working feature
           if ((n === 0 || n > 1) && wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitor-switch']));
         });
@@ -770,7 +773,7 @@ async function handleGuac(wsConn, req, id, protocol) {
     try {
       const p = guacParse(str);
       if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
-      if (p[0] === 'remacc-monitor-switch') { if (dsm) switchDsmMonitor(id, dsm).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`)); return; }
+      if (p[0] === 'remacc-monitor-switch') { log(`DSM id=${id}: Switch screen pressed`); if (dsm) switchDsmMonitor(id, dsm).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`)); return; }
       if (p[0] === 'sync') diag?.frameAcked(p[1]);
       else diag?.input(p);
     } catch {}
