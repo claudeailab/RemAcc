@@ -449,8 +449,10 @@ export default function DashboardPage() {
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [connecting, setConnecting] = useState<number | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(256);
+  const [sidebarWidth, setSidebarWidth] = useState(220);
+  const [manualWidth, setManualWidth] = useState(false);
   const isDragging = useRef(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   // Restore sessions from localStorage on mount so a page refresh reconnects
   useEffect(() => {
@@ -481,8 +483,18 @@ export default function DashboardPage() {
     } catch {}
   }, [sessions, activeKey]);
 
+  // Auto-resize sidebar to fit content when user hasn't manually sized it
+  useEffect(() => {
+    if (manualWidth) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const w = el.scrollWidth + 16;
+    setSidebarWidth(Math.max(180, Math.min(520, w)));
+  }, [expanded, connections, folders, manualWidth]);
+
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
+    setManualWidth(true);
     isDragging.current = true;
     const startX = e.clientX;
     const startW = sidebarWidth;
@@ -578,8 +590,7 @@ export default function DashboardPage() {
             </span>
           )
         }
-        <span className="text-sm truncate flex-1">{c.name}</span>
-        <span className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
+        <span className="text-sm whitespace-nowrap">{c.name}</span>
       </button>
     );
   }
@@ -598,7 +609,7 @@ export default function DashboardPage() {
             ? <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
             : <Folder className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           }
-          <span className="text-sm font-medium truncate">{f.name}</span>
+          <span className="text-sm font-medium whitespace-nowrap">{f.name}</span>
         </button>
         {isOpen && (
           <div className="mt-0.5">
@@ -621,7 +632,7 @@ export default function DashboardPage() {
           <Input className="pl-8 h-8 text-sm" placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto p-1.5">
+      <div ref={contentRef} className="flex-1 overflow-y-auto p-1.5">
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : connections.length === 0 ? (

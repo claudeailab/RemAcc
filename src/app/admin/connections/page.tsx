@@ -11,6 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Loader2, Plus, Pencil, Trash2, Copy, ChevronRight,
   Folder, FolderOpen, Monitor, FolderPlus, Globe, Upload, Download,
+  CheckSquare, Check,
 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
@@ -102,6 +103,13 @@ export default function ConnectionsPage() {
   const [shadow, setShadow] = useState<ShadowOptions>({ sessionId: 0, control: true, noConsent: true });
   const [dsmPlugin, setDsmPlugin] = useState(false);
 
+  // Select / bulk delete
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedFolders, setSelectedFolders] = useState<Set<number>>(new Set());
+  const [selectedConns, setSelectedConns] = useState<Set<number>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState(false);
+
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -149,6 +157,45 @@ export default function ConnectionsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Auto-match credential when creating a folder whose name matches a credential
+  useEffect(() => {
+    if (!folderDialog || folderForm.id || folderForm.credentialId) return;
+    const match = credentials.find(c => c.name.toLowerCase() === folderForm.name.toLowerCase());
+    if (match) setFolderForm(f => ({ ...f, credentialId: String(match.id) }));
+  }, [folderForm.name, folderDialog, folderForm.id, folderForm.credentialId, credentials]);
+
+  // ── Select / bulk delete ─────────────────────────────────────────────────────
+
+  function enterSelectMode() {
+    setSelectMode(true);
+    setSelectedFolders(new Set());
+    setSelectedConns(new Set());
+    setEditMode(false);
+  }
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedFolders(new Set());
+    setSelectedConns(new Set());
+  }
+  function toggleFolderSel(id: number) {
+    setSelectedFolders(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function toggleConnSel(id: number) {
+    setSelectedConns(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+
+  async function executeBulkDelete() {
+    setBulkDeleting(true);
+    try {
+      for (const id of selectedConns) await fetch(`/api/admin/connections?id=${id}`, { method: "DELETE" });
+      for (const id of selectedFolders) await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
+      toast.success(`Deleted ${selectedFolders.size + selectedConns.size} item${selectedFolders.size + selectedConns.size === 1 ? "" : "s"}`);
+      exitSelectMode();
+      setBulkConfirm(false);
+      load();
+    } finally { setBulkDeleting(false); }
+  }
 
   function toggle(id: number) {
     setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -310,16 +357,22 @@ export default function ConnectionsPage() {
 
   function renderConn(c: Connection, depth: number) {
     const dim = dragging?.kind === "conn" && dragging.id === c.id;
+    const checked = selectedConns.has(c.id);
     return (
       <div
         key={c.id}
         draggable={editMode}
         onDragStart={editMode ? (e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "conn", id: c.id }); }) : undefined}
         onDragEnd={editMode ? (() => { setDragging(null); setDropTarget(null); }) : undefined}
+        onClick={selectMode ? () => toggleConnSel(c.id) : undefined}
         style={{ paddingLeft: depth * 16 + 8 }}
-        className={`flex items-center gap-1.5 py-1 pr-2 rounded group hover:bg-secondary/40 transition-colors ${dim ? "opacity-40" : ""}`}
+        className={`flex items-center gap-1.5 py-1 pr-2 rounded group transition-colors ${dim ? "opacity-40" : ""} ${selectMode ? "cursor-pointer hover:bg-secondary/40" : "hover:bg-secondary/40"} ${checked ? "bg-primary/8" : ""}`}
       >
-        {editMode && DRAG_HANDLE}
+        {selectMode ? (
+          <span className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-colors ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>
+            {checked && <Check className="h-2.5 w-2.5" />}
+          </span>
+        ) : editMode && DRAG_HANDLE}
         {c.protocol === "web"
           ? <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           : <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -328,11 +381,13 @@ export default function ConnectionsPage() {
         <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
         {isDsm(c) && <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${DSM_BADGE}`}>DSM</span>}
         <span className={`text-xs truncate max-w-[140px] hidden sm:block ${muted}`}>{c.host}{c.port ? `:${c.port}` : ""}</span>
-        <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={e => e.stopPropagation()}>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditConn(c)}><Pencil className="h-3 w-3" /></Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneConn(c)}><Copy className="h-3 w-3" /></Button>
-          <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "conn", id: c.id, name: c.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
-        </div>
+        {!selectMode && (
+          <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={e => e.stopPropagation()}>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditConn(c)}><Pencil className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneConn(c)}><Copy className="h-3 w-3" /></Button>
+            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "conn", id: c.id, name: c.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+          </div>
+        )}
       </div>
     );
   }
@@ -347,6 +402,7 @@ export default function ConnectionsPage() {
     const canReceiveDrop = dragging !== null && !(
       dragging.kind === "folder" && (dragging.id === f.id || isAncestor(folders, dragging.id, f.id))
     );
+    const checked = selectedFolders.has(f.id);
 
     return (
       <div key={f.id}>
@@ -357,24 +413,32 @@ export default function ConnectionsPage() {
           onDragOver={editMode && canReceiveDrop ? (e => { e.preventDefault(); setDropTarget(f.id); }) : undefined}
           onDragLeave={editMode ? (e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === f.id ? null : prev); }) : undefined}
           onDrop={editMode ? (e => { e.preventDefault(); commitDrop(f.id); }) : undefined}
+          onClick={selectMode ? () => toggleFolderSel(f.id) : undefined}
           style={{ paddingLeft: depth * 16 + 8 }}
           className={`flex items-center gap-1 py-1 pr-2 rounded group transition-colors
             ${dim ? "opacity-40" : ""}
-            ${isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-secondary/50"}`}
+            ${selectMode ? "cursor-pointer" : ""}
+            ${isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : checked ? "bg-primary/8" : "hover:bg-secondary/50"}`}
         >
-          {editMode && DRAG_HANDLE}
-          <button
-            type="button"
-            className="p-0.5 shrink-0"
-            style={{ visibility: subs.length > 0 || folderConns.length > 0 ? "visible" : "hidden" }}
-            onClick={() => toggle(f.id)}
-          >
-            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
-          </button>
+          {selectMode ? (
+            <span className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-colors ml-0.5 ${checked ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>
+              {checked && <Check className="h-2.5 w-2.5" />}
+            </span>
+          ) : editMode && DRAG_HANDLE}
+          {!selectMode && (
+            <button
+              type="button"
+              className="p-0.5 shrink-0"
+              style={{ visibility: subs.length > 0 || folderConns.length > 0 ? "visible" : "hidden" }}
+              onClick={e => { e.stopPropagation(); toggle(f.id); }}
+            >
+              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
+            </button>
+          )}
           <button
             type="button"
             className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
-            onClick={() => toggle(f.id)}
+            onClick={e => { if (selectMode) { e.stopPropagation(); toggleFolderSel(f.id); } else toggle(f.id); }}
           >
             {isOpen
               ? <FolderOpen className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -386,13 +450,15 @@ export default function ConnectionsPage() {
               <span className={`text-[10px] shrink-0 ${muted}`}>{subs.length + folderConns.length}</span>
             )}
           </button>
-          <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
-            <Button size="icon" variant="ghost" className="h-6 w-6" title="Add connection here" onClick={() => { openNewConn(f.id); if (!isOpen) toggle(f.id); }}><Plus className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" title="Add subfolder" onClick={() => openNewFolder(f.id)}><FolderPlus className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditFolder(f)}><Pencil className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneFolder(f)}><Copy className="h-3 w-3" /></Button>
-            <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "folder", id: f.id, name: f.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
-          </div>
+          {!selectMode && (
+            <div className="flex items-center gap-0.5 shrink-0" onClick={e => e.stopPropagation()}>
+              <Button size="icon" variant="ghost" className="h-6 w-6" title="Add connection here" onClick={() => { openNewConn(f.id); if (!isOpen) toggle(f.id); }}><Plus className="h-3 w-3" /></Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" title="Add subfolder" onClick={() => openNewFolder(f.id)}><FolderPlus className="h-3 w-3" /></Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditFolder(f)}><Pencil className="h-3 w-3" /></Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => cloneFolder(f)}><Copy className="h-3 w-3" /></Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteTarget({ kind: "folder", id: f.id, name: f.name })}><Trash2 className="h-3 w-3 text-destructive" /></Button>
+            </div>
+          )}
         </div>
         {isOpen && (
           <div>
@@ -422,7 +488,14 @@ export default function ConnectionsPage() {
             <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-1" />Export
             </Button>
-            {editMode ? (
+            {selectMode ? (
+              <Button variant="outline" size="sm" onClick={exitSelectMode}>Cancel</Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={enterSelectMode}>
+                <CheckSquare className="h-4 w-4 mr-1" />Select
+              </Button>
+            )}
+            {!selectMode && (editMode ? (
               <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setDragging(null); setDropTarget(null); }}>
                 Done
               </Button>
@@ -430,7 +503,7 @@ export default function ConnectionsPage() {
               <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
                 <Pencil className="h-4 w-4 mr-1" />Edit Layout
               </Button>
-            )}
+            ))}
             <Button variant="outline" size="sm" onClick={() => openNewFolder()}>
               <FolderPlus className="h-4 w-4 mr-1" />Add Folder
             </Button>
@@ -446,6 +519,18 @@ export default function ConnectionsPage() {
           <p className={`text-center py-12 text-sm ${muted}`}>No connections yet.</p>
         ) : (
           <div className="rounded-lg border">
+            {selectMode && (
+              <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-muted/30">
+                <span className={`text-sm flex-1 ${muted}`}>
+                  {selectedFolders.size + selectedConns.size} selected
+                </span>
+                {(selectedFolders.size + selectedConns.size) > 0 && (
+                  <Button size="sm" variant="destructive" onClick={() => setBulkConfirm(true)}>
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />Delete
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="py-1">
               {rootFolders.map(f => renderFolder(f))}
               {unassigned.map(c => renderConn(c, 0))}
@@ -607,6 +692,23 @@ export default function ConnectionsPage() {
             <DialogFooter>
               <Button variant="outline" onClick={() => setConnDialog(false)}>Cancel</Button>
               <Button onClick={saveConn} disabled={connSaving}>{connSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* ── Bulk delete dialog ───────────────────────────────────────── */}
+        <Dialog open={bulkConfirm} onOpenChange={setBulkConfirm}>
+          <DialogContent>
+            <DialogHeader><DialogTitle>Delete Selected Items</DialogTitle></DialogHeader>
+            <p className="text-sm">
+              Delete {selectedFolders.size + selectedConns.size} item{selectedFolders.size + selectedConns.size === 1 ? "" : "s"}?
+              {selectedFolders.size > 0 && " Folders and all their contents will be permanently removed."}
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setBulkConfirm(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={executeBulkDelete} disabled={bulkDeleting}>
+                {bulkDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Delete"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -404,6 +404,20 @@
   }
 }
 
+@layer base {
+  /* Themed scrollbar — narrow, uses CSS vars so it follows every design theme */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-muted-foreground);
+  }
+  ::-webkit-scrollbar-corner { background: transparent; }
+}
+
 @layer utilities {
   .delay-75  { animation-delay: 75ms; }
   .delay-150 { animation-delay: 150ms; }
@@ -541,3 +555,10 @@
     }
   }
 }
+
+/* ── Themed scrollbars ─────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 9999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-muted-foreground); }
+::-webkit-scrollbar-corner { background: transparent; }
