@@ -107,6 +107,10 @@ Always prefer `mcp__github__*` tools over curl for GitHub API calls — the MCP 
 
 Connection's own credential, else nearest folder ancestor with a credential. Ids that no longer exist in `credentials` are skipped, never terminal. Server (`/api/connections/[id]/connect`) and admin UI (`resolveCredential`) must stay identical.
 
+## Azure AD Sign-in
+
+`/login` shows "Sign in with Microsoft" (link to `/api/auth/azure`, no username) only when `/api/platform` returns `azureLogin: true` = M365 enabled (`m365_enabled` ≠ "false") and client id, secret and tenant all set. `/api/o365/callback` matches the id token's `oid` to `users.azureOid` and refuses unknown (`not_provisioned`), disabled (`disabled`) and group-less/permission-less users before creating a session. Typing an Azure user's username in the form still redirects to the same flow with `login_hint`.
+
 ## Web Connections
 
 Rendered by a server-side Chromium, never an iframe or reverse proxy (URL rewriting can't cover JS-built URLs, frame-busting, cookies, CSP). `GuacPanel` opens `/ws/web/{id}?w=&h=` (panel size, clamped 640–3840 × 480–2160); `handleGuac` authorises via the connect API, `startWebBrowser` (server.js) starts Xvfb at that size + Chrome for Testing (`/usr/local/bin/remacc-chrome`, Playwright-installed in the Dockerfile, amd64+arm64) in `--kiosk` with `--ignore-certificate-errors --no-sandbox --test-type`, a per-session profile `/tmp/remacc-web-{display}` (deleted on stop) and a minimal env (never RemAcc's secrets), + x11vnc `-noprimary`; guacd connects with `select vnc`, `cursor: local`. One browser per connection (latest wins), stopped when the socket closes, never parked. Processes are spawned `detached` and killed by process group. `tools/chrome-policy.json` is installed to both `/etc/opt/chrome_for_testing/policies/managed/` and `/etc/chromium/policies/managed/` (path depends on branding): blocks `file://` (would expose `/proc/*/environ`), `chrome://`, devtools, downloads. The web toolbar (Back = Alt+Left, Reload = F5, URL) sits above the canvas, no overlay buttons.

@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
   if (!oid) return fail("invalid_token");
 
   const [user] = await db
-    .select({ id: users.id, email: users.email, groupId: users.groupId })
+    .select({ id: users.id, email: users.email, groupId: users.groupId, disabled: users.disabled })
     .from(users)
     .where(eq(users.azureOid, oid))
     .limit(1);
@@ -69,6 +69,10 @@ export async function GET(req: NextRequest) {
   if (!user) {
     console.error(`[azure-sso] no_access: oid=${oid} not found in users table`);
     return fail("not_provisioned");
+  }
+  if (user.disabled) {
+    console.error(`[azure-sso] disabled: user=${user.email}`);
+    return fail("disabled");
   }
 
   let isAdmin = false;

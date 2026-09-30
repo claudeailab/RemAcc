@@ -16,10 +16,11 @@ const ERROR_MESSAGES: Record<string, string> = {
   invalid_token: "Invalid authentication response.",
   not_provisioned: "Your account has not been added to this platform.",
   no_access: "Your account exists but has no permission group assigned. Ask an administrator to assign you to a group.",
+  disabled: "Your account has been disabled.",
   no_group: "Your account exists but has no permission group assigned. Ask an administrator to assign you to a group.",
 };
 
-function LoginForm({ platformName }: { platformName: string }) {
+function LoginForm({ azureLogin }: { azureLogin: boolean }) {
   const searchParams = useSearchParams();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -77,6 +78,24 @@ function LoginForm({ platformName }: { platformName: string }) {
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign in"}
       </Button>
+      {azureLogin && (
+        <>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
+          </div>
+          <Button asChild variant="outline" className="w-full gap-2">
+            <a href="/api/auth/azure">
+              <svg viewBox="0 0 21 21" className="h-4 w-4" aria-hidden="true">
+                <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+                <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+                <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+                <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+              </svg>
+              Sign in with Microsoft
+            </a>
+          </Button>
+        </>
+      )}
     </form>
   );
 }
@@ -84,11 +103,13 @@ function LoginForm({ platformName }: { platformName: string }) {
 function LoginPageInner() {
   const [platformName, setPlatformName] = useState("Platform");
   const [iconUrl, setIconUrl] = useState("");
+  const [azureLogin, setAzureLogin] = useState(false);
 
   useEffect(() => {
     fetch("/api/platform").then(r => r.json()).then(d => {
       if (d.name) setPlatformName(d.name);
       if (d.iconUrl) setIconUrl(d.iconUrl);
+      setAzureLogin(!!d.azureLogin);
     }).catch(() => {});
   }, []);
 
@@ -107,7 +128,7 @@ function LoginPageInner() {
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>}>
-            <LoginForm platformName={platformName} />
+            <LoginForm azureLogin={azureLogin} />
           </Suspense>
         </CardContent>
       </Card>
