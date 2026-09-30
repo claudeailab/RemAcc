@@ -973,8 +973,12 @@ function fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure) {
 
 async function handleWebProxy(req, res, id, pathAndQuery) {
   const target = await webTarget(req, id);
-  if (!target) { res.writeHead(403, { 'content-type': 'text/plain' }); res.end('Access denied'); return; }
+  if (!target) {
+    err(`WEB id=${id}: no target (auth or config issue) for ${req.method} ${pathAndQuery}`);
+    res.writeHead(403, { 'content-type': 'text/plain' }); res.end('Access denied'); return;
+  }
   const upstreamUrl = new URL(pathAndQuery, target.origin);
+  log(`WEB id=${id}: ${req.method} ${upstreamUrl}`);
   const mod = upstreamUrl.protocol === 'https:' ? https : http;
   const secure = req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
   await new Promise(resolve => {
@@ -986,7 +990,9 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
       timeout: 30000,
     }, upRes => {
       const status = upRes.statusCode ?? 502;
+      if (status >= 400) log(`WEB id=${id}: upstream ${status} for ${upstreamUrl}`);
       const headers = fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure);
+      if (headers.location) log(`WEB id=${id}: redirect ${status} -> ${headers.location}`);
       const enc = (upRes.headers['content-encoding'] ?? 'identity').toLowerCase();
       const decoder = { identity: null, gzip: zlib.createGunzip, 'x-gzip': zlib.createGunzip, deflate: zlib.createUnzip, br: zlib.createBrotliDecompress }[enc];
       if (req.method === 'HEAD' || status === 204 || status === 304 || decoder === undefined || !REWRITE_TYPES.test(upRes.headers['content-type'] ?? '')) {
@@ -997,7 +1003,7 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
       const body = decoder ? upRes.pipe(decoder()) : upRes;
       const chunks = [];
       body.on('data', c => chunks.push(c));
-      body.on('error', () => res.destroy());
+      body.on('error', e => { err(`WEB id=${id}: body decode error: ${e.message}`); res.destroy(); });
       body.on('end', () => {
         // latin1 round-trips every byte, so non-UTF-8 pages survive; the pattern is ASCII-only
         const out = Buffer.from(Buffer.concat(chunks).toString('latin1').replace(siteUrlPattern(target), `/webproxy/${id}`), 'latin1');
@@ -1009,9 +1015,11 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
     });
     up.on('timeout', () => up.destroy(new Error('timed out')));
     up.on('error', e => {
+      err(`WEB id=${id}: upstream error for ${upstreamUrl}: ${e.message}`);
       if (res.headersSent) { res.destroy(); return; }
-      res.writeHead(502, { 'content-type': 'text/plain' });
-      res.end(`RemAcc cannot reach ${target.origin}: ${e.message}`);
+      const msg = `RemAcc cannot reach ${target.origin}: ${e.message}`;
+      res.writeHead(502, { 'content-type': 'text/html' });
+      res.end(`<!doctype html><html><body style="font:14px/1.6 system-ui,sans-serif;padding:2rem;color:#c00"><b>Connection error</b><br>${msg}</body></html>`);
     });
     req.pipe(up);
   });
