@@ -159,40 +159,33 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Web Panel — opens URL in a new browser tab
-// (iframe embedding is unreliable for internal sites: self-signed certs,
-//  X-Frame-Options headers, and mixed HTTP/HTTPS all silently block it)
+// Web Panel — iframe embedding
 // ---------------------------------------------------------------------------
 function WebPanel({ session, active }: { session: Session; active: boolean }) {
-  const openedRef = useRef(false);
-
-  useEffect(() => {
-    if (!openedRef.current) {
-      openedRef.current = true;
-      window.open(session.url, "_blank", "noopener,noreferrer");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   return (
     <div
-      className="absolute inset-0 flex flex-col items-center justify-center gap-4"
+      className="absolute inset-0 flex flex-col"
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
-      <Globe className="h-12 w-12 text-muted-foreground/20" />
-      <div className="text-center">
-        <p className="font-semibold text-sm">{session.name}</p>
-        <p className={`text-xs mt-0.5 max-w-xs break-all ${muted}`}>{session.url}</p>
+      <div className="flex items-center gap-2 px-3 py-1.5 border-b bg-background/80 backdrop-blur shrink-0">
+        <Globe className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+        <span className={`text-xs truncate flex-1 ${muted}`}>{session.url}</span>
+        <a
+          href={session.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="shrink-0"
+          title="Open in browser tab"
+        >
+          <ExternalLink className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground transition-colors" />
+        </a>
       </div>
-      <a
-        href={session.url}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
-      >
-        <ExternalLink className="h-4 w-4" />
-        Open in browser
-      </a>
+      <iframe
+        src={session.url}
+        className="flex-1 w-full border-0 bg-white"
+        allow="fullscreen"
+        referrerPolicy="no-referrer"
+      />
     </div>
   );
 }
