@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
       .limit(1);
     if (group) {
       const perms = JSON.parse(group.permissions || "[]") as string[];
-      if (!perms.includes("access_dashboard") && !perms.includes("administrator")) {
+      if (!perms.includes("access_dashboard") && !perms.includes("administrator") && !perms.includes("view_remote_connections")) {
         console.error(`[azure-sso] no_access: user=${user.email} groupId=${user.groupId} perms=[${perms.join(",")}] — missing access_dashboard or administrator`);
         return fail("no_access");
       }

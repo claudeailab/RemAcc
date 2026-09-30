@@ -435,16 +435,14 @@ export default function ConnectionsPage() {
               {DRAG_HANDLE}
             </>
           )}
-          {!editMode && (
-            <button
-              type="button"
-              className="p-0.5 shrink-0"
-              style={{ visibility: subs.length > 0 || folderConns.length > 0 ? "visible" : "hidden" }}
-              onClick={e => { e.stopPropagation(); toggle(f.id); }}
-            >
-              <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
-            </button>
-          )}
+          <button
+            type="button"
+            className="p-0.5 shrink-0"
+            style={{ visibility: subs.length > 0 || folderConns.length > 0 ? "visible" : "hidden" }}
+            onClick={e => { e.stopPropagation(); toggle(f.id); }}
+          >
+            <ChevronRight className={`h-3.5 w-3.5 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
+          </button>
           <button
             type="button"
             className="flex items-center gap-1.5 min-w-0 flex-1 text-left"
