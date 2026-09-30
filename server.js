@@ -898,6 +898,7 @@ async function handleSSH(wsConn, req, id) {
 // internal site — browsers block public pages from loading private-network addresses
 // ---------------------------------------------------------------------------
 const https = require('https');
+const { http: fr_http, https: fr_https } = require('follow-redirects');
 const zlib = require('zlib');
 const WEB_PREFIX = /^\/webproxy\/(\d+)(\/.*)?$/;
 const HOP_HEADERS = ['connection', 'keep-alive', 'proxy-connection', 'te', 'trailer', 'transfer-encoding', 'upgrade'];
@@ -1006,7 +1007,10 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
   }
   const upstreamUrl = new URL(pathAndQuery, target.origin);
   log(`WEB id=${id}: ${req.method} ${upstreamUrl}`);
-  const mod = upstreamUrl.protocol === 'https:' ? https : http;
+  // GET/HEAD: follow redirects server-side (handles http→https upgrades and multi-hop chains)
+  // POST/PUT/etc: maxRedirects=0 so the browser handles POST-Redirect-GET correctly
+  const isIdempotent = req.method === 'GET' || req.method === 'HEAD';
+  const mod = upstreamUrl.protocol === 'https:' ? fr_https : fr_http;
   const secure = req.headers['x-forwarded-proto'] === 'https' || !!req.socket.encrypted;
   await new Promise(resolve => {
     res.once('close', resolve);
@@ -1015,7 +1019,27 @@ async function handleWebProxy(req, res, id, pathAndQuery) {
       headers: toUpstreamHeaders(req, id, target, false),
       rejectUnauthorized: false, // internal sites commonly use self-signed certificates
       timeout: 30000,
+      maxRedirects: isIdempotent ? 10 : 0,
+      beforeRedirect: (options, { responseUrl }) => {
+        // Keep headers in sync with each hop's target
+        const hopUrl = new URL(options.href ?? responseUrl);
+        if (hopUrl.hostname === target.hostname && hopUrl.origin !== target.origin) {
+          webOrigins.set(id, new URL(hopUrl.origin));
+          log(`WEB id=${id}: following redirect to ${hopUrl.origin}`);
+        }
+        options.headers = toUpstreamHeaders(req, id, target, false);
+        options.headers.host = hopUrl.host;
+      },
     }, upRes => {
+      // If follow-redirects settled on a different origin, persist it
+      if (upRes.responseUrl) {
+        try {
+          const finalUrl = new URL(upRes.responseUrl);
+          if (finalUrl.hostname === target.hostname && finalUrl.origin !== target.origin) {
+            webOrigins.set(id, new URL(finalUrl.origin));
+          }
+        } catch {}
+      }
       const status = upRes.statusCode ?? 502;
       if (status >= 400) log(`WEB id=${id}: upstream ${status} for ${upstreamUrl}`);
       const headers = fromUpstreamHeaders(upRes, id, target, upstreamUrl, secure);
