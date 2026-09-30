@@ -159,41 +159,39 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 }
 
 // ---------------------------------------------------------------------------
-// Web Panel — website in an iframe
+// Web Panel — opens URL in a new browser tab
+// (iframe embedding is unreliable for internal sites: self-signed certs,
+//  X-Frame-Options headers, and mixed HTTP/HTTPS all silently block it)
 // ---------------------------------------------------------------------------
 function WebPanel({ session, active }: { session: Session; active: boolean }) {
-  const [loaded, setLoaded] = useState(false);
+  const openedRef = useRef(false);
 
-  useEffect(() => { setLoaded(false); }, [session.url]);
+  useEffect(() => {
+    if (!openedRef.current) {
+      openedRef.current = true;
+      window.open(session.url, "_blank", "noopener,noreferrer");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div
-      className="absolute inset-0"
+      className="absolute inset-0 flex flex-col items-center justify-center gap-4"
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
-      <iframe
-        src={session.url}
-        className="w-full h-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
-        referrerPolicy="no-referrer"
-        title={session.name}
-        onLoad={() => setLoaded(true)}
-      />
-      {/* Loading overlay — disappears once the iframe signals it loaded */}
-      {!loaded && (
-        <div className="absolute inset-0 flex items-center justify-center bg-background">
-          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-        </div>
-      )}
-      {/* Always-visible open-in-new-tab — essential for self-signed cert or embed-blocked pages */}
+      <Globe className="h-12 w-12 text-muted-foreground/20" />
+      <div className="text-center">
+        <p className="font-semibold text-sm">{session.name}</p>
+        <p className={`text-xs mt-0.5 max-w-xs break-all ${muted}`}>{session.url}</p>
+      </div>
       <a
         href={session.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-background/85 border backdrop-blur-sm hover:bg-background transition-colors text-foreground/70 hover:text-foreground"
+        className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
       >
-        <ExternalLink className="h-3 w-3" />
-        New tab
+        <ExternalLink className="h-4 w-4" />
+        Open in browser
       </a>
     </div>
   );

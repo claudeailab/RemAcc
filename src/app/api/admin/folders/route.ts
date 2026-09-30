@@ -64,8 +64,8 @@ export async function DELETE(req: NextRequest) {
     allFolders.filter(f => f.parentId === cur).forEach(f => queue.push(f.id));
   }
 
-  // Unassign connections in all affected folders
-  await db.update(connections).set({ folderId: null }).where(inArray(connections.folderId, toDelete));
+  // Delete connections in all affected folders
+  await db.delete(connections).where(inArray(connections.folderId, toDelete));
   // Delete folders deepest-first (reverse BFS order)
   for (let i = toDelete.length - 1; i >= 0; i--) {
     await db.delete(folders).where(eq(folders.id, toDelete[i]));
