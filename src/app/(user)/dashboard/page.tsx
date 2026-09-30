@@ -1,7 +1,7 @@
 "use client";
 
 import "@xterm/xterm/css/xterm.css";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -478,7 +478,7 @@ export default function DashboardPage() {
   const [manualWidth, setManualWidth] = useState(false);
   const isDragging = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
+  const sidebarRef = useRef<HTMLDivElement>(null);
 
   // Restore sessions from localStorage on mount so a page refresh reconnects
   useEffect(() => {
@@ -512,15 +512,16 @@ export default function DashboardPage() {
     } catch {}
   }, [sessions, activeKey]);
 
-  // Auto-resize sidebar to fit content when user hasn't manually sized it.
-  // measureRef points to an inner div with width:max-content, so its scrollWidth
-  // reflects intrinsic content width regardless of the outer sidebar width.
-  useEffect(() => {
+  // Auto-resize sidebar before paint. Temporarily remove the width constraint so
+  // the panel can report its intrinsic scrollWidth, then lock it in.
+  useLayoutEffect(() => {
     if (manualWidth) return;
-    const el = measureRef.current;
+    const el = sidebarRef.current;
     if (!el) return;
-    const w = el.scrollWidth + 16;
-    setSidebarWidth(Math.max(180, Math.min(520, w)));
+    el.style.width = "max-content";
+    const w = Math.max(180, Math.min(520, el.scrollWidth + 16));
+    el.style.width = "";
+    setSidebarWidth(w);
   }, [expanded, connections, folders, manualWidth]);
 
   function startResize(e: React.MouseEvent) {
@@ -663,7 +664,6 @@ export default function DashboardPage() {
         </div>
       </div>
       <div ref={contentRef} className="flex-1 overflow-y-auto p-1.5">
-        <div ref={measureRef} style={{ width: "max-content", minWidth: "100%" }}>
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : connections.length === 0 ? (
@@ -681,7 +681,6 @@ export default function DashboardPage() {
             {ungrouped.map(c => renderConn(c))}
           </div>
         )}
-        </div>
       </div>
     </>
   );
@@ -732,6 +731,7 @@ export default function DashboardPage() {
 
         {/* Sidebar */}
         <div
+          ref={sidebarRef}
           className={`
             flex-col border-r bg-background overflow-hidden
             absolute md:relative z-20 md:z-auto h-full
