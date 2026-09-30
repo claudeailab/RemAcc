@@ -280,7 +280,7 @@ function uvncHelper(session, mode) {
 // null when the helper cannot query this session's viewer at all
 async function dsmMonitorCount(connId, session) {
   let last = null;
-  for (const start = Date.now(); Date.now() - start < 15000 && !session.stopped; await sleep(1000)) {
+  for (const start = Date.now(); Date.now() - start < 5000 && !session.stopped; await sleep(1000)) {
     last = await uvncHelper(session, 'count');
     if (last.code === 0 && +last.out > 0) return +last.out;
   }

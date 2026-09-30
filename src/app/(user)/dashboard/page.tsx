@@ -257,7 +257,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     let cancelled = false;
     let client: any = null;
     let keyboard: any = null;
-    let tunnelRef: any = null;
     let obs: ResizeObserver | null = null;
     let keepalive: ReturnType<typeof setInterval> | null = null;
     let cleanupMouse: (() => void) | null = null;
@@ -272,7 +271,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         ? `/ws/rdp/${session.id}`
         : `/ws/vnc/${session.id}`;
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
-      tunnelRef = tunnel;
       client = new Guac.Client(tunnel);
       clientRef.current = client;
       tunnelRef.current = tunnel;
