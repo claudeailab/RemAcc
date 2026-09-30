@@ -478,6 +478,7 @@ export default function DashboardPage() {
   const [manualWidth, setManualWidth] = useState(false);
   const isDragging = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
 
   // Restore sessions from localStorage on mount so a page refresh reconnects
   useEffect(() => {
@@ -511,10 +512,12 @@ export default function DashboardPage() {
     } catch {}
   }, [sessions, activeKey]);
 
-  // Auto-resize sidebar to fit content when user hasn't manually sized it
+  // Auto-resize sidebar to fit content when user hasn't manually sized it.
+  // measureRef points to an inner div with width:max-content, so its scrollWidth
+  // reflects intrinsic content width regardless of the outer sidebar width.
   useEffect(() => {
     if (manualWidth) return;
-    const el = contentRef.current;
+    const el = measureRef.current;
     if (!el) return;
     const w = el.scrollWidth + 16;
     setSidebarWidth(Math.max(180, Math.min(520, w)));
@@ -660,6 +663,7 @@ export default function DashboardPage() {
         </div>
       </div>
       <div ref={contentRef} className="flex-1 overflow-y-auto p-1.5">
+        <div ref={measureRef} style={{ width: "max-content", minWidth: "100%" }}>
         {loading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
         ) : connections.length === 0 ? (
@@ -677,6 +681,7 @@ export default function DashboardPage() {
             {ungrouped.map(c => renderConn(c))}
           </div>
         )}
+        </div>
       </div>
     </>
   );
