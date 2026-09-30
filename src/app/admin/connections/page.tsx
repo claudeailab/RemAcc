@@ -80,6 +80,9 @@ export default function ConnectionsPage() {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
 
+  // Edit mode — drag/drop only active when enabled
+  const [editMode, setEditMode] = useState(false);
+
   // Drag / drop
   const [dragging, setDragging] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<number | "root" | null>(null);
@@ -279,13 +282,13 @@ export default function ConnectionsPage() {
     return (
       <div
         key={c.id}
-        draggable
-        onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "conn", id: c.id }); }}
-        onDragEnd={() => { setDragging(null); setDropTarget(null); }}
+        draggable={editMode}
+        onDragStart={editMode ? (e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "conn", id: c.id }); }) : undefined}
+        onDragEnd={editMode ? (() => { setDragging(null); setDropTarget(null); }) : undefined}
         style={{ paddingLeft: depth * 16 + 8 }}
         className={`flex items-center gap-1.5 py-1 pr-2 rounded group hover:bg-secondary/40 transition-colors ${dim ? "opacity-40" : ""}`}
       >
-        {DRAG_HANDLE}
+        {editMode && DRAG_HANDLE}
         {c.protocol === "web"
           ? <Globe className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           : <Monitor className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -317,18 +320,18 @@ export default function ConnectionsPage() {
     return (
       <div key={f.id}>
         <div
-          draggable
-          onDragStart={e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "folder", id: f.id }); }}
-          onDragEnd={() => { setDragging(null); setDropTarget(null); }}
-          onDragOver={e => { if (canReceiveDrop) { e.preventDefault(); setDropTarget(f.id); } }}
-          onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === f.id ? null : prev); }}
-          onDrop={e => { e.preventDefault(); commitDrop(f.id); }}
+          draggable={editMode}
+          onDragStart={editMode ? (e => { e.dataTransfer.effectAllowed = "move"; setDragging({ kind: "folder", id: f.id }); }) : undefined}
+          onDragEnd={editMode ? (() => { setDragging(null); setDropTarget(null); }) : undefined}
+          onDragOver={editMode && canReceiveDrop ? (e => { e.preventDefault(); setDropTarget(f.id); }) : undefined}
+          onDragLeave={editMode ? (e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === f.id ? null : prev); }) : undefined}
+          onDrop={editMode ? (e => { e.preventDefault(); commitDrop(f.id); }) : undefined}
           style={{ paddingLeft: depth * 16 + 8 }}
           className={`flex items-center gap-1 py-1 pr-2 rounded group transition-colors
             ${dim ? "opacity-40" : ""}
             ${isDropTarget ? "bg-primary/10 ring-1 ring-inset ring-primary/40" : "hover:bg-secondary/50"}`}
         >
-          {DRAG_HANDLE}
+          {editMode && DRAG_HANDLE}
           <button
             type="button"
             className="p-0.5 shrink-0"
@@ -381,6 +384,15 @@ export default function ConnectionsPage() {
         <div className="flex items-center justify-between mb-4">
           <h1 className={pageTitle}>Connections</h1>
           <div className="flex items-center gap-2">
+            {editMode ? (
+              <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setDragging(null); setDropTarget(null); }}>
+                Done
+              </Button>
+            ) : (
+              <Button variant="outline" size="sm" onClick={() => setEditMode(true)}>
+                <Pencil className="h-4 w-4 mr-1" />Edit Layout
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => openNewFolder()}>
               <FolderPlus className="h-4 w-4 mr-1" />Add Folder
             </Button>
@@ -400,7 +412,7 @@ export default function ConnectionsPage() {
               {rootFolders.map(f => renderFolder(f))}
               {unassigned.map(c => renderConn(c, 0))}
             </div>
-            {dragging && (
+            {editMode && dragging && (
               <div
                 onDragOver={e => { e.preventDefault(); setDropTarget("root"); }}
                 onDragLeave={e => { if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) setDropTarget(prev => prev === "root" ? null : prev); }}

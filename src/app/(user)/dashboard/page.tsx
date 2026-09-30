@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe,
+  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe, ExternalLink,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
 
@@ -162,6 +162,10 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 // Web Panel — website in an iframe
 // ---------------------------------------------------------------------------
 function WebPanel({ session, active }: { session: Session; active: boolean }) {
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => { setLoaded(false); }, [session.url]);
+
   return (
     <div
       className="absolute inset-0"
@@ -173,7 +177,24 @@ function WebPanel({ session, active }: { session: Session; active: boolean }) {
         sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"
         referrerPolicy="no-referrer"
         title={session.name}
+        onLoad={() => setLoaded(true)}
       />
+      {/* Loading overlay — disappears once the iframe signals it loaded */}
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      )}
+      {/* Always-visible open-in-new-tab — essential for self-signed cert or embed-blocked pages */}
+      <a
+        href={session.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="absolute top-2 right-2 z-10 flex items-center gap-1 px-2 py-1 rounded text-[11px] bg-background/85 border backdrop-blur-sm hover:bg-background transition-colors text-foreground/70 hover:text-foreground"
+      >
+        <ExternalLink className="h-3 w-3" />
+        New tab
+      </a>
     </div>
   );
 }
