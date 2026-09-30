@@ -29,8 +29,15 @@ export default async function UserNavbar() {
             className="h-6 w-6"
           />
         </div>
-        <span className="font-bold text-base tracking-tight text-foreground truncate">{platform.name}</span>
-        {version && <span className={versionBadge}>v{version}</span>}
+        <div className="flex flex-col min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="font-bold text-base tracking-tight text-foreground truncate leading-tight">{platform.name}</span>
+            {version && <span className={`${versionBadge} shrink-0`}>v{version}</span>}
+          </div>
+          {platform.title && (
+            <span className="text-[11px] text-muted-foreground truncate leading-tight">{platform.title}</span>
+          )}
+        </div>
       </Link>
       <UserNavbarClient />
     </header>
