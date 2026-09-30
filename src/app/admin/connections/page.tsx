@@ -207,7 +207,12 @@ export default function ConnectionsPage() {
     setFolderDialog(true);
   }
   function openEditFolder(f: FolderRow) {
-    setFolderForm({ id: f.id, name: f.name, parentId: f.parentId?.toString() ?? "", credentialId: f.credentialId?.toString() ?? "" });
+    let credentialId = f.credentialId?.toString() ?? "";
+    if (!credentialId) {
+      const match = credentials.find(c => c.name.toLowerCase() === f.name.toLowerCase());
+      if (match) credentialId = String(match.id);
+    }
+    setFolderForm({ id: f.id, name: f.name, parentId: f.parentId?.toString() ?? "", credentialId });
     setFolderDialog(true);
   }
   async function saveFolder() {
