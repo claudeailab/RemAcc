@@ -51,27 +51,31 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const admin = await requireAdmin();
-  const id = Number(new URL(req.url).searchParams.get("id"));
-  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+  const url = new URL(req.url);
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
 
-  // Collect all descendant folder IDs (BFS)
+  const idsParam = url.searchParams.get("ids");
+  const singleId = Number(url.searchParams.get("id"));
+  const rootIds = idsParam
+    ? idsParam.split(",").map(Number).filter(Boolean)
+    : singleId ? [singleId] : [];
+  if (rootIds.length === 0) return NextResponse.json({ error: "Missing id(s)" }, { status: 400 });
+
+  // Collect all descendant folder IDs (BFS over all roots)
   const allFolders = await db.select({ id: folders.id, parentId: folders.parentId }).from(folders);
-  const toDelete: number[] = [];
-  const queue = [id];
+  const toDelete = new Set<number>();
+  const queue = [...rootIds];
   while (queue.length) {
     const cur = queue.shift()!;
-    toDelete.push(cur);
+    if (toDelete.has(cur)) continue;
+    toDelete.add(cur);
     allFolders.filter(f => f.parentId === cur).forEach(f => queue.push(f.id));
   }
 
-  // Delete connections in all affected folders
-  await db.delete(connections).where(inArray(connections.folderId, toDelete));
-  // Delete folders deepest-first (reverse BFS order)
-  for (let i = toDelete.length - 1; i >= 0; i--) {
-    await db.delete(folders).where(eq(folders.id, toDelete[i]));
-  }
+  const toDeleteArr = [...toDelete];
+  await db.delete(connections).where(inArray(connections.folderId, toDeleteArr));
+  await db.delete(folders).where(inArray(folders.id, toDeleteArr));
 
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
-  await logAudit({ userEmail: admin.email, action: "delete", resource: "folder", detail: `id=${id} cascade=${toDelete.length}`, ip });
+  await logAudit({ userEmail: admin.email, action: "delete", resource: "folder", detail: `roots=${rootIds.join(",")} cascade=${toDeleteArr.length}`, ip });
   return NextResponse.json({ ok: true });
 }

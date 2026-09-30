@@ -185,8 +185,10 @@ export default function ConnectionsPage() {
     setBulkDeleting(true);
     const total = selectedFolders.size + selectedConns.size;
     try {
-      for (const id of selectedConns) await fetch(`/api/admin/connections?id=${id}`, { method: "DELETE" });
-      for (const id of selectedFolders) await fetch(`/api/admin/folders?id=${id}`, { method: "DELETE" });
+      const reqs: Promise<Response>[] = [];
+      if (selectedConns.size > 0) reqs.push(fetch(`/api/admin/connections?ids=${[...selectedConns].join(",")}`, { method: "DELETE" }));
+      if (selectedFolders.size > 0) reqs.push(fetch(`/api/admin/folders?ids=${[...selectedFolders].join(",")}`, { method: "DELETE" }));
+      await Promise.all(reqs);
       toast.success(`Deleted ${total} item${total === 1 ? "" : "s"}`);
       setSelectedFolders(new Set()); setSelectedConns(new Set());
       setBulkConfirm(false);
@@ -498,9 +500,6 @@ export default function ConnectionsPage() {
                     <Trash2 className="h-4 w-4 mr-1" />Delete ({selectedFolders.size + selectedConns.size})
                   </Button>
                 )}
-                <Button variant="outline" size="sm" onClick={selectAll}>
-                  {selectedFolders.size + selectedConns.size === folders.length + connections.length && folders.length + connections.length > 0 ? "Deselect All" : "Select All"}
-                </Button>
                 <Button variant="outline" size="sm" onClick={() => { setEditMode(false); setSelectedFolders(new Set()); setSelectedConns(new Set()); setDragging(null); setDropTarget(null); }}>
                   Done
                 </Button>
@@ -526,6 +525,17 @@ export default function ConnectionsPage() {
         ) : (
           <div className="rounded-lg border">
             <div className="py-1">
+              {editMode && (
+                <div
+                  className="flex items-center gap-1.5 py-1 px-2 cursor-pointer hover:bg-secondary/40 rounded"
+                  onClick={selectAll}
+                >
+                  <span className={`shrink-0 flex items-center justify-center h-4 w-4 rounded border transition-colors ${selectedFolders.size + selectedConns.size === folders.length + connections.length && folders.length + connections.length > 0 ? "bg-primary border-primary text-primary-foreground" : "border-input"}`}>
+                    {selectedFolders.size + selectedConns.size === folders.length + connections.length && folders.length + connections.length > 0 && <Check className="h-2.5 w-2.5" />}
+                  </span>
+                  <span className={`text-xs ${muted}`}>Select all</span>
+                </div>
+              )}
               {rootFolders.map(f => renderFolder(f))}
               {unassigned.map(c => renderConn(c, 0))}
             </div>

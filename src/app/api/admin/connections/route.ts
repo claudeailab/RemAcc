@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { connections } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { logAudit } from "@/lib/audit";
 
 const createSchema = z.object({
@@ -61,10 +61,21 @@ export async function PUT(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const admin = await requireAdmin();
-  const id = Number(new URL(req.url).searchParams.get("id"));
+  const url = new URL(req.url);
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
+
+  const idsParam = url.searchParams.get("ids");
+  if (idsParam) {
+    const ids = idsParam.split(",").map(Number).filter(Boolean);
+    if (ids.length === 0) return NextResponse.json({ error: "No valid ids" }, { status: 400 });
+    await db.delete(connections).where(inArray(connections.id, ids));
+    await logAudit({ userEmail: admin.email, action: "delete", resource: "connection", detail: `bulk ids=${ids.join(",")}`, ip });
+    return NextResponse.json({ ok: true, deleted: ids.length });
+  }
+
+  const id = Number(url.searchParams.get("id"));
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
   await db.delete(connections).where(eq(connections.id, id));
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "unknown";
   await logAudit({ userEmail: admin.email, action: "delete", resource: "connection", detail: `id=${id}`, ip });
   return NextResponse.json({ ok: true });
 }
