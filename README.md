@@ -8,7 +8,7 @@ A self-hosted remote access platform. Connect to RDP, VNC, SSH, and internal web
 - **RDP** — Remote Desktop sessions streamed to the browser via Apache Guacamole (FreeRDP). Supports NLA, clipboard, multi-monitor, wallpaper/font-smoothing settings.
 - **VNC** — VNC sessions via guacd. Plain VNC or UltraVNC DSM-encrypted (plugin + viewer run server-side under Wine for full end-to-end encryption).
 - **SSH** — Full xterm.js terminal over WebSocket. PuTTY-style right-click paste, 5000-line scrollback, keepalive pings.
-- **Web** — Opens internal web services in a lightweight in-app browser (WebKitGTK, ~26 KB binary). Works outside the office network — the browser runs on the RemAcc server, inside the company network, and streams to the user like any other session.
+- **WEB** — Opens internal web services in a lightweight in-app browser (WebKitGTK, ~26 KB binary). Works outside the office network — the browser runs on the RemAcc server, inside the company network, and streams to the user like any other session.
 
 ### Auto Sign-in
 - Credentials can be assigned per connection or inherited from a parent folder.
@@ -41,7 +41,7 @@ A self-hosted remote access platform. Connect to RDP, VNC, SSH, and internal web
 - Passwords stored AES-256-GCM encrypted; never pre-loaded in forms — revealed only on demand.
 
 ### Bulk Import / Export
-- Import connections from an `.xlsx` spreadsheet (RDP, VNC, SSH, Web, UltraVNC).
+- Import connections from an `.xlsx` spreadsheet (RDP, VNC, SSH, WEB, UltraVNC).
 - Export all connections as `.xlsx` (name, type, host, folder path, notes).
 
 ### User Management
