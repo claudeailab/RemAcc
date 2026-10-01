@@ -73,10 +73,10 @@ Add the service to your `docker-compose.yml` and define the variables in a `.env
 
 ```yaml
 services:
-  webapp:
+  remacc:
     image: ghcr.io/claudeailab/remacc
-    container_name: webapp
-    hostname: webapp
+    container_name: remacc
+    hostname: remacc
     restart: unless-stopped
     user: "0"
     environment:
@@ -127,7 +127,7 @@ services:
     ports:
       - 8020:8020
     volumes:
-      - ./config/webapp/data:/data
+      - ./config/remacc/data:/data
     networks:
       - network
     depends_on:
