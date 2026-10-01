@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Loader2, Plus, Pencil, Trash2, KeyRound, Eye, EyeOff, ChevronDown, ChevronRight } from "lucide-react";
+import { Loader2, Plus, Pencil, Trash2, KeyRound, Eye, EyeOff } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle, muted } from "@/lib/ui-conventions";
 
 interface Credential { id: number; name: string; username: string; domain: string | null; notes: string | null }
@@ -99,19 +99,17 @@ export default function CredentialsPage() {
         ) : list.length === 0 ? (
           <p className={`text-center py-12 ${muted}`}>No credentials yet.</p>
         ) : (
-          <div className="space-y-2">
+          <div className="rounded-lg border divide-y divide-border overflow-hidden">
             {list.map(c => (
-              <div key={c.id} className="flex items-center justify-between rounded-lg border p-4">
-                <div className="flex items-center gap-3 min-w-0">
-                  <KeyRound className="h-4 w-4 text-muted-foreground shrink-0" />
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm">{c.name}</p>
-                    {(c.username || c.domain) && <p className={muted}>{c.domain ? `${c.domain}\\` : ""}{c.username}</p>}
-                  </div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <Button size="icon" variant="ghost" onClick={() => openEdit(c)}><Pencil className="h-4 w-4" /></Button>
-                  <Button size="icon" variant="ghost" onClick={() => setDeleteId(c.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+              <div key={c.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors">
+                <KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="font-medium text-sm min-w-0 truncate flex-1">{c.name}</span>
+                {(c.username || c.domain) && (
+                  <span className={`${muted} truncate hidden sm:block`}>{c.domain ? `${c.domain}\\` : ""}{c.username}</span>
+                )}
+                <div className="flex items-center gap-1 shrink-0 ml-auto">
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5" /></Button>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                 </div>
               </div>
             ))}
