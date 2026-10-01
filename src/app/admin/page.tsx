@@ -1,8 +1,8 @@
 import { requireAdmin } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { users, plans, audit_logs } from "@/lib/db/schema";
-import { count, eq, desc } from "drizzle-orm";
-import { Users, CreditCard, Cloud, Activity, ShieldCheck } from "lucide-react";
+import { users, audit_logs, connections, folders, credentials } from "@/lib/db/schema";
+import { count, desc } from "drizzle-orm";
+import { Users, Network, FolderOpen, KeyRound, ShieldCheck } from "lucide-react";
 import { pageWrapper, pageInner } from "@/lib/ui-conventions";
 
 function greeting(name: string) {
@@ -35,14 +35,16 @@ function StatCard({ icon: Icon, label, value, gradient, delay = "" }: StatCardPr
 export default async function AdminDashboardPage() {
   const user = await requireAdmin();
 
-  const [[totalUsers], [azureUsers], [totalPlans], [auditCount], recentAudit] = await Promise.all([
+  const [[totalConnections], [totalFolders], [totalCredentials], [totalUsers], protocolRows, recentAudit] = await Promise.all([
+    db.select({ count: count() }).from(connections),
+    db.select({ count: count() }).from(folders),
+    db.select({ count: count() }).from(credentials),
     db.select({ count: count() }).from(users),
-    db.select({ count: count() }).from(users).where(eq(users.source, "azure")),
-    db.select({ count: count() }).from(plans),
-    db.select({ count: count() }).from(audit_logs),
+    db.select({ protocol: connections.protocol, count: count() }).from(connections).groupBy(connections.protocol),
     db.select({ userEmail: audit_logs.userEmail, action: audit_logs.action, resource: audit_logs.resource, createdAt: audit_logs.createdAt })
       .from(audit_logs).orderBy(desc(audit_logs.createdAt)).limit(5),
   ]);
+  const byProtocol = Object.fromEntries(protocolRows.map(r => [r.protocol, r.count]));
 
   return (
     <div className={pageWrapper}>
@@ -58,11 +60,21 @@ export default async function AdminDashboardPage() {
         </div>
 
         {/* Stat cards */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-          <StatCard icon={Users} label="Total Users" value={totalUsers.count} gradient="from-teal-500 to-cyan-600" />
-          <StatCard icon={Cloud} label="Azure AD Users" value={azureUsers.count} gradient="from-sky-400 to-blue-500" delay="delay-75" />
-          <StatCard icon={CreditCard} label="Plans" value={totalPlans.count} gradient="from-emerald-500 to-teal-600" delay="delay-150" />
-          <StatCard icon={Activity} label="Audit Events" value={auditCount.count} gradient="from-cyan-400 to-sky-600" delay="delay-225" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+          <StatCard icon={Network} label="Connections" value={totalConnections.count} gradient="from-teal-500 to-cyan-600" />
+          <StatCard icon={FolderOpen} label="Folders" value={totalFolders.count} gradient="from-sky-400 to-blue-500" delay="delay-75" />
+          <StatCard icon={KeyRound} label="Credentials" value={totalCredentials.count} gradient="from-emerald-500 to-teal-600" delay="delay-150" />
+          <StatCard icon={Users} label="Users" value={totalUsers.count} gradient="from-cyan-400 to-sky-600" delay="delay-225" />
+        </div>
+
+        {/* Protocol breakdown */}
+        <div className="grid gap-3 grid-cols-4 mb-8 animate-slide-up delay-300">
+          {(["rdp", "vnc", "ssh", "web"] as const).map(p => (
+            <div key={p} className="rounded-xl border bg-card px-4 py-3 flex items-center justify-between">
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">{p}</span>
+              <span className="text-lg font-bold text-foreground">{byProtocol[p] ?? 0}</span>
+            </div>
+          ))}
         </div>
 
         {/* Recent activity */}
