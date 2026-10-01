@@ -262,11 +262,12 @@ function uvncHelper(session, mode) {
   });
 }
 
-// Monitors the remote UltraVNC server reports (rfbMonitorInfo); 0 when it never reports them
-// null when the helper cannot query this session's viewer at all
+// Monitors the remote UltraVNC server reports (rfbMonitorInfo); 0 when it never reports them,
+// null when the helper cannot query this session's viewer at all. The server sends it right after
+// the viewer's SetEncodings, so once the viewer is up a missing count is final: poll briefly.
 async function dsmMonitorCount(connId, session) {
   let last = null;
-  for (const start = Date.now(); Date.now() - start < 5000 && !session.stopped; await sleep(1000)) {
+  for (const start = Date.now(); Date.now() - start < 1500 && !session.stopped; await sleep(250)) {
     last = await uvncHelper(session, 'count');
     if (last.code === 0 && +last.out > 0) return +last.out;
   }
@@ -285,11 +286,31 @@ async function switchDsmMonitor(connId, session) {
 // Wider than 1.85:1 is what the browser counts as several monitors (monitorCount in the dashboard)
 const isWide = win => win.w / win.h > 1.85;
 
-// UltraVNC starts on the primary monitor and can only step to the next one (primary -> other
-// monitors -> all screens). Step until the remote sends all screens side by side; the browser then
-// picks a screen locally. Equal monitors keep the size when stepping between them, so an unchanged
-// size is not a failed step. -> true when all screens are shown
-async function showAllDsmMonitors(connId, session, count, waitMs = 8000) {
+function applyClip(connId, session, win) {
+  const clip = clipRect(win);
+  if (clip === session.clip) return;
+  session.clip = clip;
+  spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
+  log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
+}
+
+// Until the viewer window kept its size for stableMs (the remote finished rebuilding its desktop)
+async function waitForStableWindow(session, stableMs = 1000, maxMs = 4000) {
+  let last = null, since = Date.now();
+  for (const start = Date.now(); Date.now() - start < maxMs && !session.stopped; await sleep(250)) {
+    const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
+    const size = win && `${win.w}x${win.h}`;
+    if (size !== last) { last = size; since = Date.now(); }
+    else if (Date.now() - since >= stableMs) return;
+  }
+}
+
+// UltraVNC starts on the primary monitor and can only step to the next one; the cycle depends on
+// the server version (2012–2016: primary -> second -> all; 1.8: primary <-> all), so step one at a
+// time until the remote sends all screens side by side; the browser then picks a screen locally.
+// A new size arrives well within waitMs; equal monitors keep the size when stepping between them,
+// so an unchanged size is not a failed step, just the end of that step's wait. -> true when shown
+async function showAllDsmMonitors(connId, session, count, waitMs = 3000) {
   const sizeOf = win => `${win.w}x${win.h}`;
   let win = await findViewerWindow(session.display, 640, 400).catch(() => null);
   if (!win) return false;
@@ -297,11 +318,15 @@ async function showAllDsmMonitors(connId, session, count, waitMs = 8000) {
   for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped; step++) {
     if (!await switchDsmMonitor(connId, session)) return false;
     const before = sizeOf(win);
-    for (const start = Date.now(); Date.now() - start < waitMs && !session.stopped; await sleep(500)) {
+    for (const start = Date.now(); Date.now() - start < waitMs && !session.stopped; await sleep(250)) {
       const next = await findViewerWindow(session.display, 640, 400).catch(() => null);
       if (next && sizeOf(next) !== before) { win = next; break; }
     }
-    if (isWide(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
+    if (isWide(win)) {
+      applyClip(connId, session, win);
+      log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`);
+      return true;
+    }
   }
   log(`DSM id=${connId}: remote never sent a side-by-side view (now ${sizeOf(win)})`);
   return false;
@@ -323,14 +348,15 @@ async function keepAllDsmMonitors(connId, session) {
   session.allTries.push(now);
   session.stepping = true;
   try {
-    await sleep(3000);
+    await waitForStableWindow(session);
     if (session.stopped) return;
     if (!await showAllDsmMonitors(connId, session, session.monitorCount)) session.wantAll = false;
   } finally { session.stepping = false; }
 }
 
 // Keep the relay on the viewer window for the whole session: its size changes when the remote
-// switches monitors or changes resolution, however long the remote takes
+// switches monitors or changes resolution, however long the remote takes (500 ms: a size change
+// reaches the browser within ~1 s)
 function followViewerWindow(connId, session) {
   const same = (a, b) => a && b && a.w === b.w && a.h === b.h && a.x === b.x && a.y === b.y;
   let prev = null, busy = false;
@@ -340,17 +366,12 @@ function followViewerWindow(connId, session) {
     try {
       const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
       if (win && same(win, prev)) {
-        const clip = clipRect(win);
-        if (clip !== session.clip) {
-          session.clip = clip;
-          spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
-          log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
-        }
+        applyClip(connId, session, win);
         if (!isWide(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
       }
       prev = win;
     } finally { busy = false; }
-  }, 1000);
+  }, 500);
 }
 
 async function startDsmProxy(connId, host, vncPort, username, password) {
