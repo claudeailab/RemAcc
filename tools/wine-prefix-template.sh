@@ -4,6 +4,8 @@
 # Wine's own PE files become symlinks (~690 MB -> ~13 MB). server.js copies this template to a
 # prefix owned by the runtime user, since Wine refuses a prefix owned by anyone else.
 set -e
+# The UltraVNC viewer is an x86 Windows program: DSM only works on amd64, and wineboot hangs on arm64
+[ "$(dpkg --print-architecture)" = amd64 ] || { echo "Wine prefix template: not amd64, skipped"; exit 0; }
 P=$1
 export WINEPREFIX="$P" WINEDEBUG=-all DISPLAY= WINEDLLOVERRIDES='mono=d;gecko=d'
 timeout 300 wineboot -i
