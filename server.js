@@ -168,7 +168,11 @@ const WINE_PREFIX_TEMPLATE = '/opt/uvnc-wine-template';
 // Room for multi-monitor remotes at 1:1; x11vnc exports only the viewer window's rectangle
 const SCREEN_W = 7680, SCREEN_H = 2160;
 const xDisplays = new Set();    // X displays owned by running or starting DSM relays and web browsers
-const dsmByConn = new Map();    // connId -> session; one relay per connection, latest wins
+// Monitor selection (rfbSetSW -> vncDesktop::SetSW) is one server-wide setting on UltraVNC: one
+// session per remote computer steps at a time, and never while another already shows all screens.
+// "host:port" -> promise
+const dsmSwitching = new Map();
+const dsmSessions = new Set();  // running DSM relays: other viewers of the same computer change its screens too
 
 // Displays 50-149 belong to this process, so lock/socket files of a display not in
 // xDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
@@ -319,13 +323,16 @@ async function waitForStableWindow(session, stableMs = 1000, maxMs = 4000) {
 // time until the remote sends all screens side by side; the browser then picks a screen locally.
 // Equal monitors keep the size when stepping between them, so an unchanged size ends the step's
 // wait instead of failing it. The wait must outlast a slow remote's answer: stepping again before
-// it arrives overshoots past "all screens". -> true when shown
+// it arrives overshoots past "all screens". -> true shown, false never side by side, null unknown
 async function showAllDsmMonitors(connId, session, count, waitMs = 6000) {
   const sizeOf = win => `${win.w}x${win.h}`;
   let win = await findViewerWindow(session.display, 640, 400).catch(() => null);
-  if (!win) { log(`DSM id=${connId}: viewer window not found, not switching screens`); return false; }
+  if (!win) { log(`DSM id=${connId}: viewer window not found, switching screens later`); return null; }
   if (isWide(win)) return true;
   for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped; step++) {
+    // The selection is server-wide: switching while another viewer already shows all screens would
+    // turn them off for everyone. This viewer just has not received the new layout yet.
+    if (await otherViewerShowsAll(session)) { log(`DSM id=${connId}: another viewer of this computer already shows all screens, not switching`); return null; }
     if (!await switchDsmMonitor(connId, session)) return false;
     const before = sizeOf(win);
     for (const start = Date.now(); Date.now() - start < waitMs && !session.stopped; await sleep(250)) {
@@ -336,6 +343,16 @@ async function showAllDsmMonitors(connId, session, count, waitMs = 6000) {
     if (isWide(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
   }
   log(`DSM id=${connId}: remote never sent a side-by-side view (now ${sizeOf(win)})`);
+  return false;
+}
+
+async function otherViewerShowsAll(session) {
+  const remote = `${session.remote.host}:${session.remote.port}`;
+  for (const o of dsmSessions) {
+    if (o === session || o.stopped || `${o.remote.host}:${o.remote.port}` !== remote) continue;
+    const win = await findViewerWindow(o.display, 640, 400).catch(() => null);
+    if (win && isWide(win)) return true;
+  }
   return false;
 }
 
@@ -373,11 +390,23 @@ async function keepAllDsmMonitors(connId, session) {
   }
   session.allTries.push(now);
   session.stepping = true;
+  const remote = `${session.remote.host}:${session.remote.port}`;
+  let release;
   try {
+    while (dsmSwitching.has(remote)) await dsmSwitching.get(remote); // another viewer of this computer
+    dsmSwitching.set(remote, new Promise(r => { release = r; }));
     await waitForStableWindow(session);
     if (session.stopped) return;
-    if (!await showAllDsmMonitors(connId, session, session.monitorCount)) session.wantAll = false;
-  } finally { session.stepping = false; }
+    if (await showAllDsmMonitors(connId, session, session.monitorCount) === false) {
+      // With other viewers on this computer their switching can mask ours: try again later
+      const others = [...dsmSessions].some(o => o !== session && `${o.remote.host}:${o.remote.port}` === remote);
+      if (others) log(`DSM id=${connId}: other viewers of ${remote} are active, switching screens later`);
+      else session.wantAll = false;
+    }
+  } finally {
+    if (release) { dsmSwitching.delete(remote); release(); }
+    session.stepping = false;
+  }
 }
 
 // Keep the relay on the viewer window for the whole session: its size changes when the remote
@@ -410,9 +439,6 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   if (!manifest.uvnc_plugin) throw new Error('DSM plugin file not uploaded');
   if (!manifest.uvnc_viewer) throw new Error('UltraVNC Viewer not uploaded');
 
-  // A second viewer on the same server would be kicked (non-shared) and auto-reconnect,
-  // fighting the first one — the newest browser session takes over.
-  dsmByConn.get(connId)?.stop();
   const display = allocDisplay();
   const procs = [];
   // Own copy of the viewer per session: the monitor-switch helper finds this viewer by exe name.
@@ -422,17 +448,17 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   session.stop = () => {
     if (session.stopped) return;
     session.stopped = true;
+    dsmSessions.delete(session);
     clearInterval(session.follow);
     for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
     fs.rmSync(path.join(UVNC_DIR, exeName), { force: true });
     removeDisplayFiles(display);
     xDisplays.delete(display);
-    if (dsmByConn.get(connId) === session) dsmByConn.delete(connId);
     session.onStop?.();
     log(`DSM proxy id=${connId}: display=:${display} stopped`);
   };
-  dsmByConn.set(connId, session);
-  const alive = () => { if (session.stopped) throw new Error('DSM proxy superseded'); };
+  dsmSessions.add(session);
+  const alive = () => { if (session.stopped) throw new Error('DSM session closed during startup'); };
 
   try {
     await ensureWinePrefix();
@@ -460,7 +486,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     // left+right middle-button emulation (the browser sends real middle clicks).
     // -quality 3: a command-line launch uses Ultra2 at JPEG quality 80; 30 sends ~57% fewer bytes
     // per screen change with text still sharp (2 smudges it) — the VNC server link is the bottleneck.
-    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-notoolbar', '-directx', '-noremotecursor', '-noemulate3', '-quality', '3'];
+    const wineArgs = [viewerPath, `${host}::${vncPort}`, '-dsmplugin', manifest.uvnc_plugin, '-shared', '-notoolbar', '-directx', '-noremotecursor', '-noemulate3', '-quality', '3'];
     if (password) wineArgs.push('-password', password);
     if (username) wineArgs.push('-user', username);
 
@@ -864,10 +890,20 @@ async function handleGuac(wsConn, req, id, protocol) {
   const startupKeepalive = setInterval(() => { if (wsConn.readyState === 1) wsConn.send(guacEncode(['nop'])); }, 5000);
   wsConn.once('close', () => clearInterval(startupKeepalive));
   if (protocol === 'vnc' && details.options?.dsmPlugin) {
-    // A socket that already closed must not start (and supersede) a relay
+    // A socket that already closed must not start a relay
     if (wsConn.readyState !== 1) return;
+    const start = () => startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.username ?? '', details.credential?.password ?? '');
     try {
-      dsm = await startDsmProxy(id, details.host, parseInt(guacPort) || 5900, details.credential?.username ?? '', details.credential?.password ?? '');
+      try { dsm = await start(); }
+      catch (e) {
+        // The UltraVNC server can drop a viewer that connects while it rebuilds its desktop (e.g.
+        // another user's session just switched screens): one retry instead of an error
+        if (!/viewer exited before/.test(e.message) || wsConn.readyState !== 1) throw e;
+        log(`WS VNC id=${id}: ${e.message}, retrying once`);
+        await sleep(2000);
+        if (wsConn.readyState !== 1) return;
+        dsm = await start();
+      }
     } catch (e) {
       err(`WS VNC id=${id}: DSM proxy failed: ${e.message}`);
       if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', 'DSM proxy error: ' + e.message, '514']));
@@ -877,7 +913,7 @@ async function handleGuac(wsConn, req, id, protocol) {
     // The browser may have left (e.g. page reload) while the relay was starting
     if (wsConn.readyState !== 1) { dsm.stop(); return; }
     wsConn.once('close', dsm.stop);
-    dsm.onStop = () => { try { wsConn.close(); } catch {} }; // superseded by a newer session
+    dsm.onStop = () => { try { wsConn.close(); } catch {} }; // the relay ended (e.g. the viewer exited)
     guacHost = '127.0.0.1';
     guacPort = String(dsm.port);
     base.cursor = 'local'; // the relay paints no cursor; 'remote' would add guacd's position dot
