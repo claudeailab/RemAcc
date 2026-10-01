@@ -374,7 +374,6 @@ export default function ConnectionsPage() {
   function resolveCredential(c: Connection): { cred: Credential; via: "direct" | "folder" } | null {
     const own = credentials.find(x => x.id === c.credentialId);
     if (own) return { cred: own, via: "direct" };
-    if (c.protocol === "web") return null; // web: own credential only, never a folder's
     const seen = new Set<number>();
     let folderId: number | null = c.folderId;
     while (folderId !== null && !seen.has(folderId)) {
@@ -420,15 +419,12 @@ export default function ConnectionsPage() {
         <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${PROTO_BADGE[c.protocol] ?? ""}`}>{c.protocol}</span>
         {isDsm(c) && <span className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded shrink-0 ${DSM_BADGE}`}>DSM</span>}
         <span className={`text-xs truncate max-w-[140px] hidden sm:block ${muted}`}>{c.host}{c.port ? `:${c.port}` : ""}</span>
-        {c.protocol === "web" ? (
-          resolved && <span className={`text-xs truncate max-w-[100px] hidden md:block ${muted}`}>{resolved.cred.name}</span>
-        ) : (
-          resolved
+        {resolved
             ? <span className={`text-xs truncate max-w-[100px] hidden md:block ${resolved.via === "folder" ? "text-muted-foreground/60 italic" : muted}`} title={resolved.via === "folder" ? `Inherited from folder` : undefined}>
                 {resolved.via === "folder" ? `↑ ${resolved.cred.name}` : resolved.cred.name}
               </span>
             : <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive shrink-0 hidden md:block">no cred</span>
-        )}
+        }
         {!editMode && (
           <div className="flex items-center gap-0.5 shrink-0 ml-1" onClick={e => e.stopPropagation()}>
             <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEditConn(c)}><Pencil className="h-3 w-3" /></Button>
@@ -693,13 +689,11 @@ export default function ConnectionsPage() {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                {connForm.protocol === "web"
-                  ? <Label>Sign-in credential <span className={muted}>(optional, signs in automatically)</span></Label>
-                  : <Label>Credential <span className={muted}>(overrides folder)</span></Label>}
+                <Label>Credential <span className={muted}>(overrides folder{connForm.protocol === "web" ? "; signs in automatically" : ""})</span></Label>
                 <Select value={connForm.credentialId || "none"} onValueChange={v => setConnForm(f => ({ ...f, credentialId: v === "none" ? "" : v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">{connForm.protocol === "web" ? "None" : "Inherit from folder"}</SelectItem>
+                    <SelectItem value="none">Inherit from folder</SelectItem>
                     {credentials.map(c => <SelectItem key={c.id} value={String(c.id)}>{c.name}{c.username ? ` (${c.username})` : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>
