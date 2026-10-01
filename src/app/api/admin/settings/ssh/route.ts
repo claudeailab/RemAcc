@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { setSetting } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
+import { getSshSettings } from "@/lib/protocol-settings";
 import { z } from "zod";
-
-export const SSH_SETTING_DEFAULTS = {
-  fontSize: 13,
-  fontFamily: "Cascadia Code, Fira Code, monospace",
-  scrollback: 5000,
-  keepaliveInterval: 25,
-  readyTimeout: 15,
-};
 
 const schema = z.object({
   fontSize: z.number().int().min(8).max(32),
@@ -22,9 +15,7 @@ const schema = z.object({
 
 export async function GET() {
   await requireAdmin();
-  const raw = await getSetting("ssh_settings");
-  const settings = raw ? { ...SSH_SETTING_DEFAULTS, ...JSON.parse(raw) } : SSH_SETTING_DEFAULTS;
-  return NextResponse.json(settings);
+  return NextResponse.json(await getSshSettings());
 }
 
 export async function POST(req: NextRequest) {

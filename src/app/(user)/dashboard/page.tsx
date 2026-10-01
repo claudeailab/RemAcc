@@ -45,18 +45,19 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
     const obs = new ResizeObserver(() => fitRef.current?.fit());
 
     async function start() {
-      const [[{ Terminal }, { FitAddon }], sshSettingsRes] = await Promise.all([
+      const [[{ Terminal }, { FitAddon }], settings] = await Promise.all([
         Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]),
-        fetch("/api/admin/settings/ssh").then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch("/api/connections/settings").then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (cancelled || !containerRef.current) return;
+      const ssh = settings?.ssh;
 
       const term = new Terminal({
         cursorBlink: true,
-        fontFamily: sshSettingsRes?.fontFamily ?? '"Cascadia Code", "Fira Code", monospace',
-        fontSize: sshSettingsRes?.fontSize ?? 13,
+        fontFamily: ssh?.fontFamily ?? '"Cascadia Code", "Fira Code", monospace',
+        fontSize: ssh?.fontSize ?? 13,
         lineHeight: 1.2,
-        scrollback: sshSettingsRes?.scrollback ?? 5000,
+        scrollback: ssh?.scrollback ?? 5000,
         allowTransparency: false,
         macOptionIsMeta: false,
         theme: { background: "#111111", foreground: "#e0e0e0", cursor: "#e0e0e0" },
@@ -71,12 +72,14 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       obs.observe(containerRef.current);
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}`);
+      const ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}?cols=${term.cols}&rows=${term.rows}`);
       wsRef.current = ws;
       ws.binaryType = "arraybuffer";
 
+      // Resizes before the socket opened were dropped; send the current size once it is open
       ws.onopen = () => {
         fit.fit();
+        ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
         term.focus();
       };
       ws.onmessage = e => {
@@ -214,9 +217,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const screenRef = useRef(screen);
   const rescaleRef = useRef<() => void>(() => {});
   const clientRef = useRef<any>(null);
-  const tunnelRef = useRef<any>(null);
-  // UltraVNC (DSM) sessions: the server announces that it can switch the remote's monitor
-  const [canSwitchMonitor, setCanSwitchMonitor] = useState(false);
 
   const isWeb = session.protocol === "web";
 
@@ -256,12 +256,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
       clientRef.current = client;
-      tunnelRef.current = tunnel;
-      const handleInstruction = tunnel.oninstruction;
-      tunnel.oninstruction = (opcode: string, params: string[]) => {
-        if (opcode === "remacc-monitor-switch") setCanSwitchMonitor(true);
-        else handleInstruction(opcode, params);
-      };
 
       const display = client.getDisplay();
       const displayEl: HTMLElement = display.getElement();
@@ -392,7 +386,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (client)   { try { client.disconnect(); } catch {} }
       client = null;
       clientRef.current = null;
-      tunnelRef.current = null;
     };
   }, [session.id, session.protocol]);
 
@@ -436,15 +429,6 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
           >
             Ctrl+Alt+Del
           </button>
-          {canSwitchMonitor && (
-            <button
-              type="button" title="Ask the remote computer for its next screen (primary, other screens, all screens)"
-              onClick={() => { try { tunnelRef.current?.sendMessage("remacc-monitor-switch"); } catch {} }}
-              className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
-            >
-              Switch screen
-            </button>
-          )}
           {screens > 1 && (
             <div className="flex overflow-hidden rounded-md border bg-background/90 text-xs font-medium shadow-sm backdrop-blur">
               {Array.from({ length: screens }, (_, i) => (

@@ -14,45 +14,31 @@ process.on('uncaughtException', e => { err(`UNCAUGHT: ${e.stack ?? e}`); process
 process.on('unhandledRejection', (r) => { err(`UNHANDLED REJECTION: ${r?.stack ?? r}`); });
 
 // ---------------------------------------------------------------------------
-// Protocol settings cache — fetched from API and applied to guacd connections
+// Protocol settings + session grace (global values), cached; read with the
+// connecting user's cookie because the route requires a signed-in user
 // ---------------------------------------------------------------------------
 let _protoSettings = null;
 let _protoLastFetch = 0;
 
-async function getProtoSettings() {
+async function getProtoSettings(req) {
   const now = Date.now();
   if (now - _protoLastFetch > 30000) {
     try {
-      const [rdpR, vncR, sshR] = await Promise.all([
-        fetch(`http://127.0.0.1:${port}/api/admin/settings/rdp`),
-        fetch(`http://127.0.0.1:${port}/api/admin/settings/vnc`),
-        fetch(`http://127.0.0.1:${port}/api/admin/settings/ssh`),
-      ]);
-      const [rdp, vnc, ssh] = await Promise.all([rdpR.json(), vncR.json(), sshR.json()]);
-      _protoSettings = { rdp, vnc, ssh };
-    } catch {}
-    _protoLastFetch = now;
+      const r = await fetch(`http://127.0.0.1:${port}/api/connections/settings`, {
+        headers: { cookie: req.headers.cookie ?? '' }, redirect: 'manual',
+      });
+      if (r.ok) { _protoSettings = await r.json(); _protoLastFetch = now; }
+      else err(`Protocol settings: API returned ${r.status}`);
+    } catch (e) { err(`Protocol settings: ${e.message}`); }
   }
   return _protoSettings;
 }
 
-// ---------------------------------------------------------------------------
-// Session grace period — keeps SSH/RDP/VNC alive after browser disconnect
-// ---------------------------------------------------------------------------
+// Keeps SSH/RDP/VNC alive after browser disconnect
 const pendingSessions = new Map(); // key: `ssh:id` | `rdp:id` | `vnc:id`
-let _cachedGrace = 0;
-let _graceLastFetch = 0;
 
-async function getSessionGrace() {
-  const now = Date.now();
-  if (now - _graceLastFetch > 30000) {
-    try {
-      const r = await fetch(`http://127.0.0.1:${port}/api/admin/settings/connections`);
-      if (r.ok) _cachedGrace = (await r.json()).sessionGrace ?? 0;
-    } catch {}
-    _graceLastFetch = now;
-  }
-  return _cachedGrace;
+async function getSessionGrace(req) {
+  return (await getProtoSettings(req))?.sessionGrace ?? 0;
 }
 
 function storePendingSession(key, grace, sessionData, cleanupFn) {
@@ -293,7 +279,54 @@ async function dsmMonitorCount(connId, session) {
 async function switchDsmMonitor(connId, session) {
   const { code } = await uvncHelper(session, 'switch');
   if (code !== 0) err(`DSM id=${connId}: monitor switch helper exited ${code}`);
-  else log(`DSM id=${connId}: monitor switch requested`);
+  return code === 0;
+}
+
+// Wider than 1.85:1 is what the browser counts as several monitors (monitorCount in the dashboard)
+const isWide = win => win.w / win.h > 1.85;
+
+// UltraVNC starts on the primary monitor and can only step to the next one (primary -> other
+// monitors -> all screens). Step until the remote sends all screens side by side; the browser then
+// picks a screen locally. Equal monitors keep the size when stepping between them, so an unchanged
+// size is not a failed step. -> true when all screens are shown
+async function showAllDsmMonitors(connId, session, count, waitMs = 8000) {
+  const sizeOf = win => `${win.w}x${win.h}`;
+  let win = await findViewerWindow(session.display, 640, 400).catch(() => null);
+  if (!win) return false;
+  if (isWide(win)) return true;
+  for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped; step++) {
+    if (!await switchDsmMonitor(connId, session)) return false;
+    const before = sizeOf(win);
+    for (const start = Date.now(); Date.now() - start < waitMs && !session.stopped; await sleep(500)) {
+      const next = await findViewerWindow(session.display, 640, 400).catch(() => null);
+      if (next && sizeOf(next) !== before) { win = next; break; }
+    }
+    if (isWide(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
+  }
+  log(`DSM id=${connId}: remote never sent a side-by-side view (now ${sizeOf(win)})`);
+  return false;
+}
+
+// UltraVNC falls back to the primary monitor whenever it rebuilds its desktop (right after
+// connecting, lock/unlock, UAC, Ctrl+Alt+Del). Wait for the remote to settle, then step back to
+// all screens. Gives up on a remote without a side-by-side view, or one that falls back 3 times
+// within a minute (stepping would only make it flicker).
+async function keepAllDsmMonitors(connId, session) {
+  if (!session.wantAll || session.stepping || session.stopped) return;
+  const now = Date.now();
+  session.allTries = (session.allTries ?? []).filter(t => now - t < 60000);
+  if (session.allTries.length >= 3) {
+    session.wantAll = false;
+    log(`DSM id=${connId}: remote keeps returning to one screen; no longer switching`);
+    return;
+  }
+  session.allTries.push(now);
+  session.stepping = true;
+  try {
+    await sleep(3000);
+    if (session.stopped) return;
+    if (!await showAllDsmMonitors(connId, session, session.monitorCount)) session.wantAll = false;
+  } finally { session.stepping = false; }
 }
 
 // Keep the relay on the viewer window for the whole session: its size changes when the remote
@@ -313,6 +346,7 @@ function followViewerWindow(connId, session) {
           spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
           log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
         }
+        if (!isWide(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
       }
       prev = win;
     } finally { busy = false; }
@@ -669,38 +703,6 @@ async function startWebBrowser(connId, url, username, password, width, height) {
 async function handleGuac(wsConn, req, id, protocol) {
   log(`WS ${protocol.toUpperCase()} connection id=${id}`);
 
-  // Resume pending session if one exists
-  const key = `${protocol}:${id}`;
-  const pending = pendingSessions.get(key);
-  if (pending && Date.now() < pending.expires) {
-    pendingSessions.delete(key);
-    log(`WS ${protocol} id=${id}: resuming parked session`);
-    const { tcp, params } = pending;
-    let currentWs = wsConn;
-    // Re-attach TCP → WS relay
-    tcp.removeAllListeners('data');
-    let streaming = true;
-    tcp.on('data', chunk => { if (currentWs.readyState === 1) currentWs.send(chunk.toString()); });
-    tcp.on('close', () => { try { currentWs.close(); } catch {} });
-    wsConn.on('message', data => {
-      if (!streaming) return;
-      const str = data.toString();
-      try { const p = guacParse(str); if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return; } catch {}
-      tcp.write(str);
-    });
-    wsConn.on('close', async () => {
-      const grace = await getSessionGrace();
-      if (grace > 0 && !tcp.destroyed) {
-        tcp.removeAllListeners('data');
-        tcp.on('data', () => {}); // drain silently
-        storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
-      } else {
-        try { tcp.destroy(); } catch {}
-      }
-    });
-    return;
-  }
-
   let details;
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
@@ -725,9 +727,41 @@ async function handleGuac(wsConn, req, id, protocol) {
     wsConn.close(1008);
     return;
   }
+  // Resume this user's parked session, only after the connect API authorised them
+  const key = `${protocol}:${id}:${details.user}`;
+  const pending = pendingSessions.get(key);
+  if (pending && Date.now() < pending.expires) {
+    pendingSessions.delete(key);
+    log(`WS ${protocol} id=${id}: resuming parked session`);
+    const { tcp, params } = pending;
+    let currentWs = wsConn;
+    // Re-attach TCP → WS relay
+    tcp.removeAllListeners('data');
+    let streaming = true;
+    tcp.on('data', chunk => { if (currentWs.readyState === 1) currentWs.send(chunk.toString()); });
+    tcp.on('close', () => { try { currentWs.close(); } catch {} });
+    wsConn.on('message', data => {
+      if (!streaming) return;
+      const str = data.toString();
+      try { const p = guacParse(str); if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return; } catch {}
+      tcp.write(str);
+    });
+    wsConn.on('close', async () => {
+      const grace = await getSessionGrace(req);
+      if (grace > 0 && !tcp.destroyed) {
+        tcp.removeAllListeners('data');
+        tcp.on('data', () => {}); // drain silently
+        storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
+      } else {
+        try { tcp.destroy(); } catch {}
+      }
+    });
+    return;
+  }
+
   log(`WS ${protocol} id=${id}: user=${details.user} target=${protocol === 'web' ? details.host : `${details.host}:${details.port}`}`);
 
-  const proto = await getProtoSettings();
+  const proto = await getProtoSettings(req);
   let base;
   if (protocol === 'rdp') {
     const s = proto?.rdp ?? {};
@@ -867,9 +901,9 @@ async function handleGuac(wsConn, req, id, protocol) {
         if (wsConn.readyState === 1) wsConn.send(instr);
         if (dsm) dsmMonitorCount(id, dsm).then(n => {
           if (n !== null) log(`DSM id=${id}: ${n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
-          // Unknown count (older UltraVNC server): offer the button rather than hide a working feature
-          if ((n === 0 || n > 1) && wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitor-switch']));
-        });
+          // Unknown count (older UltraVNC server): still try, rather than hide the other screens
+          if (n === 0 || n > 1) { dsm.monitorCount = n; dsm.wantAll = true; return keepAllDsmMonitors(id, dsm); }
+        }).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`));
       } else if (streaming) {
         if (opcode === 'sync') diag?.frameSent(parts[1]);
         else if (opcode === 'img') diag?.imageSent();
@@ -889,7 +923,6 @@ async function handleGuac(wsConn, req, id, protocol) {
     try {
       const p = guacParse(str);
       if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
-      if (p[0] === 'remacc-monitor-switch') { log(`DSM id=${id}: Switch screen pressed`); if (dsm) switchDsmMonitor(id, dsm).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`)); return; }
       if (p[0] === 'sync') diag?.frameAcked(p[1]);
       else diag?.input(p);
     } catch {}
@@ -897,7 +930,7 @@ async function handleGuac(wsConn, req, id, protocol) {
   });
   wsConn.on('close', async () => {
     if (!streaming) { try { tcp.destroy(); } catch {} return; }
-    const grace = await getSessionGrace();
+    const grace = await getSessionGrace(req);
     if (grace > 0 && !tcp.destroyed && !dsm && !web) {
       tcp.removeAllListeners('data');
       tcp.on('data', () => {}); // drain silently while parked
@@ -916,36 +949,25 @@ async function handleGuac(wsConn, req, id, protocol) {
 // ---------------------------------------------------------------------------
 // SSH WebSocket proxy
 // ---------------------------------------------------------------------------
+// Browser terminal size at connect, so the remote shell starts at the right size
+function termSize(req) {
+  const q = new URL(req.url ?? '/', 'http://x').searchParams;
+  const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || d));
+  return { cols: clamp(q.get('cols'), 20, 1000, 80), rows: clamp(q.get('rows'), 5, 500, 24) };
+}
+
 async function handleSSH(wsConn, req, id) {
   log(`WS SSH connection id=${id}`);
 
-  // Resume pending session if one exists
-  const key = `ssh:${id}`;
-  const pending = pendingSessions.get(key);
-  if (pending && Date.now() < pending.expires) {
-    pendingSessions.delete(key);
-    log(`WS SSH id=${id}: resuming parked session`);
-    const session = pending.session;
-    session.attach(wsConn);
-    wsConn.send('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
-    wsConn.on('message', raw => {
-      try {
-        const msg = JSON.parse(raw.toString());
-        if (msg.type === 'data') session.write(msg.data);
-        else if (msg.type === 'resize') session.resize(msg.rows, msg.cols);
-      } catch {}
-    });
-    wsConn.on('close', async () => {
-      session.detach();
-      const grace = await getSessionGrace();
-      if (grace > 0) {
-        storePendingSession(key, grace, { session }, s => s.session.destroy());
-      } else {
-        session.destroy();
-      }
-    });
-    return;
-  }
+  // The browser may resize before the shell exists; keep its latest size
+  const size = termSize(req);
+  const earlyResize = raw => {
+    try {
+      const msg = JSON.parse(raw.toString());
+      if (msg.type === 'resize' && msg.cols > 0 && msg.rows > 0) { size.cols = msg.cols; size.rows = msg.rows; }
+    } catch {}
+  };
+  wsConn.on('message', earlyResize);
 
   try {
     const { Client: SSHClient } = require('ssh2');
@@ -959,6 +981,37 @@ async function handleSSH(wsConn, req, id) {
       return;
     }
     const details = await res.json();
+
+    // Resume this user's parked session, only after the connect API authorised them
+    const key = `ssh:${id}:${details.user}`;
+    const pending = pendingSessions.get(key);
+    if (pending && Date.now() < pending.expires) {
+      pendingSessions.delete(key);
+      wsConn.off('message', earlyResize);
+      log(`WS SSH id=${id}: resuming parked session`);
+      const session = pending.session;
+      session.resize(size.rows, size.cols);
+      session.attach(wsConn);
+      wsConn.send('\r\n\x1b[2m[reconnected]\x1b[0m\r\n');
+      wsConn.on('message', raw => {
+        try {
+          const msg = JSON.parse(raw.toString());
+          if (msg.type === 'data') session.write(msg.data);
+          else if (msg.type === 'resize') session.resize(msg.rows, msg.cols);
+        } catch {}
+      });
+      wsConn.on('close', async () => {
+        session.detach();
+        const grace = await getSessionGrace(req);
+        if (grace > 0) {
+          storePendingSession(key, grace, { session }, s => s.session.destroy());
+        } else {
+          session.destroy();
+        }
+      });
+      return;
+    }
+
     if (!details.credential) {
       wsConn.send('\r\n\x1b[31mNo credentials configured for this connection\x1b[0m\r\n');
       wsConn.close(1008);
@@ -968,7 +1021,8 @@ async function handleSSH(wsConn, req, id) {
     const ssh = new SSHClient();
     ssh.on('ready', () => {
       log(`WS SSH id=${id}: SSH ready`);
-      ssh.shell({ term: 'xterm-256color', cols: 80, rows: 24 }, (e, stream) => {
+      ssh.shell({ term: 'xterm-256color', cols: size.cols, rows: size.rows }, (e, stream) => {
+        wsConn.off('message', earlyResize);
         if (e) { err(`WS SSH id=${id}: shell error: ${e.message}`); wsConn.close(1011); return; }
         const session = new SshSession(ssh, stream);
         session.attach(wsConn);
@@ -981,7 +1035,7 @@ async function handleSSH(wsConn, req, id) {
         });
         wsConn.on('close', async () => {
           session.detach();
-          const grace = await getSessionGrace();
+          const grace = await getSessionGrace(req);
           if (grace > 0) {
             storePendingSession(key, grace, { session }, s => s.session.destroy());
           } else {
@@ -995,7 +1049,7 @@ async function handleSSH(wsConn, req, id) {
       if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mSSH error: ${e.message}\x1b[0m\r\n`);
       try { wsConn.close(1011); } catch {}
     });
-    const sshProto = (await getProtoSettings())?.ssh ?? {};
+    const sshProto = (await getProtoSettings(req))?.ssh ?? {};
     ssh.connect({
       host: details.host, port: details.port,
       username: details.credential.username, password: details.credential.password,

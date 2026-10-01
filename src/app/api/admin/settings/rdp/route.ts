@@ -1,21 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { setSetting } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
+import { getRdpSettings } from "@/lib/protocol-settings";
 import { z } from "zod";
-
-export const RDP_SETTING_DEFAULTS = {
-  security: "nla" as const,
-  width: 1280,
-  height: 800,
-  colorDepth: "32" as const,
-  ignoreCert: true,
-  enableWallpaper: false,
-  enableFontSmoothing: true,
-  enableTheming: false,
-  normalizeClipboard: true,
-  resizeMethod: "display-update" as const,
-};
 
 const schema = z.object({
   security: z.enum(["nla", "any", "rdp", "tls"]),
@@ -32,9 +20,7 @@ const schema = z.object({
 
 export async function GET() {
   await requireAdmin();
-  const raw = await getSetting("rdp_settings");
-  const settings = raw ? { ...RDP_SETTING_DEFAULTS, ...JSON.parse(raw) } : RDP_SETTING_DEFAULTS;
-  return NextResponse.json(settings);
+  return NextResponse.json(await getRdpSettings());
 }
 
 export async function POST(req: NextRequest) {

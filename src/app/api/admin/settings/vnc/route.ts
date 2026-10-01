@@ -1,16 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { setSetting } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
+import { getVncSettings } from "@/lib/protocol-settings";
 import { z } from "zod";
-
-export const VNC_SETTING_DEFAULTS = {
-  colorDepth: "32" as const,
-  encoding: "tight" as const,
-  readOnly: false,
-  swapRedBlue: false,
-  cursor: "remote" as const,
-};
 
 const schema = z.object({
   colorDepth: z.enum(["8", "16", "24", "32"]),
@@ -22,9 +15,7 @@ const schema = z.object({
 
 export async function GET() {
   await requireAdmin();
-  const raw = await getSetting("vnc_settings");
-  const settings = raw ? { ...VNC_SETTING_DEFAULTS, ...JSON.parse(raw) } : VNC_SETTING_DEFAULTS;
-  return NextResponse.json(settings);
+  return NextResponse.json(await getVncSettings());
 }
 
 export async function POST(req: NextRequest) {

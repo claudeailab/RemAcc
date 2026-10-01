@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/auth";
-import { getSetting, setSetting } from "@/lib/encryption";
+import { setSetting } from "@/lib/encryption";
 import { logAudit } from "@/lib/audit";
+import { getSessionGrace } from "@/lib/protocol-settings";
 import { z } from "zod";
 
 export async function GET() {
   await requireAdmin();
-  const raw = await getSetting("connection_session_grace");
-  const sessionGrace = raw ? parseInt(raw, 10) : 0;
-  return NextResponse.json({ sessionGrace: isNaN(sessionGrace) ? 0 : sessionGrace });
+  return NextResponse.json({ sessionGrace: await getSessionGrace() });
 }
 
 const schema = z.object({
