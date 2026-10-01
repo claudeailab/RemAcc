@@ -355,7 +355,7 @@ export default function UsersPage() {
                 {filteredAzure.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">No users match your filter.</p>
                 ) : (
-                  <div className="max-h-72 overflow-y-auto space-y-1 border rounded-lg p-2">
+                  <div className="max-h-72 overflow-y-auto overflow-x-hidden space-y-1 border rounded-lg p-2">
                     <div className="flex justify-between text-xs text-muted-foreground px-1 pb-1">
                       <span>{filteredAzure.length} user{filteredAzure.length !== 1 ? "s" : ""}</span>
                       <div className="flex gap-3">
@@ -370,7 +370,7 @@ export default function UsersPage() {
                       </div>
                     </div>
                     {filteredAzure.map(u => (
-                      <label key={u.oid} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/50 cursor-pointer">
+                      <label key={u.oid} className="flex items-center gap-2.5 p-2 rounded-lg hover:bg-muted/50 cursor-pointer min-w-0 w-full">
                         <input
                           type="checkbox"
                           checked={azureSelected.has(u.oid)}
