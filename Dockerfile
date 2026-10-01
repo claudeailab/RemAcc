@@ -51,6 +51,14 @@ RUN printf '%s\n' \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=browser /src/remacc-browser /usr/local/bin/remacc-browser
 
+# Wine prefix for DSM viewers, built once here instead of on the first connection after every
+# container start (~30 s). Without it (e.g. Wine cannot run on this architecture) server.js
+# falls back to creating the prefix at startup.
+COPY tools/wine-prefix-template.sh /tmp/
+RUN sh /tmp/wine-prefix-template.sh /opt/uvnc-wine-template \
+      || { rm -rf /opt/uvnc-wine-template; echo "Wine prefix template skipped"; }; \
+    rm -f /tmp/wine-prefix-template.sh
+
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
 
 # Pre-built output uploaded by the build-app CI job
