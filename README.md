@@ -1,63 +1,69 @@
-# Platform
+# RemAcc
 
-A production-ready Next.js SaaS foundation with admin panel, multi-provider auth, user management, AI integrations, payments, M365 SSO, SMTP, and PWA support. Built to deploy and extend.
+A self-hosted remote access platform. Connect to RDP, VNC, SSH, and internal web services from any browser — no client software, no VPN.
 
 ## Features
 
-### Auth & Users
-- Local email/password auth (bcrypt, session tokens)
-- Azure AD / Microsoft 365 SSO (MSAL + Microsoft Graph)
-- Permission groups with granular access control
-- Auto-seeds first admin from environment variables
-- In-memory rate limiting on login
+### Remote Access Protocols
+- **RDP** — Remote Desktop sessions streamed to the browser via Apache Guacamole (FreeRDP). Supports NLA, clipboard, multi-monitor, wallpaper/font-smoothing settings.
+- **VNC** — VNC sessions via guacd. Plain VNC or UltraVNC DSM-encrypted (plugin + viewer run server-side under Wine for full end-to-end encryption).
+- **SSH** — Full xterm.js terminal over WebSocket. PuTTY-style right-click paste, 5000-line scrollback, keepalive pings.
+- **Web** — Opens internal web services in a lightweight in-app browser (WebKitGTK, ~26 KB binary). Works outside the office network — the browser runs on the RemAcc server, inside the company network, and streams to the user like any other session.
+
+### Auto Sign-in
+- Credentials can be assigned per connection or inherited from a parent folder.
+- HTTP Basic/Digest/NTLM challenges are answered automatically on the configured host.
+- Login forms are detected, filled, and submitted — in an isolated script world the page cannot read.
+- Max 2 automatic submits per session to prevent lockout on wrong passwords.
+
+### Folder Hierarchy
+- Connections are organized in a collapsible, nestable folder tree.
+- Credentials, and future per-folder settings, cascade down to all connections in a folder unless overridden at the connection level.
+- Folders and connections can be drag-and-drop reordered and reparented.
+
+### Multi-session Dashboard
+- Open multiple connections simultaneously as tabs.
+- Tabs persist across page refreshes.
+- Resizable sidebar collapses to a menu button on mobile.
+- Live search by connection name or hostname.
+- Active session indicator (green dot) per connection.
+
+### Multi-monitor Support
+- Automatically detects side-by-side monitor layout from aspect ratio.
+- Screen switcher (1 / 2 / All) overlays the session toolbar when multiple monitors are detected.
+
+### Session Grace Period
+- Configurable reconnect window (0–300 s). If a browser disconnects and reconnects within that window, the session resumes without re-authenticating or restarting the remote session.
+- SSH sessions buffer up to 64 KB of output during the grace window so no terminal output is lost.
+
+### Credential Store
+- Named credentials with username, password, optional Windows domain, and notes.
+- Passwords stored AES-256-GCM encrypted; never pre-loaded in forms — revealed only on demand.
+
+### Bulk Import / Export
+- Import connections from an `.xlsx` spreadsheet (RDP, VNC, SSH, Web, UltraVNC).
+- Export all connections as `.xlsx` (name, type, host, folder path, notes).
+
+### User Management
+- Local email/password accounts (bcrypt).
+- Azure AD / Microsoft 365 SSO via MSAL + Microsoft Graph OAuth2.
+- Azure AD directory browser: pick individual users or bulk-sync the entire directory.
+- Permission groups with JSON-array granular permission lists.
 
 ### Admin Panel
-- Sidebar navigation with feature-flag gating
-- User management: create, edit, delete, assign groups
-- Azure AD directory browser + bulk sync
-- Permission group editor with JSON-array permissions
-- Audit log with paginated history (every login, create, update, delete)
-- Full platform branding: name, title, icon (Iconify), primary color (live preview)
-- Light / dark / system theme switcher
-
-### AI
-- Anthropic (Claude) API key + model configuration
-- OpenAI API key + model configuration
-- Connection test from admin UI
-
-### Payments
-- Stripe: secret key, public key, webhook secret, subscription plan editor
-- PayPal: client ID + secret, sandbox/live toggle
-- Viva Wallet: merchant ID + API key
-- All tested directly from admin UI
-
-### Email (SMTP)
-- Host, port, user, password, from address
-- Test email from admin UI
-
-### M365 / Azure AD
-- Client ID, client secret, tenant ID + secret expiry tracking
-- Full user sync (bulk upsert from Azure directory)
-- Connection test from admin UI
-
-### Subscriptions & Plans
-- Plan editor: name, monthly/yearly price, feature list
-- Stripe price ID linkage per plan (monthly + yearly)
-- Active/inactive toggle
+- Full CRUD for connections, folders, credentials, users, and groups.
+- Audit log: every login, create, update, and delete with user, IP, timestamp, and structured diff.
+- Protocol settings: per-protocol defaults for RDP, VNC, SSH, and UltraVNC DSM file uploads.
+- Platform branding: name, page title, icon (Iconify picker), primary color (live preview), light/dark/system theme.
+- SMTP email, Stripe/PayPal/Viva Wallet payments, Anthropic/OpenAI AI keys — all testable directly from the admin UI.
+- PWA push notifications with per-device management.
 
 ### Security
-- AES-256-GCM encryption for all settings stored in database
-- Zod input validation on all API routes
-- Drizzle query builder only (no raw SQL concatenation)
-- HTTP security headers: `X-Frame-Options`, `X-Content-Type-Options`, `CSP`, `Referrer-Policy`, `Permissions-Policy`
-- No `NEXT_PUBLIC_*` env vars — all secrets server-side only
-- Container runs as non-root user
-
-### Infrastructure
-- PWA: service worker + dynamic manifest
-- Startup health checks with ASCII status table
-- Multi-arch Docker image (amd64 + arm64)
-- Database auto-migration on startup (no manual step)
+- AES-256-GCM encryption for all secrets stored in the database.
+- Zod input validation on all API routes; Drizzle ORM only (no raw SQL).
+- HTTP security headers: `X-Frame-Options`, `X-Content-Type-Options`, CSP, `Referrer-Policy`, `Permissions-Policy`.
+- No `NEXT_PUBLIC_*` env vars — all secrets server-side only.
+- Container runs as non-root.
 
 ---
 
