@@ -142,17 +142,17 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 
   return (
     <div
-      className="absolute inset-0"
+      className="absolute inset-0 flex flex-col overflow-hidden"
       style={{
         opacity: active ? 1 : 0,
         pointerEvents: active ? "auto" : "none",
         background: "#111111",
       }}
     >
-      {/* padding:8px gives a small gutter; box-sizing keeps the terminal from overflowing */}
       <div
         ref={containerRef}
-        style={{ width: "100%", height: "100%", padding: "8px", boxSizing: "border-box" }}
+        className="flex-1 min-h-0 w-full"
+        style={{ padding: "8px", boxSizing: "border-box" }}
       />
     </div>
   );
