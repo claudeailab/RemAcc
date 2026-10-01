@@ -26,10 +26,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const [conn] = await db.select().from(connections).where(eq(connections.id, id)).limit(1);
   if (!conn) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Resolve credential: connection's own, then each folder ancestor; IDs of deleted credentials are skipped
+  // Resolve credential: connection's own, then each folder ancestor; IDs of deleted credentials are skipped.
+  // Web connections use only their own (a folder's Windows credentials must never be typed into a website).
   const candidates: number[] = [];
   if (conn.credentialId) candidates.push(conn.credentialId);
-  if (conn.folderId) {
+  if (conn.folderId && conn.protocol !== "web") {
     const allFolders = await db.select({ id: folders.id, parentId: folders.parentId, credentialId: folders.credentialId }).from(folders);
     const seen = new Set<number>();
     let folderId: number | null = conn.folderId;

@@ -180,15 +180,15 @@ const UVNC_DIR = '/tmp/uvnc';
 const WINE_PREFIX = '/tmp/uvnc-wine';
 // Room for multi-monitor remotes at 1:1; x11vnc exports only the viewer window's rectangle
 const SCREEN_W = 7680, SCREEN_H = 2160;
-const dsmDisplays = new Set();  // X displays owned by running or starting DSM proxies
+const xDisplays = new Set();    // X displays owned by running or starting DSM relays and web browsers
 const dsmByConn = new Map();    // connId -> session; one relay per connection, latest wins
 
 // Displays 50-149 belong to this process, so lock/socket files of a display not in
-// dsmDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
+// xDisplays are leftovers of a killed Xvfb. Reserved synchronously: no allocation race.
 function allocDisplay() {
   for (let d = 50; d < 150; d++) {
-    if (dsmDisplays.has(d)) continue;
-    dsmDisplays.add(d);
+    if (xDisplays.has(d)) continue;
+    xDisplays.add(d);
     removeDisplayFiles(d);
     return d;
   }
@@ -345,7 +345,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     for (const proc of procs) { try { proc.kill('SIGKILL'); } catch {} }
     fs.rmSync(path.join(UVNC_DIR, exeName), { force: true });
     removeDisplayFiles(display);
-    dsmDisplays.delete(display);
+    xDisplays.delete(display);
     if (dsmByConn.get(connId) === session) dsmByConn.delete(connId);
     session.onStop?.();
     log(`DSM proxy id=${connId}: display=:${display} stopped`);
@@ -586,7 +586,85 @@ function startDsmDiag(connId, session) {
 }
 
 // ---------------------------------------------------------------------------
-// Guacamole WebSocket relay (RDP + VNC via guacd)
+// Web connections: a minimal WebKitGTK browser (tools/remacc-browser.c) on its own Xvfb
+// display inside the company network, streamed through x11vnc + guacd like VNC
+// ---------------------------------------------------------------------------
+const BROWSER = '/usr/local/bin/remacc-browser';
+
+function webUrl(host) {
+  return /^https?:\/\//i.test(host) ? host : `http://${host}`;
+}
+
+// Browser size = the RemAcc panel size, so pages render 1:1
+function webSize(req) {
+  const q = new URL(req.url ?? '/', 'http://x').searchParams;
+  const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || d));
+  return { width: clamp(q.get('w'), 640, 3840, 1280), height: clamp(q.get('h'), 480, 2160, 800) };
+}
+
+async function startWebBrowser(connId, url, username, password, width, height) {
+  const fs = require('fs');
+  const display = allocDisplay();
+  const home = `/tmp/remacc-web-${display}`;
+  const procs = [];
+  const session = { display, port: 0, stopped: false };
+  session.stop = () => {
+    if (session.stopped) return;
+    session.stopped = true;
+    // Own process groups: WebKit's network/web processes die with the browser
+    for (const p of procs) { try { process.kill(-p.pid, 'SIGKILL'); } catch {} }
+    fs.rmSync(home, { recursive: true, force: true });
+    removeDisplayFiles(display);
+    xDisplays.delete(display);
+    session.onStop?.();
+    log(`WEB id=${connId}: display=:${display} stopped`);
+  };
+  const run = (cmd, args, opts = {}) => {
+    const p = spawn(cmd, args, { stdio: 'ignore', detached: true, ...opts });
+    procs.push(p);
+    p.on('error', e => err(`WEB id=${connId}: ${cmd} error: ${e.message}`));
+    return p;
+  };
+
+  try {
+    session.port = await findFreePort();
+    run('Xvfb', [`:${display}`, '-screen', '0', `${width}x${height}x24`, '-nolisten', 'tcp']);
+    await waitForX(display);
+
+    fs.rmSync(home, { recursive: true, force: true });
+    fs.mkdirSync(home, { recursive: true });
+    // Minimal env: the browser never sees RemAcc's secrets; credentials go through stdin only
+    const browser = run(BROWSER, [], {
+      stdio: ['pipe', 'ignore', 'ignore'],
+      env: {
+        DISPLAY: `:${display}`, HOME: home, PATH: '/usr/bin:/bin', LANG: 'C.UTF-8',
+        NO_AT_BRIDGE: '1', GSETTINGS_BACKEND: 'memory', DBUS_SESSION_BUS_ADDRESS: 'disabled:',
+        // No GPU in the container: CPU rendering into shared memory (lowest memory use)
+        WEBKIT_SKIA_ENABLE_CPU_RENDERING: '1', WEBKIT_DISABLE_DMABUF_RENDERER: '1',
+      },
+    });
+    browser.stdin.on('error', () => {});
+    browser.stdin.end(`${url}\0${username}\0${password}\0`);
+    browser.on('exit', code => { if (!session.stopped) { log(`WEB id=${connId}: browser exited (${code})`); session.stop(); } });
+
+    run('x11vnc', [
+      '-display', `:${display}`, '-rfbport', String(session.port),
+      '-nopw', '-forever', '-shared', '-quiet', '-localhost',
+      '-wait', '1', '-defer', '1',
+      '-noprimary', // only explicit copies (Ctrl+C) reach the user's clipboard, not every selection
+    ]);
+    await waitForPort(session.port);
+    if (session.stopped) throw new Error('browser exited during startup');
+    log(`WEB id=${connId}: display=:${display} port=${session.port} ${width}x${height} ${url}${username ? ' (auto sign-in)' : ''}`);
+  } catch (e) {
+    session.stop();
+    throw e;
+  }
+  return session;
+}
+
+// ---------------------------------------------------------------------------
+// Guacamole WebSocket relay (RDP, VNC and web via guacd)
 // ---------------------------------------------------------------------------
 async function handleGuac(wsConn, req, id, protocol) {
   log(`WS ${protocol.toUpperCase()} connection id=${id}`);
@@ -641,7 +719,13 @@ async function handleGuac(wsConn, req, id, protocol) {
     wsConn.close(1011);
     return;
   }
-  log(`WS ${protocol} id=${id}: user=${details.user} target=${details.host}:${details.port}`);
+  if ((protocol === 'web') !== (details.protocol === 'web')) {
+    err(`WS ${protocol} id=${id}: connection protocol is ${details.protocol}`);
+    wsConn.send(guacEncode(['error', 'Wrong connection type', '768']));
+    wsConn.close(1008);
+    return;
+  }
+  log(`WS ${protocol} id=${id}: user=${details.user} target=${protocol === 'web' ? details.host : `${details.host}:${details.port}`}`);
 
   const proto = await getProtoSettings();
   let base;
@@ -660,6 +744,9 @@ async function handleGuac(wsConn, req, id, protocol) {
       'normalize-clipboard': (s.normalizeClipboard ?? true) ? 'true' : 'false',
       'resize-method': s.resizeMethod ?? 'display-update',
     };
+  } else if (protocol === 'web') {
+    // cursor 'local': x11vnc sends the browser's cursor shapes (pointer, hand, text)
+    base = { ...VNC_DEFAULTS, 'color-depth': '24', cursor: 'local' };
   } else {
     const s = proto?.vnc ?? {};
     base = {
@@ -696,15 +783,36 @@ async function handleGuac(wsConn, req, id, protocol) {
     base.cursor = 'local'; // the relay paints no cursor; 'remote' would add guacd's position dot
     log(`WS VNC id=${id}: using DSM proxy on 127.0.0.1:${dsm.port}`);
   }
+  let web = null;
+  if (protocol === 'web') {
+    if (wsConn.readyState !== 1) return;
+    const { width, height } = webSize(req);
+    try {
+      web = await startWebBrowser(id, webUrl(details.host), details.credential?.username ?? '', details.credential?.password ?? '', width, height);
+    } catch (e) {
+      err(`WS WEB id=${id}: browser failed: ${e.message}`);
+      if (wsConn.readyState === 1) wsConn.send(guacEncode(['error', 'Browser error: ' + e.message, '514']));
+      try { wsConn.close(1011); } catch {}
+      return;
+    }
+    if (wsConn.readyState !== 1) { web.stop(); return; }
+    wsConn.once('close', web.stop);
+    web.onStop = () => { try { wsConn.close(); } catch {} };
+    guacHost = '127.0.0.1';
+    guacPort = String(web.port);
+    base.width = String(width);
+    base.height = String(height);
+  }
 
   const shadow = details.options?.shadow ?? {};
   const params = {
     ...base,
     hostname: guacHost,
     port: guacPort,
-    username: details.credential?.username ?? '',
-    password: details.credential?.password ?? '',
-    ...(details.credential?.domain ? { domain: details.credential.domain } : {}),
+    // Web credentials go to the browser (auto sign-in), never to guacd/x11vnc
+    username: web ? '' : details.credential?.username ?? '',
+    password: web ? '' : details.credential?.password ?? '',
+    ...(details.credential?.domain && !web ? { domain: details.credential.domain } : {}),
     // RDP shadow options (passed through to guacd/FreeRDP if supported)
     ...(shadow.sessionId > 0 ? {
       'shadow': String(shadow.sessionId),
@@ -791,7 +899,7 @@ async function handleGuac(wsConn, req, id, protocol) {
   wsConn.on('close', async () => {
     if (!streaming) { try { tcp.destroy(); } catch {} return; }
     const grace = await getSessionGrace();
-    if (grace > 0 && !tcp.destroyed && !dsm) {
+    if (grace > 0 && !tcp.destroyed && !dsm && !web) {
       tcp.removeAllListeners('data');
       tcp.on('data', () => {}); // drain silently while parked
       storePendingSession(key, grace, { tcp, params }, s => { try { s.tcp.destroy(); } catch {} });
@@ -802,7 +910,7 @@ async function handleGuac(wsConn, req, id, protocol) {
 
   tcp.connect(4822, '127.0.0.1', () => {
     log(`WS ${protocol} id=${id}: connected to guacd`);
-    tcp.write(guacEncode(['select', protocol]));
+    tcp.write(guacEncode(['select', web ? 'vnc' : protocol]));
   });
 }
 
@@ -1017,9 +1125,11 @@ async function main() {
     const mSsh = path.match(/^\/ws\/ssh\/(\d+)$/);
     const mRdp = path.match(/^\/ws\/rdp\/(\d+)$/);
     const mVnc = path.match(/^\/ws\/vnc\/(\d+)$/);
+    const mWeb = path.match(/^\/ws\/web\/(\d+)$/);
     if (mSsh) wss.handleUpgrade(req, socket, head, ws => handleSSH(ws, req, parseInt(mSsh[1], 10)));
     else if (mRdp) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mRdp[1], 10), 'rdp'));
     else if (mVnc) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mVnc[1], 10), 'vnc'));
+    else if (mWeb) wss.handleUpgrade(req, socket, head, ws => handleGuac(ws, req, parseInt(mWeb[1], 10), 'web'));
     else { log(`WS upgrade rejected: ${url}`); socket.destroy(); }
   });
 

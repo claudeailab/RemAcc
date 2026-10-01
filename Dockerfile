@@ -6,6 +6,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc-mingw-w64-x
 COPY tools/uvnc-switch.c /src/
 RUN x86_64-w64-mingw32-gcc -municode -O2 -s -Wall -o /src/uvnc-switch.exe /src/uvnc-switch.c
 
+# Web-connection browser (tools/remacc-browser.c): a ~26 KB launcher on WebKitGTK
+FROM ubuntu:24.04 AS browser
+RUN apt-get update && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libwebkit2gtk-4.1-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY tools/remacc-browser.c /src/
+RUN gcc -O2 -s -Wall -Wextra -Wno-unused-parameter -o /src/remacc-browser /src/remacc-browser.c \
+      $(pkg-config --cflags --libs webkit2gtk-4.1)
+
 # Next.js is pre-built on the CI runner; this image just packages the output.
 FROM ubuntu:24.04 AS runner
 WORKDIR /app
@@ -30,6 +38,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
        x11-utils \
        iproute2 \
     && rm -rf /var/lib/apt/lists/*
+
+# WebKitGTK runtime for web connections, without the icon themes, docs and translations a
+# bare browser window never shows; dbus-x11 stands in for the systemd session bus dependency
+RUN printf '%s\n' \
+      'path-exclude=/usr/share/icons/Humanity*' 'path-exclude=/usr/share/icons/ubuntu-mono*' \
+      'path-exclude=/usr/share/icons/Adwaita/*' 'path-include=/usr/share/icons/Adwaita/index.theme' \
+      'path-include=/usr/share/icons/Adwaita/cursor.theme' 'path-include=/usr/share/icons/Adwaita/cursors/*' \
+      'path-exclude=/usr/share/doc/*' 'path-exclude=/usr/share/man/*' 'path-exclude=/usr/share/locale/*' \
+      > /etc/dpkg/dpkg.cfg.d/remacc-slim \
+    && apt-get update && apt-get install -y --no-install-recommends dbus-x11 libwebkit2gtk-4.1-0 \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=browser /src/remacc-browser /usr/local/bin/remacc-browser
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
 

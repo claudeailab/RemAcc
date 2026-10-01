@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal,
+  Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe, ArrowLeft, ArrowRight, RotateCw, Home,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
 
@@ -19,6 +19,7 @@ interface Session {
   id: number;
   name: string;
   protocol: string;
+  url?: string;
 }
 
 const PROTO_BADGE: Record<string, string> = {
@@ -171,6 +172,13 @@ function monitorCount(w: number, h: number) {
 }
 
 const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
+// Web: shortcuts handled by the server-side browser (tools/remacc-browser.c)
+const BROWSER_KEYS = {
+  back: [0xffe9, 0xff51],    // Alt_L, Left
+  forward: [0xffe9, 0xff53], // Alt_L, Right
+  reload: [0xffc2],          // F5
+  home: [0xffe9, 0xff50],    // Alt_L, Home
+};
 
 // guacd sends only "Aborted. See logs." for upstream failures; its status code says what happened
 const GUAC_STATUS_TEXT: Record<number, string> = {
@@ -211,11 +219,13 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   // UltraVNC (DSM) sessions: the server announces that it can switch the remote's monitor
   const [canSwitchMonitor, setCanSwitchMonitor] = useState(false);
 
-  function sendCtrlAltDel() {
+  const isWeb = session.protocol === "web";
+
+  function sendKeys(keys: number[]) {
     const c = clientRef.current;
     if (!c) return;
-    CTRL_ALT_DEL.forEach(k => c.sendKeyEvent(1, k));
-    [...CTRL_ALT_DEL].reverse().forEach(k => c.sendKeyEvent(0, k));
+    keys.forEach(k => c.sendKeyEvent(1, k));
+    [...keys].reverse().forEach(k => c.sendKeyEvent(0, k));
   }
 
   function chooseScreen(i: number) {
@@ -240,9 +250,10 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (cancelled || !containerRef.current) return;
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const wsPath = session.protocol === "rdp"
-        ? `/ws/rdp/${session.id}`
-        : `/ws/vnc/${session.id}`;
+      // Web: the server-side browser gets this panel's size, so pages render 1:1
+      const wsPath = session.protocol === "web"
+        ? `/ws/web/${session.id}?w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
+        : `/ws/${session.protocol === "rdp" ? "rdp" : "vnc"}/${session.id}`;
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
       clientRef.current = client;
@@ -274,7 +285,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        const n = monitorCount(dw, dh);
+        const n = session.protocol === "web" ? 1 : monitorCount(dw, dh);
         if (n !== screensRef.current) { screensRef.current = n; setScreens(n); }
         const { x0, vw } = visibleRange();
         const scale = Math.min(cw / vw, ch / dh);
@@ -390,20 +401,38 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     if (active) setTimeout(() => window.dispatchEvent(new Event("resize")), 50);
   }, [active]);
 
+  const navButton = (title: string, keys: number[], Icon: typeof Home) => (
+    <Button
+      type="button" variant="ghost" size="icon" className="h-7 w-7" title={title} aria-label={title}
+      onClick={() => sendKeys(keys)} disabled={status !== "connected"}
+    >
+      <Icon className="h-4 w-4" />
+    </Button>
+  );
+
   return (
     <div
-      className="absolute inset-0 overflow-hidden bg-black"
+      className="absolute inset-0 flex flex-col overflow-hidden bg-black"
       style={{ opacity: active ? 1 : 0, pointerEvents: active ? "auto" : "none" }}
     >
-      <div ref={containerRef} className="w-full h-full relative overflow-hidden" />
-      {status === "connected" && (
+      {isWeb && (
+        <div className="flex items-center gap-0.5 px-2 py-1 border-b bg-background shrink-0">
+          {navButton("Back", BROWSER_KEYS.back, ArrowLeft)}
+          {navButton("Forward", BROWSER_KEYS.forward, ArrowRight)}
+          {navButton("Reload", BROWSER_KEYS.reload, RotateCw)}
+          {navButton("Home", BROWSER_KEYS.home, Home)}
+          {session.url && <span className={`ml-2 text-xs truncate ${muted}`}>{session.url}</span>}
+        </div>
+      )}
+      <div ref={containerRef} className="flex-1 min-h-0 w-full relative overflow-hidden" />
+      {status === "connected" && !isWeb && (
         <div
           className="absolute right-2 top-2 z-10 flex flex-col gap-1.5 items-end"
           onMouseDown={e => e.stopPropagation()}
           onMouseUp={e => e.stopPropagation()}
         >
           <button
-            type="button" title="Send Ctrl+Alt+Del to the remote computer" onClick={sendCtrlAltDel}
+            type="button" title="Send Ctrl+Alt+Del to the remote computer" onClick={() => sendKeys(CTRL_ALT_DEL)}
             className="rounded-md border bg-background/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-muted"
           >
             Ctrl+Alt+Del
@@ -486,8 +515,7 @@ export default function DashboardPage() {
       const raw = localStorage.getItem(SESSION_STORE);
       if (!raw) return;
       const parsed = JSON.parse(raw);
-      // Web connections open in their own tab and are never sessions (older versions stored them)
-      const saved = Array.isArray(parsed.sessions) ? parsed.sessions.filter((s: Session) => s.protocol !== "web") : [];
+      const saved: Session[] = Array.isArray(parsed.sessions) ? parsed.sessions : [];
       const savedKey = saved.some((s: Session) => s.key === parsed.activeKey) ? parsed.activeKey : null;
       if (saved.length === 0) return;
       // Advance counter past any restored keys to avoid collisions
@@ -556,13 +584,6 @@ export default function DashboardPage() {
   useEffect(() => { load(); }, [load]);
 
   async function handleConnect(conn: Connection) {
-    // Web: open the site in a new browser tab (synchronously, or popup blockers stop it)
-    if (conn.protocol === "web") {
-      window.open(/^https?:\/\//i.test(conn.host) ? conn.host : `http://${conn.host}`, "_blank", "noopener");
-      setSidebarOpen(false);
-      return;
-    }
-
     // If this connection already has an open session, just switch to it
     const existing = sessions.find(s => s.id === conn.id);
     if (existing) {
@@ -578,7 +599,7 @@ export default function DashboardPage() {
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Connection failed"); return; }
       const key = `s${++sessionCounter}`;
-      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol }]);
+      setSessions(prev => [...prev, { key, id: conn.id, name: conn.name, protocol: conn.protocol, ...(conn.protocol === "web" ? { url: conn.host } : {}) }]);
       setActiveKey(key);
     } finally { setConnecting(null); }
   }
@@ -614,7 +635,9 @@ export default function DashboardPage() {
           ? <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-muted-foreground" />
           : (
             <span className="relative shrink-0">
-              <Monitor className="h-3.5 w-3.5 text-muted-foreground" />
+              {c.protocol === "web"
+                ? <Globe className="h-3.5 w-3.5 text-muted-foreground" />
+                : <Monitor className="h-3.5 w-3.5 text-muted-foreground" />}
               {connected && (
                 <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-green-500 ring-1 ring-background" />
               )}
@@ -707,7 +730,7 @@ export default function DashboardPage() {
                 activeKey === s.key ? "bg-secondary font-medium" : "hover:bg-secondary/60 text-muted-foreground"
               }`}
             >
-              {s.protocol === "ssh" ? <Terminal className="h-3 w-3 shrink-0" /> : <Monitor className="h-3 w-3 shrink-0" />}
+              {s.protocol === "ssh" ? <Terminal className="h-3 w-3 shrink-0" /> : s.protocol === "web" ? <Globe className="h-3 w-3 shrink-0" /> : <Monitor className="h-3 w-3 shrink-0" />}
               <span>{s.name}</span>
               <span className={`text-[9px] font-semibold uppercase px-1 py-0.5 rounded ${PROTO_BADGE[s.protocol] ?? ""}`}>{s.protocol}</span>
               <span
