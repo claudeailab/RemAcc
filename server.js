@@ -290,8 +290,9 @@ function applyClip(connId, session, win) {
   const clip = clipRect(win);
   if (clip === session.clip) return;
   session.clip = clip;
-  spawn('x11vnc', ['-display', `:${session.display}`, '-remote', `clip:${clip}`], { stdio: 'ignore' });
   log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
+  const x = spawn('x11vnc', ['-display', `:${session.display}`, '-sync', '-remote', `clip:${clip}`], { stdio: 'ignore' });
+  x.on('exit', code => { if (code !== 0) err(`DSM id=${connId}: relay resize to ${clip} failed (x11vnc exit ${code})`); });
 }
 
 // Until the viewer window kept its size for stableMs (the remote finished rebuilding its desktop)
@@ -322,11 +323,7 @@ async function showAllDsmMonitors(connId, session, count, waitMs = 3000) {
       const next = await findViewerWindow(session.display, 640, 400).catch(() => null);
       if (next && sizeOf(next) !== before) { win = next; break; }
     }
-    if (isWide(win)) {
-      applyClip(connId, session, win);
-      log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`);
-      return true;
-    }
+    if (isWide(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
   }
   log(`DSM id=${connId}: remote never sent a side-by-side view (now ${sizeOf(win)})`);
   return false;
@@ -926,6 +923,11 @@ async function handleGuac(wsConn, req, id, protocol) {
           if (n === 0 || n > 1) { dsm.monitorCount = n; dsm.wantAll = true; return keepAllDsmMonitors(id, dsm); }
         }).catch(e => err(`DSM id=${id}: monitor switch: ${e.message}`));
       } else if (streaming) {
+        // What the browser actually gets: its 1 | 2 | All bar follows this size
+        if (dsm && opcode === 'size' && parts[1] === '0' && dsm.browserSize !== `${parts[2]}x${parts[3]}`) {
+          dsm.browserSize = `${parts[2]}x${parts[3]}`;
+          log(`DSM id=${id}: browser display now ${dsm.browserSize}`);
+        }
         if (opcode === 'sync') diag?.frameSent(parts[1]);
         else if (opcode === 'img') diag?.imageSent();
         if (wsConn.readyState === 1) wsConn.send(instr);
