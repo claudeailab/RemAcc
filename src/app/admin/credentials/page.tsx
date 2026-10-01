@@ -101,15 +101,15 @@ export default function CredentialsPage() {
         ) : (
           <div className="rounded-lg border divide-y divide-border overflow-hidden">
             {list.map(c => (
-              <div key={c.id} className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40 transition-colors">
-                <KeyRound className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="font-medium text-sm min-w-0 truncate flex-1">{c.name}</span>
+              <div key={c.id} className="flex items-center gap-1.5 px-2 py-1 hover:bg-muted/40 transition-colors">
+                <KeyRound className="h-3 w-3 text-muted-foreground shrink-0" />
+                <span className="text-sm truncate flex-1">{c.name}</span>
                 {(c.username || c.domain) && (
-                  <span className={`${muted} truncate hidden sm:block`}>{c.domain ? `${c.domain}\\` : ""}{c.username}</span>
+                  <span className={`text-xs truncate max-w-[180px] hidden sm:block ${muted}`}>{c.domain ? `${c.domain}\\` : ""}{c.username}</span>
                 )}
-                <div className="flex items-center gap-1 shrink-0 ml-auto">
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5" /></Button>
-                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                <div className="flex items-center gap-0.5 shrink-0 ml-1">
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => openEdit(c)}><Pencil className="h-3 w-3" /></Button>
+                  <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3 w-3 text-destructive" /></Button>
                 </div>
               </div>
             ))}

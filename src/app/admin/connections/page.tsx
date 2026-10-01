@@ -28,7 +28,7 @@ const PROTO_BADGE: Record<string, string> = {
 const DSM_BADGE = "bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300";
 
 function isDsm(c: Connection) {
-  try { return !!(c.options && JSON.parse(c.options).dsmPlugin); } catch { return false; }
+  try { return c.protocol === "vnc" && !!(c.options && JSON.parse(c.options).dsmPlugin); } catch { return false; }
 }
 
 // Is `ancestorId` an ancestor of `targetId` in the folder tree?
