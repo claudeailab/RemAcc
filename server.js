@@ -329,7 +329,7 @@ async function showAllDsmMonitors(connId, session, count, waitMs = 6000) {
   let win = await findViewerWindow(session.display, 640, 400).catch(() => null);
   if (!win) { log(`DSM id=${connId}: viewer window not found, switching screens later`); return null; }
   if (isWide(win)) return true;
-  for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped; step++) {
+  for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped && session.wantAll !== false; step++) {
     // The selection is server-wide: switching while another viewer already shows all screens would
     // turn them off for everyone. This viewer just has not received the new layout yet.
     if (await otherViewerShowsAll(session)) { log(`DSM id=${connId}: another viewer of this computer already shows all screens, not switching`); return null; }
@@ -357,29 +357,30 @@ async function otherViewerShowsAll(session) {
 }
 
 // Runs before the relay starts, so the browser's first picture already shows all screens instead
-// of one screen and then a re-layout a few seconds later
+// of one screen and then a re-layout. Capped: past DSM_SCREENS_BUDGET_MS the desktop is shown
+// and the switch finishes in the background (the follow loop moves the relay when it lands).
+const DSM_SCREENS_BUDGET_MS = 4000;
 async function prepareDsmMonitors(connId, session) {
-  const n = await dsmMonitorCount(connId, session);
-  log(`DSM id=${connId}: ${n === null ? 'monitor count unavailable' : n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
-  if (n === 1) return;
-  session.monitorCount = n ?? 0; // unknown: still try, rather than hide the other screens
+  // Unknown count (older UltraVNC servers never report it): step anyway, rather than hide screens.
+  // The count only caps the steps and rules out single-monitor remotes, so it is asked in parallel.
+  session.monitorCount = 0;
   session.wantAll = true;
-  try {
-    for (let attempt = 0; attempt < 2 && session.wantAll && !session.stopped; attempt++) {
-      await keepAllDsmMonitors(connId, session);
-      // Right after connecting the remote may rebuild its desktop and fall back to one screen
-      await waitForStableWindow(session);
-      const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
-      if (win && isWide(win)) return;
-    }
-  } finally { session.allTries = []; } // the session's own fallbacks get the full budget
+  dsmMonitorCount(connId, session).then(n => {
+    log(`DSM id=${connId}: ${n === null ? 'monitor count unavailable' : n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
+    if (n === 1) session.wantAll = false;
+    else if (n) session.monitorCount = n;
+  }).catch(() => {});
+  const switching = keepAllDsmMonitors(connId, session, 2500)
+    .catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`))
+    .finally(() => { session.allTries = []; }); // the session's own fallbacks get the full budget
+  await Promise.race([switching, sleep(DSM_SCREENS_BUDGET_MS)]);
 }
 
 // UltraVNC falls back to the primary monitor whenever it rebuilds its desktop (right after
 // connecting, lock/unlock, UAC, Ctrl+Alt+Del). Wait for the remote to settle, then step back to
 // all screens. Gives up on a remote without a side-by-side view, or one that falls back 3 times
 // within a minute (stepping would only make it flicker).
-async function keepAllDsmMonitors(connId, session) {
+async function keepAllDsmMonitors(connId, session, stableMs = 1000) {
   if (!session.wantAll || session.stepping || session.stopped) return;
   const now = Date.now();
   session.allTries = (session.allTries ?? []).filter(t => now - t < 60000);
@@ -395,7 +396,7 @@ async function keepAllDsmMonitors(connId, session) {
   try {
     while (dsmSwitching.has(remote)) await dsmSwitching.get(remote); // another viewer of this computer
     dsmSwitching.set(remote, new Promise(r => { release = r; }));
-    await waitForStableWindow(session);
+    await waitForStableWindow(session, stableMs);
     if (session.stopped) return;
     if (await showAllDsmMonitors(connId, session, session.monitorCount) === false) {
       // With other viewers on this computer their switching can mask ours: try again later
@@ -460,6 +461,8 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   dsmSessions.add(session);
   const alive = () => { if (session.stopped) throw new Error('DSM session closed during startup'); };
 
+  const t0 = Date.now();
+  let tViewer = 0, tScreens = 0;
   try {
     await ensureWinePrefix();
     alive();
@@ -498,7 +501,9 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     // (e.g. authentication failed), export a 1920x1080 area around it so the user can read and answer it.
     const found = await waitForViewerWindow(display, wine, alive);
     alive();
+    tViewer = Date.now() - t0;
     if (found?.screen) { await prepareDsmMonitors(connId, session); alive(); }
+    tScreens = Date.now() - t0 - tViewer;
     const win = found?.screen ? (await findViewerWindow(display, 640, 400).catch(() => null)) ?? found.win : null;
     const clip = win ? clipRect(win) : dialogRect(found?.win);
     const x11vnc = spawn('x11vnc', [
@@ -512,7 +517,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
 
     await waitForPort(session.port);
     alive();
-    log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip}`);
+    log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip} — ready in ${Date.now() - t0} ms (viewer ${tViewer} ms, screens ${tScreens} ms)`);
     session.clip = clip;
     followViewerWindow(connId, session);
   } catch (e) {
