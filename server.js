@@ -751,7 +751,6 @@ async function handleGuac(wsConn, req, id, protocol) {
     const s = proto?.vnc ?? {};
     base = {
       ...VNC_DEFAULTS,
-      port: String(s.port ?? 5900),
       'color-depth': String(s.colorDepth ?? 32),
       encoding: s.encoding ?? 'tight',
       'read-only': (s.readOnly ?? false) ? 'true' : 'false',

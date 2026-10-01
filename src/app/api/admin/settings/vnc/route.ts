@@ -5,7 +5,6 @@ import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 export const VNC_SETTING_DEFAULTS = {
-  port: 5900,
   colorDepth: "32" as const,
   encoding: "tight" as const,
   readOnly: false,
@@ -14,7 +13,6 @@ export const VNC_SETTING_DEFAULTS = {
 };
 
 const schema = z.object({
-  port: z.number().int().min(1).max(65535),
   colorDepth: z.enum(["8", "16", "24", "32"]),
   encoding: z.enum(["tight", "zrle", "ultra", "copyrect", "hextile", "zlib", "corre", "rre", "raw"]),
   readOnly: z.boolean(),

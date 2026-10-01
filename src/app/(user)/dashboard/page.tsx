@@ -45,20 +45,19 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
     const obs = new ResizeObserver(() => fitRef.current?.fit());
 
     async function start() {
-      const [{ Terminal }, { FitAddon }] = await Promise.all([
-        import("@xterm/xterm"),
-        import("@xterm/addon-fit"),
+      const [[{ Terminal }, { FitAddon }], sshSettingsRes] = await Promise.all([
+        Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]),
+        fetch("/api/admin/settings/ssh").then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (cancelled || !containerRef.current) return;
 
       const term = new Terminal({
         cursorBlink: true,
-        fontFamily: '"Cascadia Code", "Fira Code", monospace',
-        fontSize: 13,
+        fontFamily: sshSettingsRes?.fontFamily ?? '"Cascadia Code", "Fira Code", monospace',
+        fontSize: sshSettingsRes?.fontSize ?? 13,
         lineHeight: 1.2,
-        scrollback: 5000,
+        scrollback: sshSettingsRes?.scrollback ?? 5000,
         allowTransparency: false,
-        // Let xterm handle ctrl sequences; we only intercept what the browser steals
         macOptionIsMeta: false,
         theme: { background: "#111111", foreground: "#e0e0e0", cursor: "#e0e0e0" },
       });

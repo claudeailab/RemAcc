@@ -144,12 +144,12 @@ function RdpTab() {
 // ── VNC ──────────────────────────────────────────────────────────────────────
 
 interface VncSettings {
-  port: number; colorDepth: "8" | "16" | "24" | "32";
+  colorDepth: "8" | "16" | "24" | "32";
   encoding: string; readOnly: boolean; swapRedBlue: boolean;
   cursor: "remote" | "local" | "none";
 }
 const VNC_DEFAULTS: VncSettings = {
-  port: 5900, colorDepth: "32", encoding: "tight",
+  colorDepth: "32", encoding: "tight",
   readOnly: false, swapRedBlue: false, cursor: "remote",
 };
 
@@ -183,14 +183,6 @@ function VncTab() {
 
   return (
     <div className="space-y-4 max-w-xl">
-      <div className="rounded-lg border p-4 space-y-4">
-        <p className="text-sm font-medium">Connection</p>
-        <div className="flex flex-col gap-1.5">
-          <Label>Default Port</Label>
-          <Input type="number" min={1} max={65535} value={form.port} onChange={e => set("port", parseInt(e.target.value) || 5900)} className="w-32" />
-        </div>
-      </div>
-
       <div className="rounded-lg border p-4 space-y-4">
         <p className="text-sm font-medium">Display</p>
         <div className="flex flex-col gap-1.5">
@@ -260,11 +252,11 @@ function VncTab() {
 // ── SSH ──────────────────────────────────────────────────────────────────────
 
 interface SshSettings {
-  port: number; fontSize: number; fontFamily: string;
+  fontSize: number; fontFamily: string;
   scrollback: number; keepaliveInterval: number; readyTimeout: number;
 }
 const SSH_DEFAULTS: SshSettings = {
-  port: 22, fontSize: 13, fontFamily: "Cascadia Code, Fira Code, monospace",
+  fontSize: 13, fontFamily: "Cascadia Code, Fira Code, monospace",
   scrollback: 5000, keepaliveInterval: 25, readyTimeout: 15,
 };
 
@@ -300,10 +292,6 @@ function SshTab() {
     <div className="space-y-4 max-w-xl">
       <div className="rounded-lg border p-4 space-y-4">
         <p className="text-sm font-medium">Connection</p>
-        <div className="flex flex-col gap-1.5">
-          <Label>Default Port</Label>
-          <Input type="number" min={1} max={65535} value={form.port} onChange={e => set("port", parseInt(e.target.value) || 22)} className="w-32" />
-        </div>
         <div className="flex flex-col gap-1.5">
           <Label>Ready Timeout <span className={muted}>(seconds)</span></Label>
           <p className={`text-xs ${muted}`}>How long to wait for SSH handshake</p>

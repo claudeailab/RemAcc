@@ -5,7 +5,6 @@ import { logAudit } from "@/lib/audit";
 import { z } from "zod";
 
 export const SSH_SETTING_DEFAULTS = {
-  port: 22,
   fontSize: 13,
   fontFamily: "Cascadia Code, Fira Code, monospace",
   scrollback: 5000,
@@ -14,7 +13,6 @@ export const SSH_SETTING_DEFAULTS = {
 };
 
 const schema = z.object({
-  port: z.number().int().min(1).max(65535),
   fontSize: z.number().int().min(8).max(32),
   fontFamily: z.string().min(1).max(200),
   scrollback: z.number().int().min(100).max(50000),
