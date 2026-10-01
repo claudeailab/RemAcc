@@ -31,6 +31,7 @@ export function getEnvOverride(key: string): string | undefined {
     case "m365_tenantId":           return process.env.REMACC_M365_TENANT_ID;
     case "m365_expiryDate":         return process.env.REMACC_M365_EXPIRY_DATE;
     case "m365_reminderDays":       return process.env.REMACC_M365_REMINDER_DAYS;
+    case "m365_reminderEmail":      return process.env.REMACC_M365_REMINDER_EMAIL;
     // Stripe
     case "stripe_enabled":          return process.env.REMACC_STRIPE_ENABLED;
     case "stripe_liveMode":         return process.env.REMACC_STRIPE_LIVE_MODE;
@@ -57,7 +58,7 @@ export const ENV_SETTING_KEYS = new Set([
   "anthropic_enabled","anthropic_apiKey","anthropic_model",
   "openai_enabled","openai_apiKey","openai_model",
   "smtp_enabled","smtp_host","smtp_port","smtp_ssl","smtp_user","smtp_password","smtp_fromName","smtp_fromEmail",
-  "m365_enabled","m365_clientId","m365_clientSecret","m365_tenantId","m365_expiryDate","m365_reminderDays",
+  "m365_enabled","m365_clientId","m365_clientSecret","m365_tenantId","m365_expiryDate","m365_reminderDays","m365_reminderEmail",
   "stripe_enabled","stripe_liveMode","stripe_publishableKey","stripe_secretKey","stripe_webhookSecret",
   "paypal_enabled","paypal_liveMode","paypal_clientId","paypal_clientSecret",
   "vivawallet_enabled","vivawallet_liveMode","vivawallet_clientId","vivawallet_clientSecret","vivawallet_merchantId",

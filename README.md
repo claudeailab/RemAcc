@@ -110,6 +110,7 @@ services:
       REMACC_M365_CLIENT_SECRET: ${REMACC_M365_CLIENT_SECRET}
       REMACC_M365_EXPIRY_DATE: ${REMACC_M365_EXPIRY_DATE}
       REMACC_M365_REMINDER_DAYS: ${REMACC_M365_REMINDER_DAYS}
+      REMACC_M365_REMINDER_EMAIL: ${REMACC_M365_REMINDER_EMAIL}
 
       REMACC_STRIPE_ENABLED: ${REMACC_STRIPE_ENABLED}
       REMACC_STRIPE_LIVE_MODE: ${REMACC_STRIPE_LIVE_MODE}
@@ -193,6 +194,7 @@ Setting any of these env vars pre-configures that integration in the admin UI â€
 | `REMACC_M365_TENANT_ID` | Azure tenant ID |
 | `REMACC_M365_EXPIRY_DATE` | Secret expiry date (ISO, e.g. `"2027-01-01"`) |
 | `REMACC_M365_REMINDER_DAYS` | Days before expiry to remind (default: `30`) |
+| `REMACC_M365_REMINDER_EMAIL` | Email address to send the expiry reminder to |
 | `REMACC_STRIPE_ENABLED` | Enable Stripe (`true`/`false`, default `true`) |
 | `REMACC_STRIPE_PUBLISHABLE_KEY` | Stripe publishable key |
 | `REMACC_STRIPE_SECRET_KEY` | Stripe secret key |

@@ -11,8 +11,8 @@ import { Loader2, Eye, EyeOff, Copy, ExternalLink, CheckCircle2 } from "lucide-r
 import { Switch } from "@/components/ui/switch";
 import { pageWrapper, pageInner, pageTitle, fieldGap } from "@/lib/ui-conventions";
 
-type FormState = { enabled: boolean; clientId: string; clientSecret: string; tenantId: string; expiryDate: string; reminderDays: string };
-const defaultForm: FormState = { enabled: true, clientId: "", clientSecret: "", tenantId: "", expiryDate: "", reminderDays: "30" };
+type FormState = { enabled: boolean; clientId: string; clientSecret: string; tenantId: string; expiryDate: string; reminderDays: string; reminderEmail: string };
+const defaultForm: FormState = { enabled: true, clientId: "", clientSecret: "", tenantId: "", expiryDate: "", reminderDays: "30", reminderEmail: "" };
 
 export default function M365Page() {
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -190,6 +190,11 @@ export default function M365Page() {
                   <Label>Reminder Days Before</Label>
                   <Input type="number" value={form.reminderDays} onChange={e => setForm(f => ({ ...f, reminderDays: e.target.value }))} min="1" max="365" />
                 </div>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label>Reminder Email</Label>
+                <Input type="email" value={form.reminderEmail} onChange={e => setForm(f => ({ ...f, reminderEmail: e.target.value }))} placeholder="admin@example.com" />
+                <p className="text-xs text-muted-foreground">Receives an email reminder before the secret expires. Requires SMTP to be configured.</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-2">
                 <Button type="submit" disabled={!dirty || saving} className="w-full sm:w-auto">
