@@ -15,36 +15,61 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          token: ${{ secrets.CR_PAT }}
+
+      - name: Ensure main-only ruleset exists
+        env:
+          GH_TOKEN: ${{ secrets.CR_PAT }}
+        run: |
+          echo "::add-mask::$GH_TOKEN"
+          EXISTING=$(curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/${{ github.repository }}/rulesets \
+            | jq '[.[] | select(.name=="main-only")] | length')
+          if [ "$EXISTING" = "0" ]; then
+            curl -s -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              https://api.github.com/repos/${{ github.repository }}/rulesets \
+              -d '{"name":"main-only","target":"branch","enforcement":"active","conditions":{"ref_name":{"include":["refs/heads/main"],"exclude":[]}},"bypass_actors":[{"actor_id":5,"actor_type":"RepositoryRole","bypass_mode":"always"}],"rules":[{"type":"non_fast_forward"},{"type":"deletion"}]}' > /dev/null
+            echo "main-only ruleset created"
+          else
+            echo "main-only ruleset already exists"
+          fi
 
       - name: Force push to main and clean up
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CR_PAT }}
+          GITHUB_TOKEN: ${{ secrets.CR_PAT }}
           BRANCH: ${{ github.ref_name }}
-          SHA: ${{ github.sha }}
         run: |
+          echo "::add-mask::$GH_TOKEN"
+          git remote set-url origin https://x-access-token:$GH_TOKEN@github.com/${{ github.repository }}.git
           git push origin HEAD:main --force
           curl -s -X PATCH \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }} \
             -d '{"default_branch":"main"}'
           curl -s -X DELETE \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/git/refs/heads/$BRANCH || true
           for b in $(git branch -r | grep -v 'origin/main' | sed 's/origin\///'); do
             curl -s -X DELETE \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               https://api.github.com/repos/${{ github.repository }}/git/refs/heads/$b || true
           done
 
       - name: Trigger build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.CR_PAT }}
         run: |
+          echo "::add-mask::$GH_TOKEN"
           curl -s -X POST \
-            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/${{ github.repository }}/actions/workflows/build.yml/dispatches \
             -d '{"ref":"main"}'
