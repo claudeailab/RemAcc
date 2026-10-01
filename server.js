@@ -678,10 +678,13 @@ function webUrl(host) {
 }
 
 // Browser size = the RemAcc panel size, so pages render 1:1
+const WEB_MAX_W = 3840, WEB_MAX_H = 2160;
+const clampWebW = v => Math.min(WEB_MAX_W, Math.max(640, Math.round(Number(v)) || 1280));
+const clampWebH = v => Math.min(WEB_MAX_H, Math.max(480, Math.round(Number(v)) || 800));
+
 function webSize(req) {
   const q = new URL(req.url ?? '/', 'http://x').searchParams;
-  const clamp = (v, lo, hi, d) => Math.min(hi, Math.max(lo, Math.round(Number(v)) || d));
-  return { width: clamp(q.get('w'), 640, 3840, 1280), height: clamp(q.get('h'), 480, 2160, 800) };
+  return { width: clampWebW(q.get('w')), height: clampWebH(q.get('h')) };
 }
 
 async function startWebBrowser(connId, url, username, password, width, height) {
@@ -710,7 +713,9 @@ async function startWebBrowser(connId, url, username, password, width, height) {
 
   try {
     session.port = await findFreePort();
-    run('Xvfb', [`:${display}`, '-screen', '0', `${width}x${height}x24`, '-nolisten', 'tcp']);
+    // Full-size screen: the browser window (top-left) follows the user's panel and the relay
+    // exports only that window, so a resized panel never shows black bars
+    run('Xvfb', [`:${display}`, '-screen', '0', `${WEB_MAX_W}x${WEB_MAX_H}x24`, '-nolisten', 'tcp']);
     await waitForX(display);
 
     fs.rmSync(home, { recursive: true, force: true });
@@ -726,17 +731,27 @@ async function startWebBrowser(connId, url, username, password, width, height) {
       },
     });
     browser.stdin.on('error', () => {});
-    browser.stdin.end(`${url}\0${username}\0${password}\0`);
+    browser.stdin.write(`${url}\0${username}\0${password}\0${width}x${height}\0`); // stays open for resizes
     browser.on('exit', code => { if (!session.stopped) { log(`WEB id=${connId}: browser exited (${code})`); session.stop(); } });
 
     run('x11vnc', [
-      '-display', `:${display}`, '-rfbport', String(session.port),
+      '-display', `:${display}`, '-rfbport', String(session.port), '-clip', `${width}x${height}+0+0`,
       '-nopw', '-forever', '-shared', '-quiet', '-localhost',
       '-wait', '1', '-defer', '1',
       '-noprimary', // only explicit copies (Ctrl+C) reach the user's clipboard, not every selection
     ]);
     await waitForPort(session.port);
     if (session.stopped) throw new Error('browser exited during startup');
+    session.size = `${width}x${height}`;
+    session.resize = (w, h) => {
+      const size = `${clampWebW(w)}x${clampWebH(h)}`;
+      if (session.stopped || size === session.size) return;
+      session.size = size;
+      browser.stdin.write(`${size}\n`);
+      const x = spawn('x11vnc', ['-display', `:${display}`, '-sync', '-remote', `clip:${size}+0+0`], { stdio: 'ignore' });
+      x.on('exit', code => { if (code !== 0) err(`WEB id=${connId}: relay resize to ${size} failed (x11vnc exit ${code})`); });
+      log(`WEB id=${connId}: panel resized to ${size}`);
+    };
     log(`WEB id=${connId}: display=:${display} port=${session.port} ${width}x${height} ${url}${username ? ' (auto sign-in)' : ''}`);
   } catch (e) {
     session.stop();
@@ -976,6 +991,7 @@ async function handleGuac(wsConn, req, id, protocol) {
     try {
       const p = guacParse(str);
       if (p[0] === 'size' && (p[1] === '0' || p[2] === '0')) return;
+      if (web && p[0] === 'size') { web.resize(p[1], p[2]); return; }
       if (p[0] === 'sync') diag?.frameAcked(p[1]);
       else diag?.input(p);
     } catch {}

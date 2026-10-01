@@ -241,6 +241,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     let keyboard: any = null;
     let obs: ResizeObserver | null = null;
     let keepalive: ReturnType<typeof setInterval> | null = null;
+    let sizeTimer: ReturnType<typeof setTimeout> | null = null;
     let cleanupMouse: (() => void) | null = null;
 
     async function start() {
@@ -291,7 +292,16 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       rescaleRef.current = scaleDisplay;
 
       display.onresize = scaleDisplay;
-      obs = new ResizeObserver(scaleDisplay);
+      // Web: the server-side browser follows the panel's size, so pages always fill it 1:1
+      obs = new ResizeObserver(() => {
+        scaleDisplay();
+        if (session.protocol !== "web") return;
+        if (sizeTimer) clearTimeout(sizeTimer);
+        sizeTimer = setTimeout(() => {
+          const el = containerRef.current;
+          if (el && el.offsetWidth > 0 && el.offsetHeight > 0) client?.sendSize(el.offsetWidth, el.offsetHeight);
+        }, 300);
+      });
       obs.observe(containerRef.current);
 
       // Native mouse events — bypass Guacamole.Mouse entirely for exact coords.
@@ -364,7 +374,12 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         setErrorMsg(prev => prev || guacErrorText(err) || "Connection failed");
       };
       client.onstatechange = (state: number) => {
-        if (state === 3) setStatus("connected");
+        if (state === 3) {
+          setStatus("connected");
+          // Web: the size sent at connect can predate the final layout; resizes before now were dropped
+          const el = containerRef.current;
+          if (session.protocol === "web" && el && el.offsetWidth > 0 && el.offsetHeight > 0) client?.sendSize(el.offsetWidth, el.offsetHeight);
+        }
         if (state === 5) { setStatus("error"); setErrorMsg(prev => prev || "Disconnected"); }
       };
 
@@ -381,6 +396,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       cancelled = true;
       cleanupMouse?.();
       obs?.disconnect();
+      if (sizeTimer) clearTimeout(sizeTimer);
       if (keepalive) clearInterval(keepalive);
       if (keyboard) { try { keyboard.reset(); } catch {} }
       if (client)   { try { client.disconnect(); } catch {} }

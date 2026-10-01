@@ -1,10 +1,14 @@
-// Minimal WebKitGTK browser for RemAcc web connections: one undecorated window filling the
-// X display, no browser UI. Reads "url\0username\0password\0" from stdin (never argv/env).
+// Minimal WebKitGTK browser for RemAcc web connections: one undecorated window at the top-left
+// of the X display, no browser UI. Reads "url\0username\0password\0WxH\0" from stdin (never
+// argv/env), then keeps reading "WxH\n" lines: the window follows the user's panel size.
 #include <gtk/gtk.h>
 #include <webkit2/webkit2.h>
 #include <string.h>
+#include <stdio.h>
+#include <unistd.h>
 
 static WebKitWebView *view;
+static GtkWidget *win;
 static WebKitUserContentManager *ucm;
 static gchar *home_url, *user, *pass, *host;
 static int submits_left = 2; // a username step + a password step; never loops on a wrong password
@@ -133,15 +137,30 @@ static gboolean on_key(GtkWidget *w, GdkEventKey *e, gpointer d) {
   return FALSE;
 }
 
+// "WxH\n" from server.js: the user's panel changed size
+static gboolean on_resize_line(GIOChannel *ch, GIOCondition cond, gpointer data) {
+  gchar *line = NULL;
+  GIOStatus st = g_io_channel_read_line(ch, &line, NULL, NULL, NULL);
+  int w, h;
+  if (st == G_IO_STATUS_NORMAL && line && sscanf(line, "%dx%d", &w, &h) == 2 && w >= 200 && h >= 150)
+    gtk_window_resize(GTK_WINDOW(win), w, h);
+  g_free(line);
+  return st == G_IO_STATUS_NORMAL || st == G_IO_STATUS_AGAIN;
+}
+
 int main(int argc, char **argv) {
+  // Byte by byte up to the 4th NUL: stdin stays open for resize lines, so no buffered reads
   GString *in = g_string_new(NULL);
-  char buf[4096];
-  size_t n;
-  while ((n = fread(buf, 1, sizeof buf, stdin)) > 0) g_string_append_len(in, buf, n);
-  const char *p = in->str, *end = in->str + in->len;
+  char c;
+  int fields = 0;
+  while (fields < 4 && read(0, &c, 1) == 1) { g_string_append_c(in, c); if (!c) fields++; }
+  if (fields < 4) g_string_append_len(in, "\0\0\0\0", 4);
+  const char *p = in->str;
   home_url = g_strdup(p); p += strlen(p) + 1;
-  user = g_strdup(p < end ? p : ""); p += strlen(user) + 1;
-  pass = g_strdup(p < end ? p : "");
+  user = g_strdup(p); p += strlen(p) + 1;
+  pass = g_strdup(p); p += strlen(p) + 1;
+  int width = 0, height = 0;
+  sscanf(p, "%dx%d", &width, &height);
   memset(in->str, 0, in->len);
   g_string_free(in, TRUE);
   GUri *u = g_uri_parse(home_url, G_URI_FLAGS_NONE, NULL);
@@ -174,19 +193,24 @@ int main(int argc, char **argv) {
   g_signal_connect(view, "close", G_CALLBACK(on_close), NULL);
   g_signal_connect(view, "web-process-terminated", G_CALLBACK(on_crash), NULL);
 
-  GtkWidget *win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-  GdkDisplay *dpy = gdk_display_get_default();
-  GdkMonitor *mon = gdk_display_get_primary_monitor(dpy);
-  GdkRectangle geo;
-  gdk_monitor_get_geometry(mon ? mon : gdk_display_get_monitor(dpy, 0), &geo);
+  win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  if (width < 200 || height < 150) {
+    GdkDisplay *dpy = gdk_display_get_default();
+    GdkMonitor *mon = gdk_display_get_primary_monitor(dpy);
+    GdkRectangle geo;
+    gdk_monitor_get_geometry(mon ? mon : gdk_display_get_monitor(dpy, 0), &geo);
+    width = geo.width; height = geo.height;
+  }
   gtk_window_set_decorated(GTK_WINDOW(win), FALSE);
-  gtk_window_set_default_size(GTK_WINDOW(win), geo.width, geo.height);
+  gtk_window_set_default_size(GTK_WINDOW(win), width, height);
   gtk_window_move(GTK_WINDOW(win), 0, 0);
   gtk_container_add(GTK_CONTAINER(win), GTK_WIDGET(view));
   g_signal_connect(win, "key-press-event", G_CALLBACK(on_key), NULL);
   g_signal_connect(win, "destroy", G_CALLBACK(gtk_main_quit), NULL);
   gtk_widget_show_all(win);
   gtk_widget_grab_focus(GTK_WIDGET(view));
+  GIOChannel *ch = g_io_channel_unix_new(0);
+  g_io_add_watch(ch, G_IO_IN | G_IO_HUP | G_IO_ERR, on_resize_line, NULL);
   webkit_web_view_load_uri(view, home_url);
   gtk_main();
   return 0;
