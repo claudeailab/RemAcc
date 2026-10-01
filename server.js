@@ -356,11 +356,10 @@ async function otherViewerShowsAll(session) {
   return false;
 }
 
-// Runs before the relay starts, so the browser's first picture already shows all screens instead
-// of one screen and then a re-layout. Capped: past DSM_SCREENS_BUDGET_MS the desktop is shown
-// and the switch finishes in the background (the follow loop moves the relay when it lands).
-const DSM_SCREENS_BUDGET_MS = 4000;
-async function prepareDsmMonitors(connId, session) {
+// Runs in the background once the desktop is showing: the user can work on the primary screen at
+// once. When all screens arrive the browser keeps showing the chosen screen (1 by default) at the
+// same scale, so only the 1 | 2 | All bar appears.
+function prepareDsmMonitors(connId, session) {
   // Unknown count (older UltraVNC servers never report it): step anyway, rather than hide screens.
   // The count only caps the steps and rules out single-monitor remotes, so it is asked in parallel.
   session.monitorCount = 0;
@@ -370,10 +369,9 @@ async function prepareDsmMonitors(connId, session) {
     if (n === 1) session.wantAll = false;
     else if (n) session.monitorCount = n;
   }).catch(() => {});
-  const switching = keepAllDsmMonitors(connId, session, 2500)
+  keepAllDsmMonitors(connId, session, 300)
     .catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`))
     .finally(() => { session.allTries = []; }); // the session's own fallbacks get the full budget
-  await Promise.race([switching, sleep(DSM_SCREENS_BUDGET_MS)]);
 }
 
 // UltraVNC falls back to the primary monitor whenever it rebuilds its desktop (right after
@@ -462,7 +460,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
   const alive = () => { if (session.stopped) throw new Error('DSM session closed during startup'); };
 
   const t0 = Date.now();
-  let tViewer = 0, tScreens = 0;
+  let tViewer = 0;
   try {
     await ensureWinePrefix();
     alive();
@@ -502,9 +500,7 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     const found = await waitForViewerWindow(display, wine, alive);
     alive();
     tViewer = Date.now() - t0;
-    if (found?.screen) { await prepareDsmMonitors(connId, session); alive(); }
-    tScreens = Date.now() - t0 - tViewer;
-    const win = found?.screen ? (await findViewerWindow(display, 640, 400).catch(() => null)) ?? found.win : null;
+    const win = found?.screen ? found.win : null;
     const clip = win ? clipRect(win) : dialogRect(found?.win);
     const x11vnc = spawn('x11vnc', [
       '-display', `:${display}`, '-rfbport', String(session.port), '-clip', clip,
@@ -517,9 +513,10 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
 
     await waitForPort(session.port);
     alive();
-    log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip} — ready in ${Date.now() - t0} ms (viewer ${tViewer} ms, screens ${tScreens} ms)`);
+    log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip} — ready in ${Date.now() - t0} ms (viewer ${tViewer} ms)`);
     session.clip = clip;
     followViewerWindow(connId, session);
+    if (win) prepareDsmMonitors(connId, session);
   } catch (e) {
     session.stop();
     throw e;
