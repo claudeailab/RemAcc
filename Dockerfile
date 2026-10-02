@@ -61,27 +61,20 @@ RUN sh /tmp/wine-prefix-template.sh /opt/uvnc-wine-template \
 
 RUN groupadd --system --gid 1001 nodejs && useradd --system --uid 1001 --gid nodejs appuser
 
+# Install native packages (bcrypt for target arch, ws and ssh2 for WebSocket proxies) BEFORE
+# copying app files so this layer is cached across Next.js-only rebuilds.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --prefix /tmp/native-pkg --no-save --no-audit --no-fund bcrypt ws ssh2
+
 # Pre-built output uploaded by the build-app CI job
 COPY --chown=appuser:nodejs public ./public
 COPY --chown=appuser:nodejs .next/standalone ./
 COPY --chown=appuser:nodejs .next/static ./.next/static
-
-# Use custom server.js (WebSocket SSH/RDP/VNC proxy on same port as Next.js).
 COPY --chown=appuser:nodejs server.js ./server.js
 COPY --from=winhelper --chown=appuser:nodejs /src/uvnc-switch.exe ./uvnc-switch.exe
 
-# Reinstall bcrypt for the target architecture.
-# standalone bundles the amd64 build-machine binary; replace with the correct arch.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install --prefix /tmp/bcrypt-pkg --no-save --no-audit --no-fund bcrypt && \
-    cp -r /tmp/bcrypt-pkg/node_modules/bcrypt /app/node_modules/bcrypt && \
-    rm -rf /tmp/bcrypt-pkg
-
-# Install ws and ssh2 for the WebSocket proxies.
-RUN --mount=type=cache,target=/root/.npm \
-    npm install --prefix /tmp/extra-pkg --no-save --no-audit --no-fund ws ssh2 && \
-    cp -r /tmp/extra-pkg/node_modules/. /app/node_modules/ && \
-    rm -rf /tmp/extra-pkg
+# Merge native packages into the standalone node_modules (fast cp, packages already fetched above)
+RUN cp -r /tmp/native-pkg/node_modules/. /app/node_modules/ && rm -rf /tmp/native-pkg
 
 USER appuser
 EXPOSE 8020
