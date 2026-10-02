@@ -52,15 +52,17 @@ export default async function AdminDashboardPage() {
       <div className={pageInner}>
 
         {/* Hero banner */}
-        <div
-          className="relative overflow-hidden rounded-2xl p-6 text-primary-foreground mb-8"
-          style={{ background: "linear-gradient(135deg, var(--color-primary), color-mix(in srgb, var(--color-primary) 70%, black 30%))" }}
-        >
-          <div className="absolute -top-6 -right-6 h-32 w-32 rounded-full bg-white/10" />
-          <div className="absolute bottom-0 left-24 h-20 w-20 rounded-full bg-white/[0.07]" />
-          <ShieldCheck className="relative h-8 w-8 mb-3 opacity-80" />
-          <h1 className="relative text-2xl font-bold tracking-tight">{greeting(user.displayName ?? user.email)}</h1>
-          <p className="relative text-primary-foreground/70 text-sm mt-1">Admin Panel · Everything looks good.</p>
+        <div className="relative overflow-hidden rounded-2xl border bg-card p-6 mb-8">
+          <div className="absolute -top-8 -right-8 h-40 w-40 rounded-full" style={{ background: "color-mix(in srgb, var(--color-primary) 8%, transparent)" }} />
+          <div className="absolute -bottom-6 left-20 h-24 w-24 rounded-full" style={{ background: "color-mix(in srgb, var(--color-primary) 5%, transparent)" }} />
+          <div className="relative flex items-center gap-3 mb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}>
+              <ShieldCheck className="h-5 w-5 text-primary" />
+            </div>
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Admin Panel</span>
+          </div>
+          <h1 className="relative text-2xl font-bold tracking-tight text-foreground">{greeting(user.displayName ?? user.email)}</h1>
+          <p className="relative text-muted-foreground text-sm mt-1">Everything looks good.</p>
         </div>
 
         {/* Stat cards */}
