@@ -169,14 +169,90 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
 // ---------------------------------------------------------------------------
 // Guacamole Panel — RDP + VNC in-browser via guacd
 // ---------------------------------------------------------------------------
-// Fewest equal side-by-side monitors whose aspect ratio is a real monitor's (5:4 … 16:9);
-// a single ultrawide (21:9) matches none and stays one screen
-function monitorCount(w: number, h: number) {
+interface Rect { x: number; y: number; w: number; h: number }
+
+// Fewest equal monitors (side by side, or stacked) whose aspect ratio is a real monitor's
+// (5:4 … 16:9); a single ultrawide (21:9) matches none and stays one screen
+function equalMonitors(r: Rect): Rect[] {
   for (let n = 1; n <= 4; n++) {
-    const r = w / n / h;
-    if (r >= 1.2 && r <= 1.85) return n;
+    const wide = r.w / n / r.h, tall = r.w / (r.h / n);
+    if (wide >= 1.2 && wide <= 1.85) return Array.from({ length: n }, (_, i) => ({ x: r.x + (i * r.w) / n, y: r.y, w: r.w / n, h: r.h }));
+    if (tall >= 1.2 && tall <= 1.85) return Array.from({ length: n }, (_, i) => ({ x: r.x, y: r.y + (i * r.h) / n, w: r.w, h: r.h / n }));
   }
-  return 1;
+  return [r];
+}
+
+// UltraVNC's all-screens picture is the remote's virtual desktop, black where no monitor is (the
+// protocol carries no monitor positions). Splits the lit area into bands of rows or columns where
+// its outline steps, recursively (side by side, stacked, offset, mixed sizes); a part without a
+// visible step is split into equal monitors. One rectangle when no multi-monitor layout is found.
+function findMonitors(px: Uint8ClampedArray, w: number, h: number): Rect[] {
+  const lit = (x: number, y: number) => { const i = (y * w + x) * 4; return px[i] > 8 || px[i + 1] > 8 || px[i + 2] > 8; };
+  const median = (v: number[], k: number) => v.map((n, i) => {
+    if (n < 0) return -1;
+    const win = v.slice(Math.max(0, i - k), i + k + 1).filter(m => m >= 0).sort((a, b) => a - b);
+    return win[win.length >> 1];
+  });
+  type Band = { from: number; to: number; lo: number; hi: number };
+  const same = (m: Band, n: Band) => Math.abs(m.lo - n.lo) <= 8 && Math.abs(m.hi - n.hi) <= 8;
+  const holds = (n: Band | undefined, b: Band) => !!n && b.lo >= n.lo - 8 && b.hi <= n.hi + 8;
+
+  // Runs of lines across r (rows when alongY) whose lit extent stays the same
+  function bands(r: Rect, alongY: boolean): Rect[] {
+    const len = alongY ? r.h : r.w, cross = alongY ? r.w : r.h;
+    const at = alongY ? (i: number, j: number) => lit(r.x + j, r.y + i) : (i: number, j: number) => lit(r.x + i, r.y + j);
+    const lo: number[] = [], hi: number[] = [];
+    for (let i = 0; i < len; i++) {
+      let a = 0, b = cross - 1;
+      while (a < cross && !at(i, a)) a++;
+      while (b > a && !at(i, b)) b--;
+      lo.push(a < cross ? a : -1); hi.push(a < cross ? b : -1);
+    }
+    const L = median(lo, 15), H = median(hi, 15); // ignore stray lines
+    const out: Band[] = [];
+    for (let i = 0; i < len; i++) {
+      if (L[i] < 0) continue;
+      const last = out[out.length - 1];
+      if (last && same(last, { from: i, to: i, lo: L[i], hi: H[i] })) last.to = i; // dark lines in between join too
+      else out.push({ from: i, to: i, lo: L[i], hi: H[i] });
+    }
+    // Dark content at a monitor's edge only narrows its lit extent, so a band too short to be a
+    // monitor joins a neighbour whose extent contains it: sandwiched ones (a dark window) first
+    for (;;) {
+      for (let i = out.length - 1; i > 0; i--) if (same(out[i - 1], out[i])) { out[i - 1].to = out[i].to; out.splice(i, 1); }
+      const pick = out.map((b, i) => ({ b, around: [out[i - 1], out[i + 1]].filter(n => holds(n, b)) as Band[] }))
+        .filter(c => c.b.to - c.b.from < 360 && c.around.length)
+        .sort((m, n) => n.around.length - m.around.length || (m.b.to - m.b.from) - (n.b.to - n.b.from))[0];
+      if (!pick) break;
+      // Prefer the neighbour that ends up with a real monitor's shape, then the closest extent
+      const shape = (n: Band) => {
+        const len = Math.max(n.to, pick.b.to) - Math.min(n.from, pick.b.from) + 1, span = n.hi - n.lo + 1;
+        const a = alongY ? span / len : len / span;
+        return Math.min(...[16 / 9, 16 / 10, 4 / 3, 5 / 4, 21 / 9].map(m => Math.abs(a - m)));
+      };
+      const gap = (n: Band) => Math.abs(n.lo - pick.b.lo) + Math.abs(n.hi - pick.b.hi);
+      const host = pick.around.sort((m, n) => shape(m) - shape(n) || gap(m) - gap(n))[0];
+      host.from = Math.min(host.from, pick.b.from); host.to = Math.max(host.to, pick.b.to);
+      out.splice(out.indexOf(pick.b), 1);
+    }
+    return out.map(b => alongY
+      ? { x: r.x + b.lo, y: r.y + b.from, w: b.hi - b.lo + 1, h: b.to - b.from + 1 }
+      : { x: r.x + b.from, y: r.y + b.lo, w: b.to - b.from + 1, h: b.hi - b.lo + 1 });
+  }
+
+  // A part shaped like one monitor is one (its dark content must not split it further)
+  function split(r: Rect, depth: number): Rect[] {
+    if (depth > 0 && r.w / r.h >= 1.15 && r.w / r.h <= 2.4) return [r];
+    if (depth < 3) for (const alongY of [true, false]) {
+      const parts = bands(r, alongY);
+      if (parts.length >= 2) return parts.flatMap(p => split(p, depth + 1));
+    }
+    return equalMonitors(r);
+  }
+
+  const whole = { x: 0, y: 0, w, h };
+  const rects = split(whole, 0);
+  return rects.length >= 2 && rects.length <= 4 && rects.every(r => r.w >= 480 && r.h >= 360) ? rects : [whole];
 }
 
 const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
@@ -219,7 +295,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
   const [screen, setScreen] = useState(() => {
     try { return Number(localStorage.getItem(screenKey) ?? 0); } catch { return 0; }
   });
-  const screensRef = useRef(1);
+  const monitorsRef = useRef<Rect[]>([]);
   const screenRef = useRef(screen);
   const rescaleRef = useRef<() => void>(() => {});
   const clientRef = useRef<any>(null);
@@ -272,13 +348,15 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       displayEl.style.transformOrigin = "0 0";
       containerRef.current.appendChild(displayEl);
 
-      // Side-by-side monitors of equal size, inferred from the aspect ratio (VNC has no layout info)
-      function visibleRange() {
-        const dw = display.getWidth();
-        const n = screensRef.current;
-        const k = screenRef.current;
-        const vw = dw / n;
-        return n > 1 && k >= 0 && k < n ? { x0: k * vw, vw } : { x0: 0, vw: dw };
+      // The part of the remote picture on show: the chosen monitor, or all of it
+      function visibleRect(): Rect {
+        const all = { x: 0, y: 0, w: display.getWidth(), h: display.getHeight() };
+        return monitorsRef.current.length > 1 ? monitorsRef.current[screenRef.current] ?? all : all;
+      }
+
+      function setMonitors(rects: Rect[]) {
+        monitorsRef.current = rects;
+        setScreens(rects.length);
       }
 
       function scaleDisplay() {
@@ -287,19 +365,35 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth();
         const dh = display.getHeight();
         if (dw === 0 || dh === 0) return;
-        const n = session.protocol === "web" ? 1 : monitorCount(dw, dh);
-        if (n !== screensRef.current) { screensRef.current = n; setScreens(n); }
-        const { x0, vw } = visibleRange();
-        const scale = Math.min(cw / vw, ch / dh);
+        const r = visibleRect();
+        const scale = Math.min(cw / r.w, ch / r.h);
         scaleRef.current = scale;
-        displayEl.style.left = (cw - vw * scale) / 2 - x0 * scale + "px";
-        displayEl.style.top  = Math.max(0, (ch - dh * scale) / 2) + "px";
-        displayEl.style.clipPath = `inset(0 ${(dw - x0 - vw) * scale}px 0 ${x0 * scale}px)`;
+        // Whole pixels, crop rounded outward: no sliver of the neighbouring monitor at the edges
+        displayEl.style.left = Math.round((cw - r.w * scale) / 2 - r.x * scale) + "px";
+        displayEl.style.top  = Math.round(Math.max(0, (ch - r.h * scale) / 2) - r.y * scale) + "px";
+        const edge = (v: number) => (v > 0 ? Math.ceil(v * scale) : 0) + "px";
+        displayEl.style.clipPath = `inset(${edge(r.y)} ${edge(dw - r.x - r.w)} ${edge(dh - r.y - r.h)} ${edge(r.x)})`;
         display.scale(scale);
       }
       rescaleRef.current = scaleDisplay;
 
-      display.onresize = scaleDisplay;
+      // Monitor layout: equal side-by-side monitors at once from the size, then the real layout from
+      // the picture's black filler once it has been drawn (a few tries: the first frames arrive in parts)
+      let layoutTimers: ReturnType<typeof setTimeout>[] = [];
+      function detectLayout() {
+        const dw = display.getWidth(), dh = display.getHeight();
+        if (session.protocol === "web" || dw === 0 || dh === 0) return;
+        const canvas: HTMLCanvasElement = display.getDefaultLayer().getCanvas();
+        const rects = findMonitors(canvas.getContext("2d")!.getImageData(0, 0, dw, dh).data, dw, dh);
+        if (JSON.stringify(rects) !== JSON.stringify(monitorsRef.current)) { setMonitors(rects); scaleDisplay(); }
+      }
+      display.onresize = () => {
+        const dw = display.getWidth(), dh = display.getHeight();
+        setMonitors(session.protocol === "web" ? [] : equalMonitors({ x: 0, y: 0, w: dw, h: dh }));
+        scaleDisplay();
+        layoutTimers.forEach(clearTimeout);
+        layoutTimers = [1500, 4000, 10000].map(ms => setTimeout(() => { if (!cancelled) detectLayout(); }, ms));
+      };
       // Web: the server-side browser follows the panel's size, so pages always fill it 1:1
       obs = new ResizeObserver(() => {
         scaleDisplay();
@@ -323,10 +417,10 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const s = scaleRef.current || 1;
         const ox = parseFloat(displayEl.style.left) || 0;
         const oy = parseFloat(displayEl.style.top)  || 0;
-        const { x0, vw } = visibleRange(); // keep the pointer on the monitor being shown
+        const r = visibleRect(); // keep the pointer on the monitor being shown
         return {
-          x: Math.max(x0, Math.min(x0 + vw - 1, Math.round((e.clientX - rect.left - ox) / s))),
-          y: Math.max(0, Math.min(display.getHeight() - 1, Math.round((e.clientY - rect.top  - oy) / s))),
+          x: Math.max(r.x, Math.min(r.x + r.w - 1, Math.round((e.clientX - rect.left - ox) / s))),
+          y: Math.max(r.y, Math.min(r.y + r.h - 1, Math.round((e.clientY - rect.top  - oy) / s))),
         };
       }
 

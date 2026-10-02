@@ -295,8 +295,9 @@ async function switchDsmMonitor(connId, session) {
   return code === 0;
 }
 
-// Wider than 1.85:1 is what the browser counts as several monitors (monitorCount in the dashboard)
-const isWide = win => win.w / win.h > 1.85;
+// No single monitor is wider than 1.85:1 or taller than 1.15:1 (5:4 is 1.25), so a picture outside
+// that range is several monitors: side by side, or stacked (the browser finds the layout itself)
+const isAllScreens = win => win.w / win.h > 1.85 || win.w / win.h < 1.15;
 
 // x11vnc runs -remote commands from its main loop and can miss -sync's deadline under load
 // (production: "exit 1" after 3.6 s, the browser never got the new size and no bar appeared).
@@ -338,15 +339,15 @@ async function waitForStableWindow(session, stableMs = 1000, maxMs = 4000) {
 
 // UltraVNC starts on the primary monitor and can only step to the next one; the cycle depends on
 // the server version (2012–2016: primary -> second -> all; 1.8: primary <-> all), so step one at a
-// time until the remote sends all screens side by side; the browser then picks a screen locally.
+// time until the remote sends all screens; the browser then picks a screen locally.
 // Equal monitors keep the size when stepping between them, so an unchanged size ends the step's
 // wait instead of failing it. The wait must outlast a slow remote's answer: stepping again before
-// it arrives overshoots past "all screens". -> true shown, false never side by side, null unknown
+// it arrives overshoots past "all screens". -> true shown, false never all screens, null unknown
 async function showAllDsmMonitors(connId, session, count, waitMs = 6000) {
   const sizeOf = win => `${win.w}x${win.h}`;
   let win = await findViewerWindow(session.display, 640, 400).catch(() => null);
   if (!win) { log(`DSM id=${connId}: viewer window not found, switching screens later`); return null; }
-  if (isWide(win)) return true;
+  if (isAllScreens(win)) return true;
   for (let step = 0; step < (count > 1 ? count : 3) && !session.stopped && session.wantAll !== false; step++) {
     // The selection is server-wide: switching while another viewer already shows all screens would
     // turn them off for everyone. This viewer just has not received the new layout yet.
@@ -358,9 +359,9 @@ async function showAllDsmMonitors(connId, session, count, waitMs = 6000) {
       if (next && sizeOf(next) !== before) { win = next; break; }
     }
     log(`DSM id=${connId}: screen step ${step + 1}: ${sizeOf(win)}`);
-    if (isWide(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
+    if (isAllScreens(win)) { log(`DSM id=${connId}: showing all screens (${sizeOf(win)})`); return true; }
   }
-  log(`DSM id=${connId}: remote never sent a side-by-side view (now ${sizeOf(win)})`);
+  log(`DSM id=${connId}: remote never sent all screens (now ${sizeOf(win)})`);
   return false;
 }
 
@@ -369,7 +370,7 @@ async function otherViewerShowsAll(session) {
   for (const o of dsmSessions) {
     if (o === session || o.stopped || `${o.remote.host}:${o.remote.port}` !== remote) continue;
     const win = await findViewerWindow(o.display, 640, 400).catch(() => null);
-    if (win && isWide(win)) return true;
+    if (win && isAllScreens(win)) return true;
   }
   return false;
 }
@@ -394,7 +395,7 @@ function prepareDsmMonitors(connId, session) {
 
 // UltraVNC falls back to the primary monitor whenever it rebuilds its desktop (right after
 // connecting, lock/unlock, UAC, Ctrl+Alt+Del). Wait for the remote to settle, then step back to
-// all screens. Gives up on a remote without a side-by-side view, or one that falls back 3 times
+// all screens. Gives up on a remote without an all-screens view, or one that falls back 3 times
 // within a minute (stepping would only make it flicker).
 async function keepAllDsmMonitors(connId, session, stableMs = 1000) {
   if (!session.wantAll || session.stepping || session.stopped) return;
@@ -439,7 +440,7 @@ function followViewerWindow(connId, session) {
       const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
       if (win && same(win, prev)) {
         applyClip(connId, session, win);
-        if (!isWide(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
+        if (!isAllScreens(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
       }
       prev = win;
     } finally { busy = false; }
