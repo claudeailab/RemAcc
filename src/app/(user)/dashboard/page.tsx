@@ -107,6 +107,12 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
         return true;
       });
 
+      // Copy on select, like PuTTY (Ctrl+C goes to the remote shell as an interrupt)
+      term.onSelectionChange(() => {
+        const text = term.getSelection();
+        if (text) navigator.clipboard.writeText(text).catch(() => {});
+      });
+
       // Right-click paste, like PuTTY
       term.element?.addEventListener("contextmenu", (e: Event) => {
         e.preventDefault();
