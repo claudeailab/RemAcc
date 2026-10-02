@@ -492,7 +492,8 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 // Dashboard
 // ---------------------------------------------------------------------------
 let sessionCounter = 0;
-const SESSION_STORE = "remacc_sessions";
+// Open tabs are restored per account, so two accounts' dashboards in one browser stay separate
+const sessionStore = () => `remacc_sessions_${document.cookie.match(/(?:^|;\s*)webapp-active=(\d+)/)?.[1] ?? ""}`;
 
 export default function DashboardPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
@@ -509,11 +510,13 @@ export default function DashboardPage() {
   const isDragging = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
+  const storeKey = useRef("");
 
   // Restore sessions from localStorage on mount so a page refresh reconnects
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(SESSION_STORE);
+      storeKey.current = sessionStore();
+      const raw = localStorage.getItem(storeKey.current);
       if (!raw) return;
       const parsed = JSON.parse(raw);
       const saved: Session[] = Array.isArray(parsed.sessions) ? parsed.sessions : [];
@@ -534,9 +537,9 @@ export default function DashboardPage() {
   useEffect(() => {
     try {
       if (sessions.length > 0) {
-        localStorage.setItem(SESSION_STORE, JSON.stringify({ sessions, activeKey }));
+        localStorage.setItem(storeKey.current, JSON.stringify({ sessions, activeKey }));
       } else {
-        localStorage.removeItem(SESSION_STORE);
+        localStorage.removeItem(storeKey.current);
       }
     } catch {}
   }, [sessions, activeKey]);

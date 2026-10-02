@@ -4,7 +4,7 @@ import { getBaseUrl } from "@/lib/base-url";
 import { db } from "@/lib/db";
 import { users, permission_groups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { createSession } from "@/lib/auth";
+import { startSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 
 function decodeJwtPayload(token: string): Record<string, unknown> {
@@ -98,21 +98,12 @@ export async function GET(req: NextRequest) {
     return fail("no_group");
   }
 
-  const token = await createSession(user.id);
   await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
   await logAudit({ userEmail: user.email, action: "login", resource: "auth", detail: "azure_sso" });
 
   const redirectPath = isAdmin ? "/admin" : "/dashboard";
-  const isSecure = req.headers.get("x-forwarded-proto") === "https";
-
   const res = NextResponse.redirect(`${base}${redirectPath}`);
-  res.cookies.set("webapp-session", token, {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60,
-    path: "/",
-  });
+  await startSession(req, res, user.id);
   res.cookies.delete("azure-oauth-state");
   return res;
 }

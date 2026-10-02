@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import "./globals.css";
 import { Toaster } from "sonner";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import TabAccount from "@/components/TabAccount";
 import { getPlatformInfo, iconUrl } from "@/lib/platform";
 
 const geist = Geist({ subsets: ["latin"] });
@@ -49,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <Toaster richColors position="top-right" />
         <ServiceWorkerRegister />
+        <TabAccount />
       </body>
     </html>
   );

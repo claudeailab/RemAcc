@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
 import { users, permission_groups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { createSession } from "@/lib/auth";
+import { startSession } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
@@ -91,18 +91,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const token = await createSession(user.id);
   const redirectPath = isAdmin ? "/admin" : "/dashboard";
-  const isSecure = req.headers.get("x-forwarded-proto") === "https";
   await logAudit({ userEmail: user.username ?? user.email, action: "login", resource: "auth", ip });
 
   const res = NextResponse.json({ redirect: redirectPath });
-  res.cookies.set("webapp-session", token, {
-    httpOnly: true,
-    secure: isSecure,
-    sameSite: "lax",
-    maxAge: 7 * 24 * 60 * 60,
-    path: "/",
-  });
+  await startSession(req, res, user.id);
   return res;
 }
