@@ -16,22 +16,19 @@ interface StatCardProps {
   icon: React.ElementType;
   label: string;
   value: number | string;
-  angle?: number;
-  dark?: number;
   delay?: string;
 }
 
-function StatCard({ icon: Icon, label, value, angle = 135, dark = 25, delay = "" }: StatCardProps) {
+function StatCard({ icon: Icon, label, value, delay = "" }: StatCardProps) {
   return (
-    <div
-      className={`relative overflow-hidden rounded-2xl p-5 text-primary-foreground animate-slide-up card-hover ${delay}`}
-      style={{ background: `linear-gradient(${angle}deg, var(--color-primary), color-mix(in srgb, var(--color-primary) ${100 - dark}%, black ${dark}%))` }}
-    >
-      <div className="absolute -right-3 -top-3 h-20 w-20 rounded-full bg-white/10" />
-      <div className="absolute -bottom-4 -left-4 h-14 w-14 rounded-full bg-black/10" />
-      <Icon className="relative h-6 w-6 mb-3 opacity-90" />
-      <p className="relative text-3xl font-bold tracking-tight">{value}</p>
-      <p className="relative text-sm mt-0.5 text-primary-foreground/75 font-medium">{label}</p>
+    <div className={`rounded-2xl border bg-card p-5 animate-slide-up card-hover ${delay}`}>
+      <div className="flex items-start justify-between mb-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)" }}>
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
+      </div>
+      <p className="text-3xl font-bold tracking-tight text-foreground">{value}</p>
+      <p className="text-sm mt-0.5 text-muted-foreground font-medium">{label}</p>
     </div>
   );
 }
@@ -68,10 +65,10 @@ export default async function AdminDashboardPage() {
 
         {/* Stat cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
-          <StatCard icon={Network} label="Connections" value={totalConnections.count} angle={135} dark={25} />
-          <StatCard icon={FolderOpen} label="Folders" value={totalFolders.count} angle={160} dark={30} delay="delay-75" />
-          <StatCard icon={KeyRound} label="Credentials" value={totalCredentials.count} angle={120} dark={20} delay="delay-150" />
-          <StatCard icon={Users} label="Users" value={totalUsers.count} angle={145} dark={35} delay="delay-225" />
+          <StatCard icon={Network} label="Connections" value={totalConnections.count} />
+          <StatCard icon={FolderOpen} label="Folders" value={totalFolders.count} delay="delay-75" />
+          <StatCard icon={KeyRound} label="Credentials" value={totalCredentials.count} delay="delay-150" />
+          <StatCard icon={Users} label="Users" value={totalUsers.count} delay="delay-225" />
         </div>
 
         {/* Protocol breakdown */}
