@@ -298,13 +298,31 @@ async function switchDsmMonitor(connId, session) {
 // Wider than 1.85:1 is what the browser counts as several monitors (monitorCount in the dashboard)
 const isWide = win => win.w / win.h > 1.85;
 
+// x11vnc runs -remote commands from its main loop and can miss -sync's deadline under load
+// (production: "exit 1" after 3.6 s, the browser never got the new size and no bar appeared).
+// A clip counts as applied only once x11vnc confirmed it and the browser received that size;
+// until then the follow loop (every 500 ms) sends it again.
 function applyClip(connId, session, win) {
   const clip = clipRect(win);
-  if (clip === session.clip) return;
-  session.clip = clip;
-  log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
+  const size = clip.split('+')[0];
+  if (clip === session.clip) {
+    if (!session.browserSize || session.browserSize === size || Date.now() - session.clipAt < 3000) return;
+    log(`DSM id=${connId}: browser still at ${session.browserSize}, resending relay ${clip}`);
+  }
+  if (session.clipPending) return;
+  if (clip !== session.clipLogged) {
+    session.clipLogged = clip;
+    log(`DSM id=${connId}: remote screen now ${win.w}x${win.h}, relay ${clip}`);
+  }
+  session.clipPending = clip;
   const x = spawn('x11vnc', ['-display', `:${session.display}`, '-sync', '-remote', `clip:${clip}`], { stdio: 'ignore' });
-  x.on('exit', code => { if (code !== 0) err(`DSM id=${connId}: relay resize to ${clip} failed (x11vnc exit ${code})`); });
+  const done = code => {
+    session.clipPending = null;
+    if (code === 0) { session.clip = clip; session.clipAt = Date.now(); }
+    else err(`DSM id=${connId}: relay resize to ${clip} failed (x11vnc exit ${code}), retrying`);
+  };
+  x.on('exit', done);
+  x.on('error', () => done(-1));
 }
 
 // Until the viewer window kept its size for stableMs (the remote finished rebuilding its desktop)
@@ -515,6 +533,8 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     alive();
     log(`DSM proxy id=${connId}: display=:${display} port=${session.port} ${win ? 'screen' : 'viewer dialog'} ${clip} — ready in ${Date.now() - t0} ms (viewer ${tViewer} ms)`);
     session.clip = clip;
+    session.clipAt = Date.now();
+    session.clipLogged = clip;
     followViewerWindow(connId, session);
     if (win) prepareDsmMonitors(connId, session);
   } catch (e) {
