@@ -8,7 +8,7 @@ import { createSession, sessionCookieName } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
-const schema = z.object({ username: z.string().min(1), password: z.string().min(1), slot: z.string().optional() });
+const schema = z.object({ username: z.string().min(1), password: z.string().min(1) });
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for") ?? "unknown";
@@ -20,7 +20,9 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { username, password, slot } = parsed.data;
+  const { username, password } = parsed.data;
+  // Auto-detect slot: if slot 1 is already occupied, use slot 2
+  const slot = req.cookies.get("webapp-session")?.value ? "2" : undefined;
 
   // Auto-seed first admin with Administrators group
   const adminUsername = process.env.REMACC_ADMIN_USERNAME;
@@ -92,7 +94,7 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await createSession(user.id);
-  const slotSuffix = slot && slot !== "1" ? `?s=${slot}` : "";
+  const slotSuffix = slot ? `?s=${slot}` : "";
   const redirectPath = (isAdmin && !slot ? "/admin" : "/dashboard") + slotSuffix;
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
   await logAudit({ userEmail: user.username ?? user.email, action: "login", resource: "auth", ip });

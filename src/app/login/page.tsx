@@ -22,7 +22,6 @@ const ERROR_MESSAGES: Record<string, string> = {
 
 function LoginForm({ azureLogin }: { azureLogin: boolean }) {
   const searchParams = useSearchParams();
-  const slot = searchParams.get("s") ?? undefined;
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -44,7 +43,7 @@ function LoginForm({ azureLogin }: { azureLogin: boolean }) {
       const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, ...(slot ? { slot } : {}) }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
       if (data.azureLogin) {
@@ -85,7 +84,7 @@ function LoginForm({ azureLogin }: { azureLogin: boolean }) {
             <span className="h-px flex-1 bg-border" />or<span className="h-px flex-1 bg-border" />
           </div>
           <Button asChild variant="outline" className="w-full gap-2">
-            <a href={`/api/auth/azure${slot ? `?s=${slot}` : ""}`}>
+            <a href="/api/auth/azure">
               <svg viewBox="0 0 21 21" className="h-4 w-4" aria-hidden="true">
                 <rect x="1" y="1" width="9" height="9" fill="#f25022" />
                 <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
@@ -102,8 +101,6 @@ function LoginForm({ azureLogin }: { azureLogin: boolean }) {
 }
 
 function LoginPageInner() {
-  const searchParams = useSearchParams();
-  const slot = searchParams.get("s");
   const [platformName, setPlatformName] = useState("Platform");
   const [iconUrl, setIconUrl] = useState("");
   const [azureLogin, setAzureLogin] = useState(false);
@@ -127,7 +124,7 @@ function LoginPageInner() {
             </div>
           )}
           <CardTitle className="text-2xl">{platformName}</CardTitle>
-          <CardDescription>{slot && slot !== "1" ? `Sign in as a second user (session ${slot})` : "Sign in to your account"}</CardDescription>
+          <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
           <Suspense fallback={<div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin" /></div>}>
@@ -140,9 +137,5 @@ function LoginPageInner() {
 }
 
 export default function LoginPage() {
-  return (
-    <Suspense fallback={<div className="flex min-h-screen items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>}>
-      <LoginPageInner />
-    </Suspense>
-  );
+  return <LoginPageInner />;
 }
