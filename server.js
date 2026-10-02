@@ -379,6 +379,7 @@ async function otherViewerShowsAll(session) {
 // once. When all screens arrive the browser keeps showing the chosen screen (1 by default) at the
 // same scale, so only the 1 | 2 | All bar appears.
 function prepareDsmMonitors(connId, session) {
+  session.monitorsPrepared = true;
   // Unknown count (older UltraVNC servers never report it): step anyway, rather than hide screens.
   // The count only caps the steps and rules out single-monitor remotes, so it is asked in parallel.
   session.monitorCount = 0;
@@ -387,6 +388,7 @@ function prepareDsmMonitors(connId, session) {
     log(`DSM id=${connId}: ${n === null ? 'monitor count unavailable' : n ? `remote reports ${n} monitor(s)` : 'remote does not report its monitors (older UltraVNC server)'}`);
     if (n === 1) session.wantAll = false;
     else if (n) session.monitorCount = n;
+    if (n) { session.reportedMonitors = n; session.onMonitors?.(n); } // the browser's 1 | 2 | All follows it
   }).catch(() => {});
   keepAllDsmMonitors(connId, session, 300)
     .catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`))
@@ -440,7 +442,9 @@ function followViewerWindow(connId, session) {
       const win = await findViewerWindow(session.display, 640, 400).catch(() => null);
       if (win && same(win, prev)) {
         applyClip(connId, session, win);
-        if (!isAllScreens(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
+        // Started on a dialog (e.g. the remote asked for a password): set up its monitors now
+        if (!session.monitorsPrepared) prepareDsmMonitors(connId, session);
+        else if (!isAllScreens(win)) keepAllDsmMonitors(connId, session).catch(e => err(`DSM id=${connId}: monitor switch: ${e.message}`));
       }
       prev = win;
     } finally { busy = false; }
@@ -1080,6 +1084,11 @@ async function handleGuac(wsConn, req, id, protocol) {
         clearInterval(startupKeepalive);
         streaming = true;
         if (wsConn.readyState === 1) wsConn.send(instr);
+        if (dsm) {
+          // Between whole instructions only: the browser's tunnel parses them one by one
+          dsm.onMonitors = n => { if (wsConn.readyState === 1) wsConn.send(guacEncode(['remacc-monitors', String(n)])); };
+          if (dsm.reportedMonitors) dsm.onMonitors(dsm.reportedMonitors);
+        }
       } else if (streaming) {
         // What the browser actually gets: its 1 | 2 | All bar follows this size
         if (dsm && opcode === 'size' && parts[1] === '0' && dsm.browserSize !== `${parts[2]}x${parts[3]}`) {

@@ -185,8 +185,9 @@ function equalMonitors(r: Rect): Rect[] {
 // UltraVNC's all-screens picture is the remote's virtual desktop, black where no monitor is (the
 // protocol carries no monitor positions). Splits the lit area into bands of rows or columns where
 // its outline steps, recursively (side by side, stacked, offset, mixed sizes); a part without a
-// visible step is split into equal monitors. One rectangle when no multi-monitor layout is found.
-function findMonitors(px: Uint8ClampedArray, w: number, h: number): Rect[] {
+// visible step is split into equal monitors. null when the picture shows no such layout (a monitor
+// with a black desktop looks like no monitor at all).
+function findMonitors(px: Uint8ClampedArray, w: number, h: number, area: Rect = { x: 0, y: 0, w, h }): Rect[] | null {
   const lit = (x: number, y: number) => { const i = (y * w + x) * 4; return px[i] > 8 || px[i + 1] > 8 || px[i + 2] > 8; };
   const median = (v: number[], k: number) => v.map((n, i) => {
     if (n < 0) return -1;
@@ -247,12 +248,61 @@ function findMonitors(px: Uint8ClampedArray, w: number, h: number): Rect[] {
       const parts = bands(r, alongY);
       if (parts.length >= 2) return parts.flatMap(p => split(p, depth + 1));
     }
-    return equalMonitors(r);
+    return depth ? equalMonitors(r) : [r]; // no step anywhere: no layout found
   }
 
+  const rects = split(area, 0);
+  return rects.length >= 2 && rects.length <= 4 && rects.every(r => r.w >= 480 && r.h >= 360) ? rects : null;
+}
+
+// Bounding box of the picture's non-black pixels, null when all black
+function litArea(px: Uint8ClampedArray, w: number, h: number): Rect | null {
+  let x0 = w, x1 = -1, y0 = h, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    if (px[i] > 8 || px[i + 1] > 8 || px[i + 2] > 8) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; y1 = y; }
+  }
+  return x1 < 0 ? null : { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
+}
+
+// The monitors in a w x h picture. `count` is how many the remote reports (0 = unknown: plain VNC,
+// older UltraVNC servers) and decides between the found layout and equal monitors. A picture shaped
+// like one monitor (1.15–2.4 wide) is one unless the remote reports more and a layout matches.
+function chooseMonitors(w: number, h: number, px: Uint8ClampedArray | null, count: number): Rect[] {
   const whole = { x: 0, y: 0, w, h };
-  const rects = split(whole, 0);
-  return rects.length >= 2 && rects.length <= 4 && rects.every(r => r.w >= 480 && r.h >= 360) ? rects : [whole];
+  const oneShaped = w / h >= 1.15 && w / h <= 2.4;
+  if (count === 1 || (!count && oneShaped)) return [whole];
+  const fits = (rs: Rect[]) => (count ? rs.length === count : rs.length > 1);
+  const found = px && findMonitors(px, w, h);
+  if (found && fits(found)) return found;
+  // A monitor with a black desktop is dark from edge to edge: the lit part spans the picture's full
+  // height (or width) and the dark strips beside it are the remaining monitors. Trusted before equal
+  // monitors when the lit monitors have a real monitor's shape (else their own dark content may
+  // have moved the edge).
+  const standard = (r: Rect) => [16 / 9, 16 / 10, 4 / 3, 5 / 4, 21 / 9].some(m => Math.abs(r.w / r.h - m) < 0.02);
+  let beside: Rect[] | null = null, litStandard = false;
+  const lit = px && count > 1 ? litArea(px, w, h) : null;
+  if (lit) {
+    const across = lit.y <= 16 && lit.y + lit.h >= h - 16, down = lit.x <= 16 && lit.x + lit.w >= w - 16;
+    const main = across ? { x: lit.x, y: 0, w: lit.w, h } : { x: 0, y: lit.y, w, h: lit.h };
+    const strips = (across ? [{ x: 0, y: 0, w: lit.x, h }, { x: lit.x + lit.w, y: 0, w: w - lit.x - lit.w, h }]
+      : down ? [{ x: 0, y: 0, w, h: lit.y }, { x: 0, y: lit.y + lit.h, w, h: h - lit.y - lit.h }] : [])
+      .filter(r => r.w >= 480 && r.h >= 360);
+    const lit2 = findMonitors(px!, w, h, main) ?? [main];
+    if (strips.length) {
+      beside = [...lit2, ...strips].sort((m, n) => m.y - n.y || m.x - n.x);
+      litStandard = lit2.every(standard);
+    }
+  }
+  const equal = equalMonitors(whole);
+  if (beside && fits(beside) && litStandard) return beside;
+  if (fits(equal)) return equal;
+  if (beside && fits(beside)) return beside;
+  if (!count || oneShaped) return equal;
+  // The remote reports more monitors than the picture shows: equal parts along its long side
+  return Array.from({ length: count }, (_, i) => w >= h
+    ? { x: (i * w) / count, y: 0, w: w / count, h }
+    : { x: 0, y: (i * h) / count, w, h: h / count });
 }
 
 const CTRL_ALT_DEL = [0xffe3, 0xffe9, 0xffff]; // Control_L, Alt_L, Delete
@@ -296,6 +346,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
     try { return Number(localStorage.getItem(screenKey) ?? 0); } catch { return 0; }
   });
   const monitorsRef = useRef<Rect[]>([]);
+  const monitorCountRef = useRef(0); // as reported by the remote (DSM), 0 = unknown
   const screenRef = useRef(screen);
   const rescaleRef = useRef<() => void>(() => {});
   const clientRef = useRef<any>(null);
@@ -340,6 +391,13 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         : "";
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
+      // RemAcc's own instruction: the monitor count the remote reports (DSM sessions)
+      const handle = tunnel.oninstruction;
+      tunnel.oninstruction = (opcode: string, args: string[]) => {
+        if (opcode !== "remacc-monitors") return handle(opcode, args);
+        monitorCountRef.current = Number(args[0]) || 0;
+        detectLayout();
+      };
       clientRef.current = client;
 
       const display = client.getDisplay();
@@ -384,12 +442,12 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         const dw = display.getWidth(), dh = display.getHeight();
         if (session.protocol === "web" || dw === 0 || dh === 0) return;
         const canvas: HTMLCanvasElement = display.getDefaultLayer().getCanvas();
-        const rects = findMonitors(canvas.getContext("2d")!.getImageData(0, 0, dw, dh).data, dw, dh);
+        const rects = chooseMonitors(dw, dh, canvas.getContext("2d")!.getImageData(0, 0, dw, dh).data, monitorCountRef.current);
         if (JSON.stringify(rects) !== JSON.stringify(monitorsRef.current)) { setMonitors(rects); scaleDisplay(); }
       }
       display.onresize = () => {
         const dw = display.getWidth(), dh = display.getHeight();
-        setMonitors(session.protocol === "web" ? [] : equalMonitors({ x: 0, y: 0, w: dw, h: dh }));
+        setMonitors(session.protocol === "web" ? [] : chooseMonitors(dw, dh, null, monitorCountRef.current));
         scaleDisplay();
         layoutTimers.forEach(clearTimeout);
         layoutTimers = [1500, 4000, 10000].map(ms => setTimeout(() => { if (!cancelled) detectLayout(); }, ms));
