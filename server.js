@@ -791,14 +791,32 @@ async function startWebBrowser(connId, url, username, password, width, height) {
     await waitForPort(session.port);
     if (session.stopped) throw new Error('browser exited during startup');
     session.size = `${width}x${height}`;
+    // x11vnc can miss -sync's deadline (exit 1), so retry until the latest size is applied
+    let clip = session.size, clipping = false, failures = 0;
+    const applyClip = () => {
+      if (session.stopped || clipping || clip === session.size) return;
+      clipping = true;
+      const size = session.size;
+      const done = code => {
+        clipping = false;
+        if (session.stopped) return;
+        if (code === 0) { clip = size; failures = 0; applyClip(); return; }
+        if (++failures > 10) { err(`WEB id=${connId}: relay resize to ${size} failed (x11vnc exit ${code}), giving up`); return; }
+        err(`WEB id=${connId}: relay resize to ${size} failed (x11vnc exit ${code}), retrying`);
+        setTimeout(applyClip, 500);
+      };
+      const x = spawn('x11vnc', ['-display', `:${display}`, '-sync', '-remote', `clip:${size}+0+0`], { stdio: 'ignore' });
+      x.on('exit', done);
+      x.on('error', () => done(-1));
+    };
     session.resize = (w, h) => {
       const size = `${clampWebW(w)}x${clampWebH(h)}`;
       if (session.stopped || size === session.size) return;
       session.size = size;
+      failures = 0;
       browser.stdin.write(`${size}\n`);
-      const x = spawn('x11vnc', ['-display', `:${display}`, '-sync', '-remote', `clip:${size}+0+0`], { stdio: 'ignore' });
-      x.on('exit', code => { if (code !== 0) err(`WEB id=${connId}: relay resize to ${size} failed (x11vnc exit ${code})`); });
       log(`WEB id=${connId}: panel resized to ${size}`);
+      applyClip();
     };
     log(`WEB id=${connId}: display=:${display} port=${session.port} ${width}x${height} ${url}${username ? ' (auto sign-in)' : ''}`);
   } catch (e) {
@@ -1176,10 +1194,14 @@ async function handleSSH(wsConn, req, id) {
       if (wsConn.readyState === 1) wsConn.send(`\r\n\x1b[31mSSH error: ${e.message}\x1b[0m\r\n`);
       try { wsConn.close(1011); } catch {}
     });
+    // Many servers (PAM, appliances) take the password only through keyboard-interactive
+    ssh.on('keyboard-interactive', (_name, _instr, _lang, prompts, finish) =>
+      finish(prompts.map(() => details.credential.password)));
     const sshProto = (await getProtoSettings(req))?.ssh ?? {};
     ssh.connect({
       host: details.host, port: details.port,
       username: details.credential.username, password: details.credential.password,
+      tryKeyboard: true,
       readyTimeout: (sshProto.readyTimeout ?? 15) * 1000,
       keepaliveInterval: (sshProto.keepaliveInterval ?? 25) * 1000,
     });

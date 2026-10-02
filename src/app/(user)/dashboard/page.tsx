@@ -250,10 +250,12 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
       if (cancelled || !containerRef.current) return;
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      // Web: the server-side browser gets this panel's size, so pages render 1:1
-      const wsPath = session.protocol === "web"
-        ? `/ws/web/${session.id}?w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
-        : `/ws/${session.protocol === "rdp" ? "rdp" : "vnc"}/${session.id}`;
+      const wsPath = `/ws/${session.protocol === "web" ? "web" : session.protocol === "rdp" ? "rdp" : "vnc"}/${session.id}`;
+      // Web: the server-side browser gets this panel's size, so pages render 1:1. The tunnel
+      // appends "?" + connect data to its URL, so the size travels as that data.
+      const connectData = session.protocol === "web"
+        ? `w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
+        : "";
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
       clientRef.current = client;
@@ -387,7 +389,7 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
         try { tunnel.sendMessage("nop"); } catch {}
       }, 25000);
 
-      client.connect();
+      client.connect(connectData);
     }
 
     start().catch(e => console.error("GuacPanel error", e));
