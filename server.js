@@ -509,13 +509,22 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     if (password) wineArgs.push('-password', password);
     if (username) wineArgs.push('-user', username);
 
-    const wine = spawn('wine', wineArgs, { env: wineEnv, cwd: UVNC_DIR, stdio: 'ignore' });
+    // Wine's own errors (not its fixme noise) explain a viewer that quits on its own
+    const wine = spawn('wine', wineArgs, { env: { ...wineEnv, WINEDEBUG: 'fixme-all' }, cwd: UVNC_DIR, stdio: ['ignore', 'ignore', 'pipe'] });
     procs.push(wine);
     wine.on('error', e => err(`Wine id=${connId} error: ${e.message}`));
+    let wineOut = '';
+    wine.stderr.on('data', d => { wineOut = (wineOut + d).slice(-4000); });
+    const tWine = Date.now();
 
     // Export exactly the viewer window (= the remote screen). If the viewer shows a dialog instead
     // (e.g. authentication failed), export a 1920x1080 area around it so the user can read and answer it.
-    const found = await waitForViewerWindow(display, wine, alive);
+    let found;
+    try { found = await waitForViewerWindow(display, wine, alive); }
+    catch (e) {
+      if (wine.exitCode === null && wine.signalCode === null) throw e;
+      throw await viewerExitError(connId, host, vncPort, wine, Date.now() - tWine, wineOut);
+    }
     alive();
     tViewer = Date.now() - t0;
     const win = found?.screen ? found.win : null;
@@ -542,6 +551,33 @@ async function startDsmProxy(connId, host, vncPort, username, password) {
     throw e;
   }
   return session;
+}
+
+// null when host:port accepts a TCP connection, else why not (ECONNREFUSED, ETIMEDOUT, ENOTFOUND…)
+function tcpProbe(host, port, timeoutMs) {
+  return new Promise(resolve => {
+    const s = net.connect({ host, port, timeout: timeoutMs });
+    const done = r => { s.destroy(); resolve(r); };
+    s.on('connect', () => done(null));
+    s.on('timeout', () => done(`no answer within ${timeoutMs / 1000} s`));
+    s.on('error', e => done(e.code ?? e.message));
+  });
+}
+
+// Viewer quit without a window: log its exit and output, and tell an unreachable remote (no
+// retry, nothing to sign in to) from a server that ended the connection
+async function viewerExitError(connId, host, port, wine, ms, output) {
+  const secs = (ms / 1000).toFixed(1);
+  const how = wine.signalCode ? `signal ${wine.signalCode}` : `exit code ${wine.exitCode}`;
+  const lines = output.split('\n').map(l => l.trim()).filter(Boolean).slice(-10);
+  err(`DSM proxy id=${connId}: viewer quit after ${secs} s (${how})${lines.length ? `, output:\n  ${lines.join('\n  ')}` : ', no output'}`);
+  const problem = await tcpProbe(host, port, 3000);
+  if (problem) {
+    err(`DSM proxy id=${connId}: ${host}:${port} unreachable (${problem})`);
+    return new Error(`Cannot reach ${host}:${port} (${problem})`);
+  }
+  log(`DSM proxy id=${connId}: ${host}:${port} accepts connections`);
+  return new Error(`UltraVNC viewer exited before showing the remote screen (after ${secs} s, ${how}). ${host}:${port} is reachable, so the VNC server ended the connection.`);
 }
 
 // Largest viewable viewer window (any .exe class — each session has its own display) at least minW x minH, excluding the connection status
