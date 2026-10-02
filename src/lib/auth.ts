@@ -1,13 +1,27 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "./db";
 import { sessions, users, permission_groups } from "./db/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
+export function sessionCookieName(slot?: string | null) {
+  return slot && slot !== "1" ? `webapp-session-${slot}` : "webapp-session";
+}
+
+async function resolveSlot(): Promise<string | null> {
+  try {
+    const h = await headers();
+    return h.get("x-session-slot");
+  } catch {
+    return null;
+  }
+}
+
 export async function getSession() {
+  const slot = await resolveSlot();
   const cookieStore = await cookies();
-  const token = cookieStore.get("webapp-session")?.value;
+  const token = cookieStore.get(sessionCookieName(slot))?.value;
   if (!token) return null;
 
   const [session] = await db

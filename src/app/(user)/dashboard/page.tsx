@@ -1,7 +1,8 @@
 "use client";
 
 import "@xterm/xterm/css/xterm.css";
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, createContext, useContext, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +10,12 @@ import {
   Loader2, Monitor, Folder, FolderOpen, Search, X, Menu, Terminal, Globe, ArrowLeft, ArrowRight, RotateCw, Home,
 } from "lucide-react";
 import { muted } from "@/lib/ui-conventions";
+
+const SlotContext = createContext<string | null>(null);
+function useSlot() { return useContext(SlotContext); }
+function slotHeaders(slot: string | null): HeadersInit {
+  return slot && slot !== "1" ? { "X-Session-Slot": slot } : {};
+}
 
 interface Connection { id: number; name: string; host: string; port: number | null; protocol: string; folderId: number | null; credentialId: number | null }
 interface FolderRow { id: number; name: string; parentId: number | null; credentialId: number | null }
@@ -33,6 +40,7 @@ const PROTO_BADGE: Record<string, string> = {
 // SSH Panel — xterm.js over WebSocket
 // ---------------------------------------------------------------------------
 function SshPanel({ session, active }: { session: Session; active: boolean }) {
+  const slot = useSlot();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -47,7 +55,7 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
     async function start() {
       const [[{ Terminal }, { FitAddon }], settings] = await Promise.all([
         Promise.all([import("@xterm/xterm"), import("@xterm/addon-fit")]),
-        fetch("/api/connections/settings").then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch("/api/connections/settings", { headers: slotHeaders(slot) }).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (cancelled || !containerRef.current) return;
       const ssh = settings?.ssh;
@@ -72,7 +80,8 @@ function SshPanel({ session, active }: { session: Session; active: boolean }) {
       obs.observe(containerRef.current);
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}?cols=${term.cols}&rows=${term.rows}`);
+      const slotParam = slot && slot !== "1" ? `&s=${slot}` : "";
+      const ws = new WebSocket(`${proto}//${location.host}/ws/ssh/${session.id}?cols=${term.cols}&rows=${term.rows}${slotParam}`);
       wsRef.current = ws;
       ws.binaryType = "arraybuffer";
 
@@ -200,6 +209,7 @@ function guacErrorText(err: any) {
 }
 
 function GuacPanel({ session, active }: { session: Session; active: boolean }) {
+  const slot = useSlot();
   const containerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef(active);
   const [status, setStatus] = useState<"connecting" | "connected" | "error">("connecting");
@@ -251,11 +261,12 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 
       const proto = location.protocol === "https:" ? "wss:" : "ws:";
       const wsPath = `/ws/${session.protocol === "web" ? "web" : session.protocol === "rdp" ? "rdp" : "vnc"}/${session.id}`;
+      const slotParam = slot && slot !== "1" ? `s=${slot}&` : "";
       // Web: the server-side browser gets this panel's size, so pages render 1:1. The tunnel
       // appends "?" + connect data to its URL, so the size travels as that data.
       const connectData = session.protocol === "web"
-        ? `w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
-        : "";
+        ? `${slotParam}w=${containerRef.current.offsetWidth}&h=${containerRef.current.offsetHeight}`
+        : slotParam ? slotParam.slice(0, -1) : "";
       const tunnel = new Guac.WebSocketTunnel(`${proto}//${location.host}${wsPath}`);
       client = new Guac.Client(tunnel);
       clientRef.current = client;
@@ -494,7 +505,9 @@ function GuacPanel({ session, active }: { session: Session; active: boolean }) {
 let sessionCounter = 0;
 const SESSION_STORE = "remacc_sessions";
 
-export default function DashboardPage() {
+function DashboardPageInner() {
+  const searchParams = useSearchParams();
+  const slot = searchParams.get("s");
   const [connections, setConnections] = useState<Connection[]>([]);
   const [folders, setFolders] = useState<FolderRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -575,12 +588,12 @@ export default function DashboardPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await fetch("/api/connections");
+      const r = await fetch("/api/connections", { headers: slotHeaders(slot) });
       const d = await r.json();
       setConnections(d.connections ?? []);
       setFolders(d.folders ?? []);
     } finally { setLoading(false); }
-  }, []);
+  }, [slot]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -596,7 +609,7 @@ export default function DashboardPage() {
     setConnecting(conn.id);
     setSidebarOpen(false);
     try {
-      const r = await fetch(`/api/connections/${conn.id}/connect`);
+      const r = await fetch(`/api/connections/${conn.id}/connect`, { headers: slotHeaders(slot) });
       const d = await r.json();
       if (!r.ok) { toast.error(d.error ?? "Connection failed"); return; }
       const key = `s${++sessionCounter}`;
@@ -710,6 +723,7 @@ export default function DashboardPage() {
   );
 
   return (
+    <SlotContext.Provider value={slot}>
     <div className="h-[calc(100vh-3.5rem)] flex flex-col overflow-hidden bg-background">
       {/* Tab bar */}
       <div className="flex-none h-10 border-b flex items-center gap-1 px-2 overflow-x-auto shrink-0">
@@ -801,5 +815,14 @@ export default function DashboardPage() {
         </div>
       </div>
     </div>
+    </SlotContext.Provider>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={null}>
+      <DashboardPageInner />
+    </Suspense>
   );
 }

@@ -4,11 +4,11 @@ import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
 import { users, permission_groups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { createSession } from "@/lib/auth";
+import { createSession, sessionCookieName } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
-const schema = z.object({ username: z.string().min(1), password: z.string().min(1) });
+const schema = z.object({ username: z.string().min(1), password: z.string().min(1), slot: z.string().optional() });
 
 export async function POST(req: NextRequest) {
   const ip = req.headers.get("x-forwarded-for") ?? "unknown";
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const parsed = schema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
-  const { username, password } = parsed.data;
+  const { username, password, slot } = parsed.data;
 
   // Auto-seed first admin with Administrators group
   const adminUsername = process.env.REMACC_ADMIN_USERNAME;
@@ -92,12 +92,13 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await createSession(user.id);
-  const redirectPath = isAdmin ? "/admin" : "/dashboard";
+  const slotSuffix = slot && slot !== "1" ? `?s=${slot}` : "";
+  const redirectPath = (isAdmin && !slot ? "/admin" : "/dashboard") + slotSuffix;
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
   await logAudit({ userEmail: user.username ?? user.email, action: "login", resource: "auth", ip });
 
   const res = NextResponse.json({ redirect: redirectPath });
-  res.cookies.set("webapp-session", token, {
+  res.cookies.set(sessionCookieName(slot), token, {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax",
