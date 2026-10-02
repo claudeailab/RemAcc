@@ -867,13 +867,11 @@ async function startWebBrowser(connId, url, username, password, width, height) {
 // ---------------------------------------------------------------------------
 async function handleGuac(wsConn, req, id, protocol) {
   log(`WS ${protocol.toUpperCase()} connection id=${id}`);
-  const slotParam = new URL(req.url ?? '/', 'http://x').searchParams.get('s');
-  const slotHeader = slotParam ? { 'x-session-slot': slotParam } : {};
 
   let details;
   try {
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
-      headers: { cookie: req.headers.cookie ?? '', ...slotHeader },
+      headers: { cookie: req.headers.cookie ?? '' },
     });
     if (!res.ok) {
       err(`WS ${protocol} id=${id}: connect API returned ${res.status}`);
@@ -1141,8 +1139,6 @@ function termSize(req) {
 
 async function handleSSH(wsConn, req, id) {
   log(`WS SSH connection id=${id}`);
-  const slotParam = new URL(req.url ?? '/', 'http://x').searchParams.get('s');
-  const slotHeader = slotParam ? { 'x-session-slot': slotParam } : {};
 
   // The browser may resize before the shell exists; keep its latest size
   const size = termSize(req);
@@ -1157,7 +1153,7 @@ async function handleSSH(wsConn, req, id) {
   try {
     const { Client: SSHClient } = require('ssh2');
     const res = await fetch(`http://127.0.0.1:${port}/api/connections/${id}/connect`, {
-      headers: { cookie: req.headers.cookie ?? '', ...slotHeader },
+      headers: { cookie: req.headers.cookie ?? '' },
     });
     if (!res.ok) {
       err(`WS SSH id=${id}: connect API returned ${res.status}`);

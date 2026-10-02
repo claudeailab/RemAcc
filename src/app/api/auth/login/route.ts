@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { db } from "@/lib/db";
 import { users, permission_groups } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { createSession, sessionCookieName } from "@/lib/auth";
+import { createSession } from "@/lib/auth";
 import { isRateLimited } from "@/lib/rate-limit";
 import { logAudit } from "@/lib/audit";
 
@@ -21,8 +21,6 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const { username, password } = parsed.data;
-  // Auto-detect slot: if slot 1 is already occupied, use slot 2
-  const slot = req.cookies.get("webapp-session")?.value ? "2" : undefined;
 
   // Auto-seed first admin with Administrators group
   const adminUsername = process.env.REMACC_ADMIN_USERNAME;
@@ -94,13 +92,12 @@ export async function POST(req: NextRequest) {
   }
 
   const token = await createSession(user.id);
-  const slotSuffix = slot ? `?s=${slot}` : "";
-  const redirectPath = (isAdmin && !slot ? "/admin" : "/dashboard") + slotSuffix;
+  const redirectPath = isAdmin ? "/admin" : "/dashboard";
   const isSecure = req.headers.get("x-forwarded-proto") === "https";
   await logAudit({ userEmail: user.username ?? user.email, action: "login", resource: "auth", ip });
 
   const res = NextResponse.json({ redirect: redirectPath });
-  res.cookies.set(sessionCookieName(slot), token, {
+  res.cookies.set("webapp-session", token, {
     httpOnly: true,
     secure: isSecure,
     sameSite: "lax",
