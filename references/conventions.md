@@ -166,3 +166,7 @@ The same URL always opens the login page (`/` -> `/login`, which never redirects
 ## SSH Terminal Clipboard
 
 PuTTY-style: selecting text copies it (`term.onSelectionChange` -> `navigator.clipboard.writeText`; covers drag, double-click word and triple-click line — a `mouseup` listener misses double-click because xterm selects the word after mouseup), right-click and Ctrl+V paste. Ctrl+C stays the remote interrupt. The Clipboard API needs a secure context (HTTPS or localhost).
+
+## Dates and Times
+
+Admin → System → Settings → Date & Time sets the platform timezone (any IANA zone, default UTC), date format (`DD/MM/YYYY` default, `MM/DD/YYYY`, `YYYY-MM-DD`, `DD.MM.YYYY`, `D MMM YYYY`) and time format (`24h` default, `12h`); stored as settings `datetime_timezone`, `datetime_date_format`, `datetime_time_format` (`lib/datetime.ts`, API `/api/admin/settings/datetime`, validated with zod + `isTimeZone`, audited as resource `datetime`). Never render a date with `toLocaleString()`/`toLocaleDateString()` (viewer's zone and locale, and the server's in server components): use `formatDateTime(value, settings, withTime?)` from `lib/datetime-shared.ts` — server components get settings from `getDateTimeSettings()`, client components under `/admin` from `useFormatDateTime()` (`components/DateTimeProvider.tsx`, provided by the admin layout).

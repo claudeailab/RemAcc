@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
+import { useFormatDateTime } from "@/components/DateTimeProvider";
 
 interface AuditLog {
   id: number;
@@ -20,6 +21,7 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
 
   if (action === "login" && resource === "auth") return "Logged in";
   if (action === "update" && resource === "platform") return d ? `Updated platform settings: ${d}` : "Updated platform settings";
+  if (action === "update" && resource === "datetime") return d ? `Updated date & time settings: ${d}` : "Updated date & time settings";
 
   if (action === "create" && resource === "user") {
     if (d.startsWith("azure_add")) {
@@ -93,6 +95,7 @@ function formatAuditEvent(action: string, resource: string, detail: string | nul
 }
 
 export default function AuditPage() {
+  const formatDate = useFormatDateTime();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -132,7 +135,7 @@ export default function AuditPage() {
                 <div key={log.id} className="p-3 space-y-1">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-sm font-medium">{formatAuditEvent(log.action, log.resource, log.detail)}</span>
-                    <span className="text-xs text-muted-foreground shrink-0">{new Date(log.createdAt).toLocaleString()}</span>
+                    <span className="text-xs text-muted-foreground shrink-0">{formatDate(log.createdAt)}</span>
                   </div>
                   {log.userEmail && <div className="text-xs text-muted-foreground">{log.userEmail}</div>}
                   {log.ip && <div className="text-xs text-muted-foreground font-mono">{log.ip}</div>}
@@ -153,7 +156,7 @@ export default function AuditPage() {
                 <tbody>
                   {logs.map(log => (
                     <tr key={log.id} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
-                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{new Date(log.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs">{formatDate(log.createdAt)}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">{log.userEmail ?? "—"}</td>
                       <td className="px-3 py-2">{formatAuditEvent(log.action, log.resource, log.detail)}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-muted-foreground text-xs font-mono">{log.ip ?? "—"}</td>

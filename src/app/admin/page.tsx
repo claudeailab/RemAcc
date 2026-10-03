@@ -4,6 +4,8 @@ import { users, audit_logs, connections, folders, credentials } from "@/lib/db/s
 import { count, desc } from "drizzle-orm";
 import { Users, Network, FolderOpen, KeyRound, ShieldCheck } from "lucide-react";
 import { pageWrapper, pageInner } from "@/lib/ui-conventions";
+import { getDateTimeSettings } from "@/lib/datetime";
+import { formatDateTime } from "@/lib/datetime-shared";
 
 function greeting(name: string) {
   const h = new Date().getHours();
@@ -36,7 +38,7 @@ function StatCard({ icon: Icon, label, value, delay = "" }: StatCardProps) {
 export default async function AdminDashboardPage() {
   const user = await requireAdmin();
 
-  const [[totalConnections], [totalFolders], [totalCredentials], [totalUsers], protocolRows, recentAudit] = await Promise.all([
+  const [[totalConnections], [totalFolders], [totalCredentials], [totalUsers], protocolRows, recentAudit, datetime] = await Promise.all([
     db.select({ count: count() }).from(connections),
     db.select({ count: count() }).from(folders),
     db.select({ count: count() }).from(credentials),
@@ -44,6 +46,7 @@ export default async function AdminDashboardPage() {
     db.select({ protocol: connections.protocol, count: count() }).from(connections).groupBy(connections.protocol),
     db.select({ userEmail: audit_logs.userEmail, action: audit_logs.action, resource: audit_logs.resource, createdAt: audit_logs.createdAt })
       .from(audit_logs).orderBy(desc(audit_logs.createdAt)).limit(5),
+    getDateTimeSettings(),
   ]);
   const byProtocol = Object.fromEntries(protocolRows.map(r => [r.protocol, r.count]));
 
@@ -102,7 +105,7 @@ export default async function AdminDashboardPage() {
                     </p>
                   </div>
                   <time className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
-                    {new Date(log.createdAt!).toLocaleString()}
+                    {formatDateTime(log.createdAt!, datetime)}
                   </time>
                 </div>
               ))}

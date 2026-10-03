@@ -15,6 +15,8 @@ import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
 import { PLATFORM_PERMISSIONS } from "@/lib/permissions";
 import type { FeatureKey } from "@/lib/features";
 import { iconUrl, DEFAULT_ICON, DEFAULT_PRIMARY_COLOR } from "@/lib/platform-shared";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DATE_FORMATS, TIME_FORMATS, formatDateTime, isTimeZone, type DateTimeSettings, type DateFormat, type TimeFormat } from "@/lib/datetime-shared";
 
 const FEATURE_LIST: { key: FeatureKey; label: string; description: string }[] = [
   { key: "audit", label: "Audit", description: "Admin audit log of all platform actions" },
@@ -672,6 +674,89 @@ function VisualAppearanceSection() {
   );
 }
 
+function DateTimeTab() {
+  const router = useRouter();
+  const [form, setForm] = useState<DateTimeSettings | null>(null);
+  const [original, setOriginal] = useState<DateTimeSettings | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  const zones = useState(() => {
+    const list: string[] = (Intl as unknown as { supportedValuesOf?: (k: string) => string[] }).supportedValuesOf?.("timeZone") ?? [];
+    return list.includes("UTC") ? list : ["UTC", ...list];
+  })[0];
+  const browserZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  useEffect(() => {
+    fetch("/api/admin/settings/datetime").then(r => r.json()).then((d: DateTimeSettings) => { setForm(d); setOriginal(d); });
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  if (!form || !original) return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>;
+
+  const validZone = isTimeZone(form.timezone);
+  const dirty = JSON.stringify(form) !== JSON.stringify(original);
+  const set = <K extends keyof DateTimeSettings>(k: K, v: DateTimeSettings[K]) => setForm({ ...form, [k]: v });
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/admin/settings/datetime", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(form) });
+      if (!r.ok) { toast.error("Save failed"); return; }
+      toast.success("Date & time settings saved");
+      setOriginal(form);
+      router.refresh();
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div className="space-y-6">
+      <p className="text-sm text-muted-foreground">How dates and times are shown throughout the platform, whatever the viewer&apos;s device is set to.</p>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="dt-zone">Timezone</Label>
+        <Input id="dt-zone" list="dt-zones" value={form.timezone} onChange={e => set("timezone", e.target.value)} placeholder="e.g. Europe/Nicosia" autoComplete="off" />
+        <datalist id="dt-zones">{zones.map(z => <option key={z} value={z} />)}</datalist>
+        {!validZone
+          ? <p className="text-xs text-destructive">Unknown timezone — pick one from the list.</p>
+          : browserZone && browserZone !== form.timezone && (
+            <button type="button" onClick={() => set("timezone", browserZone)} className="w-fit text-xs text-primary hover:underline">Use this browser&apos;s timezone ({browserZone})</button>
+          )}
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="flex flex-col gap-1.5">
+          <Label>Date format</Label>
+          <Select value={form.dateFormat} onValueChange={v => set("dateFormat", v as DateFormat)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {DATE_FORMATS.map(f => (
+                <SelectItem key={f} value={f}>{f} — {formatDateTime(now, { ...form, timezone: validZone ? form.timezone : "UTC", dateFormat: f }, false)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label>Time format</Label>
+          <Select value={form.timeFormat} onValueChange={v => set("timeFormat", v as TimeFormat)}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {TIME_FORMATS.map(f => (
+                <SelectItem key={f} value={f}>{f === "24h" ? "24-hour" : "12-hour"} — {formatDateTime(now, { ...form, timezone: validZone ? form.timezone : "UTC", timeFormat: f }).split(" ").slice(f === "12h" ? -2 : -1).join(" ")}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div className="rounded-lg border bg-muted/40 px-4 py-3">
+        <p className="text-xs text-muted-foreground">Preview</p>
+        <p className="text-sm font-medium tabular-nums">{validZone ? formatDateTime(now, form) : "—"}</p>
+      </div>
+      <Button onClick={handleSave} disabled={saving || !dirty || !validZone}>
+        {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1.5" />Saving…</> : "Save"}
+      </Button>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [theme, setTheme] = useState<Theme>("system");
   const [saving, setSaving] = useState(false);
@@ -703,6 +788,7 @@ export default function SettingsPage() {
           <TabsList className="h-auto flex-wrap">
             <TabsTrigger value="platform">Name</TabsTrigger>
             <TabsTrigger value="visual">Visual</TabsTrigger>
+            <TabsTrigger value="datetime">Date &amp; Time</TabsTrigger>
             <TabsTrigger value="features">Features</TabsTrigger>
             <TabsTrigger value="permissions">Permissions</TabsTrigger>
           </TabsList>
@@ -725,6 +811,9 @@ export default function SettingsPage() {
                 <VisualAppearanceSection />
               </CardContent>
             </Card>
+          </TabsContent>
+          <TabsContent value="datetime">
+            <Card><CardContent className="pt-6"><DateTimeTab /></CardContent></Card>
           </TabsContent>
           <TabsContent value="features">
             <Card><CardContent className="pt-6"><FeaturesTab /></CardContent></Card>

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Loader2, Bell, Trash2 } from "lucide-react";
 import { pageWrapper, pageInner, pageTitle } from "@/lib/ui-conventions";
+import { useFormatDateTime } from "@/components/DateTimeProvider";
 
 interface PushDevice {
   id: number;
@@ -25,6 +26,7 @@ function urlBase64ToArrayBuffer(base64String: string): ArrayBuffer {
 }
 
 export default function NotificationsPage() {
+  const formatDate = useFormatDateTime();
   const [publicKey, setPublicKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [subscribed, setSubscribed] = useState(false);
@@ -235,7 +237,7 @@ export default function NotificationsPage() {
                         </div>
                         {device.createdAt && (
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            Added {new Date(device.createdAt).toLocaleDateString()}
+                            Added {formatDate(device.createdAt, false)}
                           </p>
                         )}
                       </div>
